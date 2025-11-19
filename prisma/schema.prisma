@@ -1,0 +1,81 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  phone     String?
+  whatsappId String? @unique // WhatsApp sender ID
+  instagramId String? @unique // Instagram sender ID
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages  Message[]
+  bookings  Booking[]
+  bookingDrafts BookingDraft[]
+
+  @@map("customers")
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  content   String
+  platform  String   // whatsapp, instagram, messenger, telegram
+  direction String   // inbound, outbound
+  customerId String
+  customer  Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  externalId String? @unique // External message ID to prevent duplicates
+  createdAt DateTime @default(now())
+
+  @@map("messages")
+}
+
+model Booking {
+  id          String   @id @default(cuid())
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  service     String
+  dateTime    DateTime
+  status      String   // provisional, confirmed, cancelled
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("bookings")
+}
+
+model KnowledgeBase {
+  id        String   @id @default(cuid())
+  question  String
+  answer    String
+  embedding Float[]  // vector for Pinecone
+  createdAt DateTime @default(now())
+
+  @@map("knowledge_base")
+}
+
+model BookingDraft {
+  id          String   @id @default(cuid())
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  service     String?
+  date        DateTime?
+  time        String?  // e.g., "9:00 AM"
+  name        String?
+  step        String   // current step: service, date, time, name, confirm
+  version     Int      @default(1) // For optimistic locking
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([customerId]) // One draft per customer
+  @@map("booking_drafts")
+}
