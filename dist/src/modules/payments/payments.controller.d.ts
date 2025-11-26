@@ -7,4 +7,20 @@ export declare class PaymentsController {
         ResultCode: number;
         ResultDesc: string;
     }>;
+    getCallbackHealth(): {
+        status: string;
+        message: string;
+    };
+    testStkPush(body: {
+        phone: string;
+        amount: number;
+    }): Promise<{
+        checkoutRequestId: any;
+        merchantRequestId: any;
+        success: boolean;
+        error?: undefined;
+    } | {
+        success: boolean;
+        error: any;
+    }>;
 }

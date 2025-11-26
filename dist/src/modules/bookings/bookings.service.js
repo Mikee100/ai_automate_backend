@@ -43,20 +43,26 @@ let BookingsService = BookingsService_1 = class BookingsService {
         try {
             const draft = await this.prisma.bookingDraft.findUnique({ where: { customerId } });
             this.logger.debug(`Fetched bookingDraft: ${JSON.stringify(draft)}`);
-            if (!draft || !draft.service || (!draft.dateTimeIso && !providedDateTime) || !draft.name) {
-                const msg = `Incomplete booking draft detected for customerId=${customerId}`;
-                this.logger.warn(msg);
-                throw new Error(msg);
-            }
+            if (!draft)
+                throw new Error(`No booking draft found for customerId=${customerId}`);
+            if (!draft.service)
+                throw new Error(`Draft missing service for customerId=${customerId}`);
+            if (!draft.dateTimeIso && !providedDateTime)
+                throw new Error(`Draft missing dateTimeIso for customerId=${customerId}`);
+            if (!draft.name)
+                throw new Error(`Draft missing name for customerId=${customerId}`);
+            if (!draft.recipientPhone)
+                throw new Error(`Draft missing recipientPhone for customerId=${customerId}`);
             const pkg = await this.prisma.package.findFirst({ where: { name: draft.service } });
             if (!pkg || !pkg.deposit) {
                 throw new Error(`Package deposit not configured for ${draft.service}`);
             }
             const depositAmount = pkg.deposit;
-            const phone = draft.recipientPhone;
-            if (!phone) {
-                throw new Error(`Recipient phone not found in draft for customerId=${customerId}`);
+            let phone = draft.recipientPhone;
+            if (!phone.startsWith('254')) {
+                phone = `254${phone.replace(/^0+/, '')}`;
             }
+            this.logger.debug(`[STK] Using phone: ${phone}, amount: ${depositAmount}`);
             await this.paymentsService.initiateSTKPush(draft.id, phone, depositAmount);
             const depositMsg = `To confirm your booking, please pay the deposit of KSH ${depositAmount}. An M-Pesa prompt has been sent to your phone. Complete the payment to secure your slot!`;
             this.logger.log(`[DepositPrompt] Attempting to send WhatsApp deposit prompt to customerId=${customerId}`);
@@ -130,10 +136,11 @@ let BookingsService = BookingsService_1 = class BookingsService {
         });
     }
     async updateBookingDraft(customerId, updates) {
+        const { packageId, ...rest } = updates;
         return this.prisma.bookingDraft.upsert({
             where: { customerId },
-            update: { ...updates, updatedAt: new Date() },
-            create: { customerId, step: 'service', ...updates },
+            update: { ...rest, updatedAt: new Date() },
+            create: { customerId, step: 'service', ...rest },
         });
     }
     async deleteBookingDraft(customerId) {
@@ -354,6 +361,15 @@ let BookingsService = BookingsService_1 = class BookingsService {
     }
     async deletePackage(id) {
         return this.prisma.package.delete({ where: { id } });
+    }
+    async getLatestConfirmedBooking(customerId) {
+        return this.prisma.booking.findFirst({
+            where: {
+                customerId,
+                status: 'confirmed',
+            },
+            orderBy: { dateTime: 'desc' },
+        });
     }
 };
 exports.BookingsService = BookingsService;

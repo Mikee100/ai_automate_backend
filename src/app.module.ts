@@ -14,6 +14,7 @@ import { InstagramModule } from './modules/instagram/instagram.module';
 import { WorkersModule } from './workers/workers.module';
 import { WebsocketModule } from './websockets/websocket.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { PaymentsModule } from './modules/payments/payments.module';   // 👈 ADD THIS
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
     WorkersModule,
     WebsocketModule,
     AnalyticsModule,
+    PaymentsModule,    // 👈 ADD THIS
   ],
 })
 export class AppModule {}

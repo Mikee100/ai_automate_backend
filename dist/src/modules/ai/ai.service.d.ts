@@ -40,10 +40,10 @@ export declare class AiService {
     private generateBookingReply;
     getOrCreateDraft(customerId: string): Promise<{
         id: string;
-        createdAt: Date;
-        customerId: string;
         name: string | null;
+        createdAt: Date;
         updatedAt: Date;
+        customerId: string;
         service: string | null;
         date: string | null;
         time: string | null;
@@ -56,10 +56,10 @@ export declare class AiService {
     }>;
     mergeIntoDraft(customerId: string, extraction: any): Promise<{
         id: string;
-        createdAt: Date;
-        customerId: string;
         name: string | null;
+        createdAt: Date;
         updatedAt: Date;
+        customerId: string;
         service: string | null;
         date: string | null;
         time: string | null;
@@ -99,10 +99,10 @@ export declare class AiService {
         response: any;
         draft: {
             id: string;
-            createdAt: Date;
-            customerId: string;
             name: string | null;
+            createdAt: Date;
             updatedAt: Date;
+            customerId: string;
             service: string | null;
             date: string | null;
             time: string | null;

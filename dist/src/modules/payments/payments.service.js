@@ -104,7 +104,7 @@ let PaymentsService = PaymentsService_1 = class PaymentsService {
             PartyA: phone.startsWith('254') ? phone : `254${phone.substring(1)}`,
             PartyB: this.shortcode,
             PhoneNumber: phone.startsWith('254') ? phone : `254${phone.substring(1)}`,
-            CallBackURL: `${this.callbackUrl}/validation`,
+            CallBackURL: this.callbackUrl,
             AccountReference: `BookingDeposit-${draft.id}`,
             TransactionDesc: `Deposit for ${draft.service} booking`,
         };
@@ -156,7 +156,7 @@ let PaymentsService = PaymentsService_1 = class PaymentsService {
             this.logger.warn(`Payment not found for CheckoutRequestID: ${CheckoutRequestID}`);
             return;
         }
-        if (ResultCode === '0') {
+        if (ResultCode === 0 || ResultCode === '0') {
             let receipt = '';
             if (CallbackMetadata && CallbackMetadata.Item) {
                 const item = CallbackMetadata.Item.find((i) => i.Name === 'MpesaReceiptNumber');
@@ -209,6 +209,46 @@ let PaymentsService = PaymentsService_1 = class PaymentsService {
                 data: { status: 'failed' },
             });
             this.logger.error(`STK Push failed for ${payment.id}: ${ResultDesc}`);
+        }
+    }
+    async testStkPush(phone, amount) {
+        const timestamp = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, -3);
+        const password = Buffer.from(`${this.shortcode}${this.passkey}${timestamp}`).toString('base64');
+        const accessToken = await this.getAccessToken();
+        const stkRequestBody = {
+            BusinessShortCode: this.shortcode,
+            Password: password,
+            Timestamp: timestamp,
+            TransactionType: 'CustomerPayBillOnline',
+            Amount: amount,
+            PartyA: phone.startsWith('254') ? phone : `254${phone.substring(1)}`,
+            PartyB: this.shortcode,
+            PhoneNumber: phone.startsWith('254') ? phone : `254${phone.substring(1)}`,
+            CallBackURL: this.callbackUrl,
+            AccountReference: `TestSTKPush`,
+            TransactionDesc: `Test STK Push`,
+        };
+        const stkUrl = `${this.mpesaBaseUrl}/mpesa/stkpush/v1/processrequest`;
+        this.logger.log(`[TEST] Initiating STK Push to URL: ${stkUrl}`);
+        this.logger.log(`[TEST] STK Push request body: ${JSON.stringify(stkRequestBody)}`);
+        this.logger.log(`[TEST] Authorization header: Bearer ${accessToken.substring(0, 10)}...`);
+        try {
+            const stkResponse = await (0, rxjs_1.firstValueFrom)(this.httpService.post(stkUrl, stkRequestBody, {
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json',
+                },
+            }));
+            const data = stkResponse.data;
+            if (data.ResponseCode !== '0') {
+                throw new Error(`STK Push failed: ${data.errorMessage}`);
+            }
+            this.logger.log(`[TEST] STK Push initiated, CheckoutRequestID: ${data.CheckoutRequestID}`);
+            return { checkoutRequestId: data.CheckoutRequestID, merchantRequestId: data.MerchantRequestID };
+        }
+        catch (error) {
+            this.logger.error(`[TEST] STK Push request failed: ${error.message}`, error.response?.data || error);
+            throw error;
         }
     }
 };

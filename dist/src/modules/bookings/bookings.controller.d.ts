@@ -3,16 +3,35 @@ import { CreateBookingDto } from './dto/create-booking.dto';
 export declare class BookingsController {
     private readonly bookingsService;
     constructor(bookingsService: BookingsService);
+    getBookingStatus(customerId: string): Promise<{
+        status: string;
+        booking: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            customerId: string;
+            service: string;
+            recipientName: string | null;
+            recipientPhone: string | null;
+            dateTime: Date;
+            status: string;
+            durationMinutes: number | null;
+            googleEventId: string | null;
+        };
+    } | {
+        status: string;
+        booking?: undefined;
+    }>;
     create(createBookingDto: CreateBookingDto): Promise<{
         id: string;
         createdAt: Date;
-        customerId: string;
         updatedAt: Date;
+        customerId: string;
         service: string;
         recipientName: string | null;
         recipientPhone: string | null;
-        status: string;
         dateTime: Date;
+        status: string;
         durationMinutes: number | null;
         googleEventId: string | null;
     }>;
@@ -20,26 +39,26 @@ export declare class BookingsController {
         bookings: ({
             customer: {
                 id: string;
-                createdAt: Date;
                 name: string;
+                createdAt: Date;
+                updatedAt: Date;
                 email: string | null;
+                phone: string | null;
                 whatsappId: string | null;
                 instagramId: string | null;
                 messengerId: string | null;
-                phone: string | null;
                 aiEnabled: boolean;
-                updatedAt: Date;
             };
         } & {
             id: string;
             createdAt: Date;
-            customerId: string;
             updatedAt: Date;
+            customerId: string;
             service: string;
             recipientName: string | null;
             recipientPhone: string | null;
-            status: string;
             dateTime: Date;
+            status: string;
             durationMinutes: number | null;
             googleEventId: string | null;
         })[];
@@ -47,11 +66,9 @@ export declare class BookingsController {
     }>;
     getPackages(): Promise<{
         id: string;
-        createdAt: Date;
         name: string;
-        price: number;
-        updatedAt: Date;
         type: string;
+        price: number;
         deposit: number;
         duration: string;
         images: number;
@@ -64,14 +81,14 @@ export declare class BookingsController {
         balloonBackdrop: boolean;
         wig: boolean;
         notes: string | null;
+        createdAt: Date;
+        updatedAt: Date;
     }[]>;
     createPackage(data: any): Promise<{
         id: string;
-        createdAt: Date;
         name: string;
-        price: number;
-        updatedAt: Date;
         type: string;
+        price: number;
         deposit: number;
         duration: string;
         images: number;
@@ -84,14 +101,14 @@ export declare class BookingsController {
         balloonBackdrop: boolean;
         wig: boolean;
         notes: string | null;
+        createdAt: Date;
+        updatedAt: Date;
     }>;
     updatePackage(id: string, data: any): Promise<{
         id: string;
-        createdAt: Date;
         name: string;
-        price: number;
-        updatedAt: Date;
         type: string;
+        price: number;
         deposit: number;
         duration: string;
         images: number;
@@ -104,14 +121,14 @@ export declare class BookingsController {
         balloonBackdrop: boolean;
         wig: boolean;
         notes: string | null;
+        createdAt: Date;
+        updatedAt: Date;
     }>;
     deletePackage(id: string): Promise<{
         id: string;
-        createdAt: Date;
         name: string;
-        price: number;
-        updatedAt: Date;
         type: string;
+        price: number;
         deposit: number;
         duration: string;
         images: number;
@@ -124,38 +141,40 @@ export declare class BookingsController {
         balloonBackdrop: boolean;
         wig: boolean;
         notes: string | null;
+        createdAt: Date;
+        updatedAt: Date;
     }>;
     getStudioInfo(): Promise<{
         id: string;
-        createdAt: Date;
-        location: string;
-        updatedAt: Date;
         notes: string;
+        createdAt: Date;
+        updatedAt: Date;
+        location: string;
     }>;
     findByCustomer(customerId: string): Promise<{
         bookings: ({
             customer: {
                 id: string;
-                createdAt: Date;
                 name: string;
+                createdAt: Date;
+                updatedAt: Date;
                 email: string | null;
+                phone: string | null;
                 whatsappId: string | null;
                 instagramId: string | null;
                 messengerId: string | null;
-                phone: string | null;
                 aiEnabled: boolean;
-                updatedAt: Date;
             };
         } & {
             id: string;
             createdAt: Date;
-            customerId: string;
             updatedAt: Date;
+            customerId: string;
             service: string;
             recipientName: string | null;
             recipientPhone: string | null;
-            status: string;
             dateTime: Date;
+            status: string;
             durationMinutes: number | null;
             googleEventId: string | null;
         })[];
@@ -164,30 +183,50 @@ export declare class BookingsController {
     confirm(id: string): Promise<{
         id: string;
         createdAt: Date;
-        customerId: string;
         updatedAt: Date;
+        customerId: string;
         service: string;
         recipientName: string | null;
         recipientPhone: string | null;
-        status: string;
         dateTime: Date;
+        status: string;
         durationMinutes: number | null;
         googleEventId: string | null;
     }>;
     cancel(id: string): Promise<{
         id: string;
         createdAt: Date;
-        customerId: string;
         updatedAt: Date;
+        customerId: string;
         service: string;
         recipientName: string | null;
         recipientPhone: string | null;
-        status: string;
         dateTime: Date;
+        status: string;
         durationMinutes: number | null;
         googleEventId: string | null;
     }>;
     completeDraft(customerId: string): Promise<{
         message: string;
+    }>;
+    getAvailableHours(date: string, service?: string): Promise<{
+        time: any;
+        available: boolean;
+    }[]>;
+    updateDraft(customerId: string, updates: any): Promise<{
+        id: string;
+        name: string | null;
+        createdAt: Date;
+        updatedAt: Date;
+        customerId: string;
+        service: string | null;
+        date: string | null;
+        time: string | null;
+        dateTimeIso: string | null;
+        recipientName: string | null;
+        recipientPhone: string | null;
+        isForSomeoneElse: boolean | null;
+        step: string;
+        version: number;
     }>;
 }

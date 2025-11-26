@@ -20,6 +20,17 @@ let BookingsController = class BookingsController {
     constructor(bookingsService) {
         this.bookingsService = bookingsService;
     }
+    async getBookingStatus(customerId) {
+        const booking = await this.bookingsService.getLatestConfirmedBooking(customerId);
+        if (booking) {
+            return { status: 'confirmed', booking };
+        }
+        const draft = await this.bookingsService.getBookingDraft(customerId);
+        if (draft) {
+            return { status: 'pending' };
+        }
+        return { status: 'none' };
+    }
     create(createBookingDto) {
         return this.bookingsService.createBooking(createBookingDto.customerId, {
             message: createBookingDto.message,
@@ -60,8 +71,34 @@ let BookingsController = class BookingsController {
     completeDraft(customerId) {
         return this.bookingsService.completeBookingDraft(customerId);
     }
+    async getAvailableHours(date, service) {
+        const availableSlots = await this.bookingsService.getAvailableSlotsForDate(date, service);
+        const { DateTime } = require('luxon');
+        const day = DateTime.fromISO(date, { zone: 'Africa/Nairobi' }).startOf('day');
+        const hours = [];
+        for (let h = 9; h < 17; h++) {
+            hours.push(day.set({ hour: h, minute: 0 }).toISO());
+            hours.push(day.set({ hour: h, minute: 30 }).toISO());
+        }
+        const availableSet = new Set(availableSlots.map(s => DateTime.fromISO(s).toISO()));
+        const result = hours.map(time => ({
+            time,
+            available: availableSet.has(time)
+        }));
+        return result;
+    }
+    updateDraft(customerId, updates) {
+        return this.bookingsService.updateBookingDraft(customerId, updates);
+    }
 };
 exports.BookingsController = BookingsController;
+__decorate([
+    (0, common_1.Get)('status/:customerId'),
+    __param(0, (0, common_1.Param)('customerId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], BookingsController.prototype, "getBookingStatus", null);
 __decorate([
     (0, common_1.Post)(),
     __param(0, (0, common_1.Body)()),
@@ -137,6 +174,22 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", void 0)
 ], BookingsController.prototype, "completeDraft", null);
+__decorate([
+    (0, common_1.Get)('available-hours/:date'),
+    __param(0, (0, common_1.Param)('date')),
+    __param(1, (0, common_1.Body)('service')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", Promise)
+], BookingsController.prototype, "getAvailableHours", null);
+__decorate([
+    (0, common_1.Post)('draft/:customerId'),
+    __param(0, (0, common_1.Param)('customerId')),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], BookingsController.prototype, "updateDraft", null);
 exports.BookingsController = BookingsController = __decorate([
     (0, common_1.Controller)('bookings'),
     __metadata("design:paramtypes", [bookings_service_1.BookingsService])

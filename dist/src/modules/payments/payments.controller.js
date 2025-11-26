@@ -29,6 +29,20 @@ let PaymentsController = PaymentsController_1 = class PaymentsController {
             ResultDesc: 'Accepted'
         };
     }
+    getCallbackHealth() {
+        return { status: 'ok', message: 'M-Pesa callback endpoint is up. Use POST for callbacks.' };
+    }
+    async testStkPush(body) {
+        this.logger.log(`[TEST] STK Push requested for phone: ${body.phone}, amount: ${body.amount}`);
+        try {
+            const result = await this.paymentsService.testStkPush(body.phone, body.amount);
+            return { success: true, ...result };
+        }
+        catch (error) {
+            this.logger.error(`[TEST] STK Push failed: ${error.message}`);
+            return { success: false, error: error.message };
+        }
+    }
 };
 exports.PaymentsController = PaymentsController;
 __decorate([
@@ -38,6 +52,19 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], PaymentsController.prototype, "handleCallback", null);
+__decorate([
+    (0, common_1.Get)('callback'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], PaymentsController.prototype, "getCallbackHealth", null);
+__decorate([
+    (0, common_1.Post)('test-stk-push'),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], PaymentsController.prototype, "testStkPush", null);
 exports.PaymentsController = PaymentsController = PaymentsController_1 = __decorate([
     (0, common_1.Controller)('mpesa'),
     __metadata("design:paramtypes", [payments_service_1.PaymentsService])

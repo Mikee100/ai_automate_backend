@@ -41,16 +41,18 @@ export class BookingsService {
    * - Added extensive logging for debugging
    * -------------------------- */
   async completeBookingDraft(customerId: string, providedDateTime?: Date) {
+
     this.logger.debug(`completeBookingDraft called for customerId=${customerId}`);
     try {
       const draft = await this.prisma.bookingDraft.findUnique({ where: { customerId } });
       this.logger.debug(`Fetched bookingDraft: ${JSON.stringify(draft)}`);
 
-      if (!draft || !draft.service || (!draft.dateTimeIso && !providedDateTime) || !draft.name) {
-        const msg = `Incomplete booking draft detected for customerId=${customerId}`;
-        this.logger.warn(msg);
-        throw new Error(msg);
-      }
+      // Validation for required fields
+      if (!draft) throw new Error(`No booking draft found for customerId=${customerId}`);
+      if (!draft.service) throw new Error(`Draft missing service for customerId=${customerId}`);
+      if (!draft.dateTimeIso && !providedDateTime) throw new Error(`Draft missing dateTimeIso for customerId=${customerId}`);
+      if (!draft.name) throw new Error(`Draft missing name for customerId=${customerId}`);
+      if (!draft.recipientPhone) throw new Error(`Draft missing recipientPhone for customerId=${customerId}`);
 
       // Get package deposit amount
       const pkg = await this.prisma.package.findFirst({ where: { name: draft.service } });
@@ -59,11 +61,12 @@ export class BookingsService {
       }
       const depositAmount = pkg.deposit;
 
-      // Get phone for payment (use recipientPhone from draft)
-      const phone = draft.recipientPhone;
-      if (!phone) {
-        throw new Error(`Recipient phone not found in draft for customerId=${customerId}`);
+      // Format phone
+      let phone = draft.recipientPhone;
+      if (!phone.startsWith('254')) {
+        phone = `254${phone.replace(/^0+/, '')}`;
       }
+      this.logger.debug(`[STK] Using phone: ${phone}, amount: ${depositAmount}`);
 
       // Initiate M-Pesa STK Push for deposit
       await this.paymentsService.initiateSTKPush(draft.id, phone, depositAmount);
@@ -167,10 +170,12 @@ export class BookingsService {
   }
 
   async updateBookingDraft(customerId: string, updates: Partial<any>) {
+    // Remove packageId if present, as bookingDraft does not have this field
+    const { packageId, ...rest } = updates;
     return this.prisma.bookingDraft.upsert({
       where: { customerId },
-      update: { ...updates, updatedAt: new Date() },
-      create: { customerId, step: 'service', ...updates },
+      update: { ...rest, updatedAt: new Date() },
+      create: { customerId, step: 'service', ...rest },
     });
   }
 
@@ -456,4 +461,16 @@ export class BookingsService {
   async deletePackage(id: string) {
     return this.prisma.package.delete({ where: { id } });
   }
+
+    // Get the latest confirmed booking for a customer
+  async getLatestConfirmedBooking(customerId: string) {
+    return this.prisma.booking.findFirst({
+      where: {
+        customerId,
+        status: 'confirmed',
+      },
+      orderBy: { dateTime: 'desc' },
+    });
+  }
+
 }

@@ -5,64 +5,64 @@ export declare class MessagesController {
     constructor(messagesService: MessagesService);
     create(createMessageDto: CreateMessageDto): Promise<{
         id: string;
+        createdAt: Date;
+        customerId: string;
         content: string;
         platform: string;
         direction: string;
         externalId: string | null;
-        createdAt: Date;
         handledBy: string | null;
         isResolved: boolean | null;
         isEscalated: boolean | null;
-        customerId: string;
     }>;
     findAll(): Promise<({
         customer: {
             id: string;
-            createdAt: Date;
             name: string;
+            createdAt: Date;
+            updatedAt: Date;
             email: string | null;
+            phone: string | null;
             whatsappId: string | null;
             instagramId: string | null;
             messengerId: string | null;
-            phone: string | null;
             aiEnabled: boolean;
-            updatedAt: Date;
         };
     } & {
         id: string;
+        createdAt: Date;
+        customerId: string;
         content: string;
         platform: string;
         direction: string;
         externalId: string | null;
-        createdAt: Date;
         handledBy: string | null;
         isResolved: boolean | null;
         isEscalated: boolean | null;
-        customerId: string;
     })[]>;
     findByCustomer(customerId: string): Promise<({
         customer: {
             id: string;
-            createdAt: Date;
             name: string;
+            createdAt: Date;
+            updatedAt: Date;
             email: string | null;
+            phone: string | null;
             whatsappId: string | null;
             instagramId: string | null;
             messengerId: string | null;
-            phone: string | null;
             aiEnabled: boolean;
-            updatedAt: Date;
         };
     } & {
         id: string;
+        createdAt: Date;
+        customerId: string;
         content: string;
         platform: string;
         direction: string;
         externalId: string | null;
-        createdAt: Date;
         handledBy: string | null;
         isResolved: boolean | null;
         isEscalated: boolean | null;
-        customerId: string;
     })[]>;
 }

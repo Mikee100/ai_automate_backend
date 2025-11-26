@@ -18,4 +18,8 @@ export declare class PaymentsService {
     getAccessToken(): Promise<string>;
     initiateSTKPush(bookingDraftId: string, phone: string, amount: number): Promise<string>;
     handleCallback(body: any): Promise<void>;
+    testStkPush(phone: string, amount: number): Promise<{
+        checkoutRequestId: any;
+        merchantRequestId: any;
+    }>;
 }

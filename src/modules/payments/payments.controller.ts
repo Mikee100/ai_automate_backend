@@ -1,4 +1,6 @@
-import { Controller, Post, Body, Logger } from '@nestjs/common';
+  // === TEST STK PUSH ENDPOINT ===
+
+import { Controller, Post, Body,Get, Logger } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 
 @Controller('mpesa')
@@ -20,4 +22,22 @@ export class PaymentsController {
       ResultDesc: 'Accepted'
     };
   }
+  // Optional: GET endpoint for health check/debugging
+  @Get('callback')
+  getCallbackHealth() {
+    return { status: 'ok', message: 'M-Pesa callback endpoint is up. Use POST for callbacks.' };
+  }
+
+    @Post('test-stk-push')
+  async testStkPush(@Body() body: { phone: string; amount: number }) {
+    this.logger.log(`[TEST] STK Push requested for phone: ${body.phone}, amount: ${body.amount}`);
+    try {
+      const result = await this.paymentsService.testStkPush(body.phone, body.amount);
+      return { success: true, ...result };
+    } catch (error) {
+      this.logger.error(`[TEST] STK Push failed: ${error.message}`);
+      return { success: false, error: error.message };
+    }
+  }
+
 }
