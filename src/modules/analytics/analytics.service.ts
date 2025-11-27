@@ -9,7 +9,7 @@ export class AnalyticsService {
   constructor(
     private prisma: PrismaService,
     @Inject(forwardRef(() => MessagesService)) private messagesService: MessagesService,
-  ) {}
+  ) { }
   // WhatsApp Sentiment by Topic/Intent
   async whatsappSentimentByTopic() {
     // Get recent WhatsApp inbound messages
@@ -85,76 +85,76 @@ export class AnalyticsService {
     });
   }
 
-        async customersWithBooking() {
-          return this.prisma.customer.count({
-            where: {
-              whatsappId: { not: null },
-              bookings: { some: {} },
-            },
-          });
-        }
+  async customersWithBooking() {
+    return this.prisma.customer.count({
+      where: {
+        whatsappId: { not: null },
+        bookings: { some: {} },
+      },
+    });
+  }
 
-        async totalInboundWhatsAppMessages() {
-          return this.prisma.message.count({
-            where: { platform: 'whatsapp', direction: 'inbound' },
-          });
-        }
+  async totalInboundWhatsAppMessages() {
+    return this.prisma.message.count({
+      where: { platform: 'whatsapp', direction: 'inbound' },
+    });
+  }
 
-        async totalOutboundWhatsAppMessages() {
-          return this.prisma.message.count({
-            where: { platform: 'whatsapp', direction: 'outbound' },
-          });
-        }
+  async totalOutboundWhatsAppMessages() {
+    return this.prisma.message.count({
+      where: { platform: 'whatsapp', direction: 'outbound' },
+    });
+  }
 
-        async peakChatHours() {
-          const result: any[] = await this.prisma.$queryRaw`SELECT DATE_PART('hour', "createdAt") as hour, COUNT(*) as count FROM "messages" WHERE platform = 'whatsapp' AND direction = 'inbound' GROUP BY hour ORDER BY hour`;
-          return result.map(row => ({
-            hour: Number(row.hour),
-            count: typeof row.count === 'bigint' ? Number(row.count) : row.count
-          }));
-        }
+  async peakChatHours() {
+    const result: any[] = await this.prisma.$queryRaw`SELECT DATE_PART('hour', "createdAt") as hour, COUNT(*) as count FROM "messages" WHERE platform = 'whatsapp' AND direction = 'inbound' GROUP BY hour ORDER BY hour`;
+    return result.map(row => ({
+      hour: Number(row.hour),
+      count: typeof row.count === 'bigint' ? Number(row.count) : row.count
+    }));
+  }
 
-        async peakChatDays() {
-          const result: any[] = await this.prisma.$queryRaw`SELECT TO_CHAR("createdAt", 'Day') as day, COUNT(*) as count FROM "messages" WHERE platform = 'whatsapp' AND direction = 'inbound' GROUP BY day ORDER BY COUNT(*) DESC`;
-          return result.map(row => ({
-            day: row.day,
-            count: typeof row.count === 'bigint' ? Number(row.count) : row.count
-          }));
-        }
+  async peakChatDays() {
+    const result: any[] = await this.prisma.$queryRaw`SELECT TO_CHAR("createdAt", 'Day') as day, COUNT(*) as count FROM "messages" WHERE platform = 'whatsapp' AND direction = 'inbound' GROUP BY day ORDER BY COUNT(*) DESC`;
+    return result.map(row => ({
+      day: row.day,
+      count: typeof row.count === 'bigint' ? Number(row.count) : row.count
+    }));
+  }
 
-        async whatsappBookingConversionRate() {
-          const total = await this.prisma.customer.count({ where: { whatsappId: { not: null } } });
-          const withBooking = await this.prisma.customer.count({
-            where: { whatsappId: { not: null }, bookings: { some: {} } },
-          });
-          return total === 0 ? 0 : withBooking / total;
-        }
+  async whatsappBookingConversionRate() {
+    const total = await this.prisma.customer.count({ where: { whatsappId: { not: null } } });
+    const withBooking = await this.prisma.customer.count({
+      where: { whatsappId: { not: null }, bookings: { some: {} } },
+    });
+    return total === 0 ? 0 : withBooking / total;
+  }
 
-        async bookingStatusCounts() {
-          return this.prisma.booking.groupBy({
-            by: ['status'],
-            _count: { _all: true },
-          });
-        }
+  async bookingStatusCounts() {
+    return this.prisma.booking.groupBy({
+      by: ['status'],
+      _count: { _all: true },
+    });
+  }
 
-        async aiDisabledFrequency() {
-          return this.prisma.customer.count({ where: { aiEnabled: false } });
-        }
+  async aiDisabledFrequency() {
+    return this.prisma.customer.count({ where: { aiEnabled: false } });
+  }
 
-        async depositRevenue() {
-          const result = await this.prisma.payment.aggregate({
-            where: { status: 'success' },
-            _sum: { amount: true },
-          });
-          // Convert BigInt to Number if needed
-          return {
-            ...result,
-            _sum: {
-              amount: result._sum.amount ? Number(result._sum.amount) : 0,
-            }
-          }
-        }
-          // Returns a count of customers with AI enabled vs disabled
+  async depositRevenue() {
+    const result = await this.prisma.payment.aggregate({
+      where: { status: 'success' },
+      _sum: { amount: true },
+    });
+    // Convert BigInt to Number if needed
+    return {
+      ...result,
+      _sum: {
+        amount: result._sum.amount ? Number(result._sum.amount) : 0,
+      }
+    }
+  }
+  // Returns a count of customers with AI enabled vs disabled
   async aiEnabledVsDisabled() {
     const enabled = await this.prisma.customer.count({ where: { aiEnabled: true } });
     const disabled = await this.prisma.customer.count({ where: { aiEnabled: false } });
@@ -268,45 +268,146 @@ export class AnalyticsService {
       ai: format(stats.ai),
     };
   }
-    // AI Performance Metrics from AiPrediction
+  // Enhanced AI Performance Metrics
   async aiPerformanceMetrics() {
-    // Fetch all AiPrediction records (limit for performance)
-    const predictions = await this.prisma.aiPrediction.findMany({
-      orderBy: { timestamp: 'desc' },
-      take: 1000,
+    // Get messages from last 30 days for relevant metrics
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const messages = await this.prisma.message.findMany({
+      where: {
+        platform: 'whatsapp',
+        createdAt: { gte: thirtyDaysAgo }
+      },
+      include: { customer: true },
+      orderBy: { createdAt: 'desc' }
     });
-    // Only include those with actual labels for classification metrics
-    const labeled = predictions.filter(p => p.actual !== null && p.actual !== undefined);
-    let tp = 0, fp = 0, fn = 0, tn = 0;
-    // For binary classification, assume 'positive' vs 'negative' (customize as needed)
-    for (const p of labeled) {
-      if (p.prediction === 'positive' && p.actual === 'positive') tp++;
-      else if (p.prediction === 'positive' && p.actual !== 'positive') fp++;
-      else if (p.prediction !== 'positive' && p.actual === 'positive') fn++;
-      else tn++;
+
+    const inboundMessages = messages.filter(m => m.direction === 'inbound');
+    const outboundMessages = messages.filter(m => m.direction === 'outbound');
+
+    // Calculate response times (time between inbound and next outbound)
+    // Only count responses within 5 minutes (300,000ms) to avoid counting cross-conversation delays
+    const responseTimes: number[] = [];
+    const MAX_RESPONSE_TIME = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+    for (let i = 0; i < inboundMessages.length; i++) {
+      const inbound = inboundMessages[i];
+      const nextOutbound = outboundMessages.find(
+        m => m.customerId === inbound.customerId && m.createdAt > inbound.createdAt
+      );
+      if (nextOutbound) {
+        const timeMs = nextOutbound.createdAt.getTime() - inbound.createdAt.getTime();
+        // Only include if response is within 5 minutes (immediate conversation)
+        if (timeMs <= MAX_RESPONSE_TIME) {
+          responseTimes.push(timeMs);
+        }
+      }
     }
-    const accuracy = labeled.length ? (tp + tn) / labeled.length : null;
-    const precision = tp + fp ? tp / (tp + fp) : null;
-    const recall = tp + fn ? tp / (tp + fn) : null;
-    const f1 = precision && recall && (precision + recall) ? 2 * (precision * recall) / (precision + recall) : null;
-    // Response time (ms)
-    const avgResponseTime = predictions.length ? Math.round(predictions.reduce((sum, p) => sum + (p.responseTime || 0), 0) / predictions.length) : null;
-    // Error rate
-    const errorCount = predictions.filter(p => !!p.error).length;
-    const errorRate = predictions.length ? errorCount / predictions.length : null;
-    // User feedback (1-5 scale)
-    const feedbacks = predictions.filter(p => typeof p.userFeedback === 'number');
-    const avgFeedback = feedbacks.length ? Math.round(feedbacks.reduce((sum, p) => sum + (p.userFeedback || 0), 0) / feedbacks.length * 10) / 10 : null;
+
+    // Calculate percentiles
+    const sorted = [...responseTimes].sort((a, b) => a - b);
+    const p50 = sorted[Math.floor(sorted.length * 0.5)] || 0;
+    const p95 = sorted[Math.floor(sorted.length * 0.95)] || 0;
+    const p99 = sorted[Math.floor(sorted.length * 0.99)] || 0;
+    const avgResponseTime = responseTimes.length > 0
+      ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length
+      : 0;
+
+    // Booking conversion rate
+    const totalCustomers = await this.prisma.customer.count({
+      where: { whatsappId: { not: null } }
+    });
+    const customersWithBooking = await this.prisma.customer.count({
+      where: {
+        whatsappId: { not: null },
+        bookings: { some: {} }
+      }
+    });
+    const bookingConversionRate = totalCustomers > 0
+      ? (customersWithBooking / totalCustomers) * 100
+      : 0;
+
+    // Smart actions performance (check logs for '[SMART ACTION]')
+    const smartActionMessages = outboundMessages.filter(
+      m => m.content.includes('Done! ✅') || m.content.includes('sent a lovely reminder')
+    );
+
+    // Package queries (check for package list responses)
+    const packageQueryResponses = outboundMessages.filter(
+      m => m.content.includes('packages with you') || m.content.includes('KSH')
+    );
+
+    // Intent distribution (simplified - counting keywords)
+    const intents = {
+      booking: inboundMessages.filter(m => /(book|appointment|schedule|reserve)/i.test(m.content)).length,
+      pricing: inboundMessages.filter(m => /(price|cost|package|how much)/i.test(m.content)).length,
+      inquiry: inboundMessages.filter(m => /(\?|what|when|where|how)/i.test(m.content)).length,
+      confirmation: inboundMessages.filter(m => /(yes|yeah|confirm|correct)/i.test(m.content)).length,
+      other: 0
+    };
+    intents.other = inboundMessages.length - (intents.booking + intents.pricing + intents.inquiry + intents.confirmation);
+
+    // Customer satisfaction proxy (based on sentiment)
+    let positiveSentiment = 0;
+    let negativeSentiment = 0;
+    for (const msg of inboundMessages.slice(0, 200)) {
+      const { mood } = analyzeSentiment(msg.content);
+      if (mood === 'positive') positiveSentiment++;
+      if (mood === 'negative') negativeSentiment++;
+    }
+    const satisfactionScore = inboundMessages.length > 0
+      ? ((positiveSentiment / Math.min(inboundMessages.length, 200)) * 100)
+      : 0;
+
+    // Messages per conversation (avg messages per customer)
+    const customersWithMessages = await this.prisma.customer.findMany({
+      where: { messages: { some: {} } },
+      include: { _count: { select: { messages: true } } }
+    });
+    const avgMessagesPerConversation = customersWithMessages.length > 0
+      ? customersWithMessages.reduce((sum, c) => sum + c._count.messages, 0) / customersWithMessages.length
+      : 0;
+
     return {
-      accuracy,
-      precision,
-      recall,
-      f1,
-      avgResponseTime,
-      errorRate,
-      avgFeedback,
-      total: predictions.length,
-      labeled: labeled.length,
+      // Response times
+      avgResponseTimeMs: Math.round(avgResponseTime),
+      p50ResponseTimeMs: Math.round(p50),
+      p95ResponseTimeMs: Math.round(p95),
+      p99ResponseTimeMs: Math.round(p99),
+
+      // Conversions
+      totalConversations: inboundMessages.length,
+      bookingConversionRate: Math.round(bookingConversionRate * 10) / 10,
+      customersWithBooking,
+      totalCustomers,
+
+      // Actions
+      smartActionsTriggered: smartActionMessages.length,
+      packageQueriesHandled: packageQueryResponses.length,
+
+      // Engagement
+      avgMessagesPerConversation: Math.round(avgMessagesPerConversation * 10) / 10,
+      totalInbound: inboundMessages.length,
+      totalOutbound: outboundMessages.length,
+
+      // Intent distribution
+      topIntents: [
+        { intent: 'booking', count: intents.booking },
+        { intent: 'pricing', count: intents.pricing },
+        { intent: 'inquiry', count: intents.inquiry },
+        { intent: 'confirmation', count: intents.confirmation },
+        { intent: 'other', count: intents.other }
+      ].sort((a, b) => b.count - a.count),
+
+      // Satisfaction
+      customerSatisfactionScore: Math.round(satisfactionScore * 10) / 10,
+      positiveSentiment,
+      negativeSentiment,
+
+      // Period
+      periodDays: 30,
+      lastUpdated: new Date().toISOString()
     };
   }
 

@@ -92,14 +92,27 @@ export declare class AnalyticsService {
         ai: any;
     }>;
     aiPerformanceMetrics(): Promise<{
-        accuracy: number;
-        precision: number;
-        recall: number;
-        f1: number;
-        avgResponseTime: number;
-        errorRate: number;
-        avgFeedback: number;
-        total: number;
-        labeled: number;
+        avgResponseTimeMs: number;
+        p50ResponseTimeMs: number;
+        p95ResponseTimeMs: number;
+        p99ResponseTimeMs: number;
+        totalConversations: number;
+        bookingConversionRate: number;
+        customersWithBooking: number;
+        totalCustomers: number;
+        smartActionsTriggered: number;
+        packageQueriesHandled: number;
+        avgMessagesPerConversation: number;
+        totalInbound: number;
+        totalOutbound: number;
+        topIntents: {
+            intent: string;
+            count: number;
+        }[];
+        customerSatisfactionScore: number;
+        positiveSentiment: number;
+        negativeSentiment: number;
+        periodDays: number;
+        lastUpdated: string;
     }>;
 }

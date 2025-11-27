@@ -19,12 +19,14 @@ model Customer {
   instagramId String? @unique // Instagram sender ID
   messengerId String? @unique // Messenger sender ID
   aiEnabled Boolean  @default(true) // AI enabled for this customer
+  isAiPaused Boolean @default(false) // Pauses AI for this customer (e.g. during escalation)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   messages  Message[]
   bookings  Booking[]
   bookingDrafts BookingDraft[]
+  escalations Escalation[]
 
   @@map("customers")
 }
@@ -163,4 +165,16 @@ model AiPrediction {
   error        String?
   userFeedback Int?     // 1-5 rating
   modelVersion String?
+}
+
+model Escalation {
+  id        String   @id @default(uuid())
+  customerId String
+  customer  Customer @relation(fields: [customerId], references: [id])
+  reason    String?
+  status    String   @default("OPEN") // OPEN, RESOLVED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("escalations")
 }

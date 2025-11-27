@@ -5,7 +5,7 @@ export declare class AiSettingsService {
     isAiEnabled(): Promise<boolean>;
     setAiEnabled(value: boolean): Promise<{
         id: number;
-        aiEnabled: boolean;
         updatedAt: Date;
+        aiEnabled: boolean;
     }>;
 }

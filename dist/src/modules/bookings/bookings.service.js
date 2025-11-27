@@ -53,9 +53,14 @@ let BookingsService = BookingsService_1 = class BookingsService {
                 throw new Error(`Draft missing name for customerId=${customerId}`);
             if (!draft.recipientPhone)
                 throw new Error(`Draft missing recipientPhone for customerId=${customerId}`);
-            const pkg = await this.prisma.package.findFirst({ where: { name: draft.service } });
-            if (!pkg || !pkg.deposit) {
-                throw new Error(`Package deposit not configured for ${draft.service}`);
+            const serviceName = draft.service ? draft.service.trim() : '';
+            const pkg = await this.prisma.package.findFirst({
+                where: {
+                    name: { equals: serviceName, mode: 'insensitive' }
+                }
+            });
+            if (!pkg || pkg.deposit == null) {
+                throw new Error(`Package deposit not configured for ${serviceName}`);
             }
             const depositAmount = pkg.deposit;
             let phone = draft.recipientPhone;
@@ -165,7 +170,7 @@ let BookingsService = BookingsService_1 = class BookingsService {
         else {
             throw new Error('Either message or dateTime is required');
         }
-        const selectedService = opts.service?.trim();
+        const selectedService = opts.service ? opts.service.trim() : '';
         let packageInfo = null;
         let durationMinutes = 60;
         if (selectedService) {
@@ -310,6 +315,13 @@ let BookingsService = BookingsService_1 = class BookingsService {
             const currentBooking = await tx.booking.findUnique({ where: { id: bookingId } });
             if (!currentBooking)
                 throw new Error('Booking not found');
+            const now = new Date();
+            const bookingTime = new Date(currentBooking.dateTime);
+            const diffMs = bookingTime.getTime() - now.getTime();
+            const hoursUntilBooking = diffMs / (1000 * 60 * 60);
+            if (hoursUntilBooking < 24 && hoursUntilBooking > 0) {
+                throw new Error('Changes cannot be made within 24 hours of the appointment. Please contact support directly.');
+            }
             const newDateTime = updates.dateTime ?? new Date(currentBooking.dateTime);
             const newService = updates.service ?? currentBooking.service;
             let duration = currentBooking.durationMinutes ?? 60;
@@ -332,7 +344,15 @@ let BookingsService = BookingsService_1 = class BookingsService {
             const updated = await tx.booking.update({
                 where: { id: bookingId },
                 data: { service: newService, dateTime: newDateTime, durationMinutes: duration },
+                include: { customer: true }
             });
+            const msg = `Your appointment has been rescheduled to ${luxon_1.DateTime.fromJSDate(newDateTime).setZone(this.STUDIO_TZ).toFormat('ccc, LLL dd, yyyy HH:mm')}.`;
+            try {
+                await this.messagesService.sendOutboundMessage(updated.customerId, msg, 'whatsapp');
+            }
+            catch (e) {
+                this.logger.error(`Failed to send reschedule notification to ${updated.customerId}`, e);
+            }
             return updated;
         });
     }
@@ -343,10 +363,29 @@ let BookingsService = BookingsService_1 = class BookingsService {
         });
     }
     async cancelBooking(bookingId) {
-        return this.prisma.booking.update({
+        const currentBooking = await this.prisma.booking.findUnique({ where: { id: bookingId } });
+        if (!currentBooking)
+            throw new Error('Booking not found');
+        const now = new Date();
+        const bookingTime = new Date(currentBooking.dateTime);
+        const diffMs = bookingTime.getTime() - now.getTime();
+        const hoursUntilBooking = diffMs / (1000 * 60 * 60);
+        if (hoursUntilBooking < 24 && hoursUntilBooking > 0) {
+            throw new Error('Cancellations cannot be made within 24 hours of the appointment. Please contact support directly.');
+        }
+        const booking = await this.prisma.booking.update({
             where: { id: bookingId },
             data: { status: 'cancelled' },
+            include: { customer: true }
         });
+        const msg = `Your appointment has been cancelled. We hope to see you again soon!`;
+        try {
+            await this.messagesService.sendOutboundMessage(booking.customerId, msg, 'whatsapp');
+        }
+        catch (e) {
+            this.logger.error(`Failed to send cancellation notification to ${booking.customerId}`, e);
+        }
+        return booking;
     }
     async getBookings(customerId) {
         const where = customerId ? { customerId } : {};

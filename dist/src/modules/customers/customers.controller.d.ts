@@ -5,34 +5,35 @@ export declare class CustomersController {
     constructor(customersService: CustomersService);
     create(createCustomerDto: CreateCustomerDto): Promise<{
         id: string;
-        createdAt: Date;
         name: string;
+        createdAt: Date;
+        updatedAt: Date;
         email: string | null;
-        phone: string | null;
         whatsappId: string | null;
         instagramId: string | null;
         messengerId: string | null;
+        phone: string | null;
         aiEnabled: boolean;
-        updatedAt: Date;
+        isAiPaused: boolean;
     }>;
     findAll(): Promise<({
         messages: {
+            id: string;
+            createdAt: Date;
             content: string;
             platform: string;
             direction: string;
-            customerId: string;
             externalId: string | null;
-            id: string;
-            createdAt: Date;
             handledBy: string | null;
             isResolved: boolean | null;
             isEscalated: boolean | null;
+            customerId: string;
         }[];
         bookings: {
-            customerId: string;
             id: string;
             createdAt: Date;
             updatedAt: Date;
+            customerId: string;
             status: string;
             service: string;
             recipientName: string | null;
@@ -43,34 +44,35 @@ export declare class CustomersController {
         }[];
     } & {
         id: string;
-        createdAt: Date;
         name: string;
+        createdAt: Date;
+        updatedAt: Date;
         email: string | null;
-        phone: string | null;
         whatsappId: string | null;
         instagramId: string | null;
         messengerId: string | null;
+        phone: string | null;
         aiEnabled: boolean;
-        updatedAt: Date;
+        isAiPaused: boolean;
     })[]>;
     findOne(id: string): Promise<{
         messages: {
+            id: string;
+            createdAt: Date;
             content: string;
             platform: string;
             direction: string;
-            customerId: string;
             externalId: string | null;
-            id: string;
-            createdAt: Date;
             handledBy: string | null;
             isResolved: boolean | null;
             isEscalated: boolean | null;
+            customerId: string;
         }[];
         bookings: {
-            customerId: string;
             id: string;
             createdAt: Date;
             updatedAt: Date;
+            customerId: string;
             status: string;
             service: string;
             recipientName: string | null;
@@ -81,50 +83,54 @@ export declare class CustomersController {
         }[];
     } & {
         id: string;
-        createdAt: Date;
         name: string;
+        createdAt: Date;
+        updatedAt: Date;
         email: string | null;
-        phone: string | null;
         whatsappId: string | null;
         instagramId: string | null;
         messengerId: string | null;
+        phone: string | null;
         aiEnabled: boolean;
-        updatedAt: Date;
+        isAiPaused: boolean;
     }>;
     update(id: string, updateCustomerDto: Partial<CreateCustomerDto>): Promise<{
         id: string;
-        createdAt: Date;
         name: string;
+        createdAt: Date;
+        updatedAt: Date;
         email: string | null;
-        phone: string | null;
         whatsappId: string | null;
         instagramId: string | null;
         messengerId: string | null;
+        phone: string | null;
         aiEnabled: boolean;
-        updatedAt: Date;
+        isAiPaused: boolean;
     }>;
     remove(id: string): Promise<{
         id: string;
-        createdAt: Date;
         name: string;
+        createdAt: Date;
+        updatedAt: Date;
         email: string | null;
-        phone: string | null;
         whatsappId: string | null;
         instagramId: string | null;
         messengerId: string | null;
+        phone: string | null;
         aiEnabled: boolean;
-        updatedAt: Date;
+        isAiPaused: boolean;
     }>;
     toggleAi(id: string, enabled: boolean): Promise<{
         id: string;
-        createdAt: Date;
         name: string;
+        createdAt: Date;
+        updatedAt: Date;
         email: string | null;
-        phone: string | null;
         whatsappId: string | null;
         instagramId: string | null;
         messengerId: string | null;
+        phone: string | null;
         aiEnabled: boolean;
-        updatedAt: Date;
+        isAiPaused: boolean;
     }>;
 }

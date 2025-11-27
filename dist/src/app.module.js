@@ -13,17 +13,19 @@ const bull_1 = require("@nestjs/bull");
 const prisma_module_1 = require("./prisma/prisma.module");
 const auth_module_1 = require("./modules/auth/auth.module");
 const bookings_module_1 = require("./modules/bookings/bookings.module");
+const calendar_module_1 = require("./modules/calendar/calendar.module");
+const cron_module_1 = require("./modules/cron/cron.module");
 const customers_module_1 = require("./modules/customers/customers.module");
 const messages_module_1 = require("./modules/messages/messages.module");
 const ai_module_1 = require("./modules/ai/ai.module");
 const webhooks_module_1 = require("./modules/webhooks/webhooks.module");
-const calendar_module_1 = require("./modules/calendar/calendar.module");
 const whatsapp_module_1 = require("./modules/whatsapp/whatsapp.module");
 const instagram_module_1 = require("./modules/instagram/instagram.module");
 const workers_module_1 = require("./workers/workers.module");
 const websocket_module_1 = require("./websockets/websocket.module");
 const analytics_module_1 = require("./modules/analytics/analytics.module");
 const payments_module_1 = require("./modules/payments/payments.module");
+const escalation_module_1 = require("./modules/escalation/escalation.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -44,12 +46,14 @@ exports.AppModule = AppModule = __decorate([
             ai_module_1.AiModule,
             webhooks_module_1.WebhooksModule,
             calendar_module_1.CalendarModule,
+            cron_module_1.CronModule,
             whatsapp_module_1.WhatsappModule,
             instagram_module_1.InstagramModule,
             workers_module_1.WorkersModule,
             websocket_module_1.WebsocketModule,
             analytics_module_1.AnalyticsModule,
             payments_module_1.PaymentsModule,
+            escalation_module_1.EscalationModule,
         ],
     })
 ], AppModule);

@@ -242,41 +242,104 @@ let AnalyticsService = class AnalyticsService {
         };
     }
     async aiPerformanceMetrics() {
-        const predictions = await this.prisma.aiPrediction.findMany({
-            orderBy: { timestamp: 'desc' },
-            take: 1000,
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const messages = await this.prisma.message.findMany({
+            where: {
+                platform: 'whatsapp',
+                createdAt: { gte: thirtyDaysAgo }
+            },
+            include: { customer: true },
+            orderBy: { createdAt: 'desc' }
         });
-        const labeled = predictions.filter(p => p.actual !== null && p.actual !== undefined);
-        let tp = 0, fp = 0, fn = 0, tn = 0;
-        for (const p of labeled) {
-            if (p.prediction === 'positive' && p.actual === 'positive')
-                tp++;
-            else if (p.prediction === 'positive' && p.actual !== 'positive')
-                fp++;
-            else if (p.prediction !== 'positive' && p.actual === 'positive')
-                fn++;
-            else
-                tn++;
+        const inboundMessages = messages.filter(m => m.direction === 'inbound');
+        const outboundMessages = messages.filter(m => m.direction === 'outbound');
+        const responseTimes = [];
+        const MAX_RESPONSE_TIME = 5 * 60 * 1000;
+        for (let i = 0; i < inboundMessages.length; i++) {
+            const inbound = inboundMessages[i];
+            const nextOutbound = outboundMessages.find(m => m.customerId === inbound.customerId && m.createdAt > inbound.createdAt);
+            if (nextOutbound) {
+                const timeMs = nextOutbound.createdAt.getTime() - inbound.createdAt.getTime();
+                if (timeMs <= MAX_RESPONSE_TIME) {
+                    responseTimes.push(timeMs);
+                }
+            }
         }
-        const accuracy = labeled.length ? (tp + tn) / labeled.length : null;
-        const precision = tp + fp ? tp / (tp + fp) : null;
-        const recall = tp + fn ? tp / (tp + fn) : null;
-        const f1 = precision && recall && (precision + recall) ? 2 * (precision * recall) / (precision + recall) : null;
-        const avgResponseTime = predictions.length ? Math.round(predictions.reduce((sum, p) => sum + (p.responseTime || 0), 0) / predictions.length) : null;
-        const errorCount = predictions.filter(p => !!p.error).length;
-        const errorRate = predictions.length ? errorCount / predictions.length : null;
-        const feedbacks = predictions.filter(p => typeof p.userFeedback === 'number');
-        const avgFeedback = feedbacks.length ? Math.round(feedbacks.reduce((sum, p) => sum + (p.userFeedback || 0), 0) / feedbacks.length * 10) / 10 : null;
+        const sorted = [...responseTimes].sort((a, b) => a - b);
+        const p50 = sorted[Math.floor(sorted.length * 0.5)] || 0;
+        const p95 = sorted[Math.floor(sorted.length * 0.95)] || 0;
+        const p99 = sorted[Math.floor(sorted.length * 0.99)] || 0;
+        const avgResponseTime = responseTimes.length > 0
+            ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length
+            : 0;
+        const totalCustomers = await this.prisma.customer.count({
+            where: { whatsappId: { not: null } }
+        });
+        const customersWithBooking = await this.prisma.customer.count({
+            where: {
+                whatsappId: { not: null },
+                bookings: { some: {} }
+            }
+        });
+        const bookingConversionRate = totalCustomers > 0
+            ? (customersWithBooking / totalCustomers) * 100
+            : 0;
+        const smartActionMessages = outboundMessages.filter(m => m.content.includes('Done! ✅') || m.content.includes('sent a lovely reminder'));
+        const packageQueryResponses = outboundMessages.filter(m => m.content.includes('packages with you') || m.content.includes('KSH'));
+        const intents = {
+            booking: inboundMessages.filter(m => /(book|appointment|schedule|reserve)/i.test(m.content)).length,
+            pricing: inboundMessages.filter(m => /(price|cost|package|how much)/i.test(m.content)).length,
+            inquiry: inboundMessages.filter(m => /(\?|what|when|where|how)/i.test(m.content)).length,
+            confirmation: inboundMessages.filter(m => /(yes|yeah|confirm|correct)/i.test(m.content)).length,
+            other: 0
+        };
+        intents.other = inboundMessages.length - (intents.booking + intents.pricing + intents.inquiry + intents.confirmation);
+        let positiveSentiment = 0;
+        let negativeSentiment = 0;
+        for (const msg of inboundMessages.slice(0, 200)) {
+            const { mood } = (0, sentiment_util_1.analyzeSentiment)(msg.content);
+            if (mood === 'positive')
+                positiveSentiment++;
+            if (mood === 'negative')
+                negativeSentiment++;
+        }
+        const satisfactionScore = inboundMessages.length > 0
+            ? ((positiveSentiment / Math.min(inboundMessages.length, 200)) * 100)
+            : 0;
+        const customersWithMessages = await this.prisma.customer.findMany({
+            where: { messages: { some: {} } },
+            include: { _count: { select: { messages: true } } }
+        });
+        const avgMessagesPerConversation = customersWithMessages.length > 0
+            ? customersWithMessages.reduce((sum, c) => sum + c._count.messages, 0) / customersWithMessages.length
+            : 0;
         return {
-            accuracy,
-            precision,
-            recall,
-            f1,
-            avgResponseTime,
-            errorRate,
-            avgFeedback,
-            total: predictions.length,
-            labeled: labeled.length,
+            avgResponseTimeMs: Math.round(avgResponseTime),
+            p50ResponseTimeMs: Math.round(p50),
+            p95ResponseTimeMs: Math.round(p95),
+            p99ResponseTimeMs: Math.round(p99),
+            totalConversations: inboundMessages.length,
+            bookingConversionRate: Math.round(bookingConversionRate * 10) / 10,
+            customersWithBooking,
+            totalCustomers,
+            smartActionsTriggered: smartActionMessages.length,
+            packageQueriesHandled: packageQueryResponses.length,
+            avgMessagesPerConversation: Math.round(avgMessagesPerConversation * 10) / 10,
+            totalInbound: inboundMessages.length,
+            totalOutbound: outboundMessages.length,
+            topIntents: [
+                { intent: 'booking', count: intents.booking },
+                { intent: 'pricing', count: intents.pricing },
+                { intent: 'inquiry', count: intents.inquiry },
+                { intent: 'confirmation', count: intents.confirmation },
+                { intent: 'other', count: intents.other }
+            ].sort((a, b) => b.count - a.count),
+            customerSatisfactionScore: Math.round(satisfactionScore * 10) / 10,
+            positiveSentiment,
+            negativeSentiment,
+            periodDays: 30,
+            lastUpdated: new Date().toISOString()
         };
     }
 };

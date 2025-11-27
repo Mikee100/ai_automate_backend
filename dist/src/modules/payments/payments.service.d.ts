@@ -21,10 +21,10 @@ export declare class PaymentsService {
         id: string;
         createdAt: Date;
         updatedAt: Date;
+        status: string;
+        phone: string;
         bookingDraftId: string | null;
         amount: number;
-        phone: string;
-        status: string;
         mpesaReceipt: string | null;
         checkoutRequestId: string | null;
     }>;

@@ -1,20 +1,24 @@
 // src/modules/ai/ai.service.ts
-import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Logger, Optional, Inject, forwardRef } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { ConfigService } from '@nestjs/config';
-import { OpenAI } from 'openai';
+import OpenAI from 'openai';
 import { Pinecone } from '@pinecone-database/pinecone';
+import axios from 'axios';
+import * as chrono from 'chrono-node';
+import { DateTime } from 'luxon';
 import { PrismaService } from '../../prisma/prisma.service';
+import { BookingsService } from '../bookings/bookings.service';
+import { MessagesService } from '../messages/messages.service';
+import { EscalationService } from '../escalation/escalation.service';
+
 // Utility to extract model version from OpenAI model string
 function extractModelVersion(model: string): string {
   if (!model) return '';
   const match = model.match(/(gpt-[^\s]+)/);
   return match ? match[1] : model;
 }
-import { BookingsService } from '../bookings/bookings.service';
-import * as chrono from 'chrono-node';
-import { DateTime } from 'luxon';
 
 type HistoryMsg = { role: 'user' | 'assistant'; content: string };
 
@@ -69,8 +73,10 @@ export class AiService {
   constructor(
     private configService: ConfigService,
     private prisma: PrismaService,
-    @Inject(forwardRef(() => BookingsService)) private bookingsService: BookingsService,
-    @InjectQueue('aiQueue') private aiQueue: Queue,
+    @Inject(forwardRef(() => BookingsService)) @Optional() private bookingsService?: BookingsService,
+    @Optional() private messagesService?: MessagesService,
+    @Optional() private escalationService?: EscalationService,
+    @InjectQueue('aiQueue') private aiQueue?: Queue,
   ) {
     // OpenAI client
     this.openai = new OpenAI({ apiKey: this.configService.get<string>('OPENAI_API_KEY') });
@@ -465,6 +471,19 @@ Examples:
   async getOrCreateDraft(customerId: string) {
     let draft = await this.prisma.bookingDraft.findUnique({ where: { customerId } });
     if (!draft) {
+      // Ensure customer exists before creating draft
+      let customer = await this.prisma.customer.findUnique({ where: { id: customerId } });
+      if (!customer) {
+        // Create a minimal customer record (customize as needed)
+        customer = await this.prisma.customer.create({
+          data: {
+            id: customerId,
+            name: 'Guest',
+            email: null,
+            phone: null,
+          },
+        });
+      }
       draft = await this.prisma.bookingDraft.create({
         data: { customerId, step: 'service', version: 1 },
       });
@@ -585,6 +604,145 @@ Examples:
 
     const lower = (message || '').toLowerCase();
 
+    // 1. CHECK ESCALATION STATUS
+    if (this.escalationService) {
+      const isEscalated = await this.escalationService.isCustomerEscalated(customerId);
+      if (isEscalated) {
+        this.logger.debug(`Skipping AI response for escalated customer ${customerId}`);
+        return { response: null, draft: null, updatedHistory: history };
+      }
+    }
+
+    // 2. DETECT ESCALATION INTENT
+    if (/(talk|speak).*(human|person|agent|representative)/i.test(message) || /(stupid|useless|hate|annoying|bad bot)/i.test(message)) {
+      if (this.escalationService) {
+        this.logger.log(`[ESCALATION] Customer ${customerId} requested handoff`);
+        await this.escalationService.createEscalation(customerId, 'User requested human or expressed frustration');
+        const msg = "I understand you'd like to speak with a human agent. I've notified our team, and someone will be with you shortly. In the meantime, I'll pause my responses. 💖";
+        return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+      }
+    }
+
+    // 3. DETECT CANCELLATION
+    if (/(cancel).*(booking|appointment|session)/i.test(message)) {
+      const booking = await this.bookingsService.getLatestConfirmedBooking(customerId);
+      if (booking) {
+        if (/(yes|sure|confirm|please|do it)/i.test(message)) {
+          await this.bookingsService.cancelBooking(booking.id);
+          const msg = "Your booking has been cancelled. We hope to see you again soon! 💔";
+          return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+        } else {
+          const msg = "Are you sure you want to cancel your upcoming booking? Reply 'yes' to confirm.";
+          return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+        }
+      }
+    }
+
+    // 4. DETECT RESCHEDULING
+    if (/(reschedule|change|move).*(booking|appointment|date|time)/i.test(message)) {
+      const booking = await this.bookingsService.getLatestConfirmedBooking(customerId);
+      if (booking) {
+        // Try to parse a date from the message
+        const parsed = chrono.parse(message);
+        if (parsed.length > 0) {
+          const localDt = parsed[0].start.date();
+          const dt = DateTime.fromJSDate(localDt).setZone(this.studioTz);
+          const newDate = new Date(dt.toUTC().toISO());
+
+          // Check availability
+          const avail = await this.bookingsService.checkAvailability(newDate, booking.service);
+          if (avail.available) {
+            await this.bookingsService.updateBooking(booking.id, { dateTime: newDate });
+            // Notification is sent by bookingsService
+            const msg = `I've rescheduled your appointment to ${dt.toFormat('ccc, LLL dd, yyyy HH:mm')}. See you then! 💖`;
+            return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+          } else {
+            const msg = `I'm sorry, that time slot isn't available. Could you try another time?`;
+            return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+          }
+        } else {
+          const msg = "I can help with that! Please reply with the new date and time you'd like (e.g., 'Move to next Friday at 2pm').";
+          return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+        }
+      }
+    }
+
+
+    // SMART ACTION DETECTION: Send immediate reminder (broadened to catch more variations)
+    const isReminderAction = (
+      (/(send|give|text|message).*(reminder|message|notification|it)/i.test(message) && /(again|now|right now|immediately|asap|today)/i.test(message)) ||
+      /(send|text|message).*(her|him|them).*(reminder|again)/i.test(message) ||
+      /(remind|text|message).*(her|him|them).*(now|again|please)/i.test(message)
+    );
+
+    if (isReminderAction) {
+      this.logger.log(`[SMART ACTION] Manual reminder request detected: "${message}"`);
+
+      // Find the most recent booking for this customer
+      const recentBooking = await this.prisma.booking.findFirst({
+        where: { customerId },
+        orderBy: { createdAt: 'desc' },
+        include: { customer: true }
+      });
+
+      if (recentBooking) {
+        const bookingDt = DateTime.fromJSDate(recentBooking.dateTime).setZone(this.studioTz);
+        const formattedDate = bookingDt.toFormat('MMMM d, yyyy');
+        const formattedTime = bookingDt.toFormat('h:mm a');
+        const recipientName = recentBooking.recipientName || recentBooking.customer?.name || 'there';
+        const recipientPhone = recentBooking.recipientPhone || recentBooking.customer?.phone;
+
+        if (recipientPhone) {
+          const reminderMessage =
+            `Hi ${recipientName}! 💖\n\n` +
+            `This is a friendly reminder about your upcoming maternity photoshoot ` +
+            `on *${formattedDate} at ${formattedTime}*. ` +
+            `We're so excited to capture your beautiful moments! ✨📸\n\n` +
+            `If you have any questions, feel free to reach out. See you soon! 🌸`;
+
+          try {
+            // Send via messages service to the recipient
+            await this.messagesService.sendOutboundMessage(
+              recipientPhone,
+              reminderMessage,
+              'whatsapp'
+            );
+
+            this.logger.log(`[SMART ACTION] Sent manual reminder to ${recipientPhone} for booking ${recentBooking.id}`);
+
+            const confirmMsg = `Done! ✅ I've just sent a lovely reminder to ${recipientName} at ${recipientPhone.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3')}. She should receive it shortly. 💖`;
+            return { response: confirmMsg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: confirmMsg }] };
+          } catch (err) {
+            this.logger.error('[SMART ACTION] Failed to send manual reminder', err);
+            const errorMsg = `I tried to send the reminder, but encountered an issue. Could you please check the phone number or try again? 💕`;
+            return { response: errorMsg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: errorMsg }] };
+          }
+        } else {
+          const noPhoneMsg = `I'd love to send that reminder, but I don't have a phone number for ${recipientName}. Could you provide it? 🌸`;
+          return { response: noPhoneMsg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: noPhoneMsg }] };
+        }
+      } else {
+        const noBookingMsg = `I'd be happy to send a reminder, but I don't see any booking details yet. Would you like to book a session first? 💖`;
+        return { response: noBookingMsg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: noBookingMsg }] };
+      }
+    }
+
+    // Handle WhatsApp number confirmation for bookings
+    if (hasDraft && /(yes|yeah|yep|correct|that'?s? right|it is|yess)/i.test(message) && /(whatsapp|number|phone|reach)/i.test(lower)) {
+      this.logger.log(`[SMART EXTRACTION] Detected WhatsApp number confirmation: "${message}"`);
+      const customer = await this.prisma.customer.findUnique({ where: { id: customerId } });
+
+      if (customer?.phone && !draft.recipientPhone) {
+        // User confirmed to use customer's WhatsApp number as recipient phone
+        await this.prisma.bookingDraft.update({
+          where: { customerId },
+          data: { recipientPhone: customer.phone }
+        });
+        this.logger.log(`[SMART EXTRACTION] Set recipientPhone to customer phone: ${customer.phone}`);
+        // Reload draft
+        draft = await this.prisma.bookingDraft.findUnique({ where: { customerId } });
+      }
+    }
 
     // Business name query detection
     const businessNameKeywords = ['business name', 'what is the business called', 'who are you', 'company name', 'studio name', 'what is this place', 'what is this business', 'what is your name'];
@@ -600,6 +758,75 @@ Examples:
       const locationResponse = `Our business is called ${this.businessName}. ${this.businessLocation}`;
       const updatedHistory = [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: locationResponse }];
       return { response: locationResponse, draft: null, updatedHistory };
+    }
+
+    // CHECK FOR PACKAGE QUERIES FIRST (before intent classification) 
+    const isPackageQuery = /(package|price|pricing|cost|how much|offer|photoshoot|shoot|what do you have|what are|show me|tell me about)/i.test(message);
+
+    if (!hasDraft && isPackageQuery) {
+      this.logger.log(`[PACKAGE QUERY DETECTED] Message: "${message}"`);
+      try {
+        const allPackages = await this.bookingsService.getPackages();
+        this.logger.log(`[PACKAGE QUERY] Found ${allPackages?.length || 0} packages in DB`);
+
+        // Try to match a package selection in the message
+        const lowerMsg = message.toLowerCase();
+        const matchedPackage = allPackages.find((p: any) => lowerMsg.includes(p.name.toLowerCase()));
+        if (matchedPackage) {
+          // Set the selected package in the booking draft and move to next step
+          let draft = await this.getOrCreateDraft(customerId);
+          draft = await this.prisma.bookingDraft.update({
+            where: { customerId },
+            data: { service: matchedPackage.name },
+          });
+          this.logger.log(`[PACKAGE SELECTION] User selected package: ${matchedPackage.name}`);
+          // Continue booking flow (ask for next info, e.g., date/time)
+          const extraction = { service: matchedPackage.name, subIntent: 'provide' };
+          const merged = await this.mergeIntoDraft(customerId, extraction);
+          const reply = await this.generateBookingReply(message, merged, extraction, history, this.bookingsService);
+          return { response: reply, draft: merged, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: reply }] };
+        }
+
+        if (allPackages && allPackages.length > 0) {
+          let packages = allPackages;
+          let packageType = '';
+          if (/(outdoor)/i.test(message)) {
+            packages = allPackages.filter((p: any) => p.type?.toLowerCase() === 'outdoor');
+            packageType = 'outdoor ';
+          } else if (/(studio)/i.test(message)) {
+            packages = allPackages.filter((p: any) => p.type?.toLowerCase() === 'studio');
+            packageType = 'studio ';
+          }
+
+          if (packages.length > 0) {
+            const packagesList = packages.map((p: any) => {
+              const name = p.name ?? 'Unnamed package';
+              const dur = p.duration ?? 'unknown duration';
+              let price = 'price not available';
+              if (p.price !== undefined && p.price !== null) {
+                price = `KSH ${p.price}`;
+              }
+              let deposit = '';
+              if (p.deposit !== undefined && p.deposit !== null) {
+                deposit = ` (Deposit: KSH ${p.deposit})`;
+              }
+              return `*${name}*: ${dur}, ${price}${deposit}`;
+            }).join('\\n\\n');
+
+            const response = `Oh, my dear, I'm so delighted to share our ${packageType}packages with you! Each one is thoughtfully crafted to beautifully capture this precious time in your life. Here they are:\\n\\n${packagesList}\\n\\nIf you have any questions about any package, just let me know! 💖`;
+            this.logger.log(`[PACKAGE QUERY] Returning package list (${packages.length} packages)`);
+            return { response, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
+          }
+        }
+        // If no packages found or filtered to zero
+        this.logger.warn('[PACKAGE QUERY] No matching packages found');
+        const response = "I'm not sure about our current packages. Would you like me to check and get back to you?";
+        return { response, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
+      } catch (err) {
+        this.logger.error('[PACKAGE QUERY] Failed to fetch packages', err);
+        const response = "I'm not sure about our current packages. Would you like me to check and get back to you?";
+        return { response, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
+      }
     }
 
     let intent: 'faq' | 'booking' | 'other' = 'other';
@@ -625,51 +852,7 @@ Examples:
       }
     }
 
-    // Check if message mentions package-related keywords to prevent hallucination (only for non-booking intents)
-    if (intent !== 'booking' && /(package|price|cost|how much|offer|studio|outdoor)/.test(lower)) {
-      try {
-        this.logger.log('Fetching packages from DB for package-related query');
-        const allPackages = await this.bookingsService.getPackages();
-        if (allPackages && allPackages.length > 0) {
-          let packages = allPackages;
-          let packageType = '';
-          if (/(outdoor)/.test(lower)) {
-            packages = allPackages.filter((p: any) => p.type?.toLowerCase() === 'outdoor');
-            packageType = 'outdoor ';
-          } else if (/(studio)/.test(lower)) {
-            packages = allPackages.filter((p: any) => p.type?.toLowerCase() === 'studio');
-            packageType = 'studio ';
-          }
-          if (packages.length > 0) {
-            const packagesList = packages.map((p: any) => {
-              // Defensive fallback for missing fields
-              const name = p.name ?? 'Unnamed package';
-              const dur = p.duration ?? 'unknown duration';
-              let price = 'price not available';
-              if (p.price !== undefined && p.price !== null) {
-                price = `KSH ${p.price}`;
-              }
-              return `${name}: ${dur}, ${price}`;
-            }).join('; ');
-            const response = `Oh, my dear, I'm so delighted to share more about our ${packageType}packages with you! Each one is thoughtfully crafted to beautifully capture this precious time in your life. Here they are: ${packagesList}. If you have any questions about any package, just let me know! 💖`;
-            return { response, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
-          } else {
-            const response = `I'm not sure about our current ${packageType}packages. Would you like me to check and get back to you?`;
-            return { response, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
-          }
-        } else {
-          this.logger.warn('No packages found in DB');
-          const response = "I'm not sure about our current packages. Would you like me to check and get back to you?";
-          return { response, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
-        }
-      } catch (err) {
-        this.logger.error('Failed to fetch packages for FAQ', err);
-        const response = "I'm not sure about our current packages. Would you like me to check and get back to you?";
-        return { response, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
-      }
-    }
-
-    // Route flows for non-package queries
+    // Route flows for non-package queries (packages already handled above)
     if (intent === 'faq' || intent === 'other') {
       const reply = await this.answerFaq(message, history);
       return { response: reply, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: reply }] };

@@ -15,15 +15,21 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AiController = void 0;
 const common_1 = require("@nestjs/common");
 const ai_service_1 = require("./ai.service");
+const bookings_service_1 = require("../bookings/bookings.service");
 let AiController = class AiController {
-    constructor(aiService) {
+    constructor(aiService, bookingsService) {
         this.aiService = aiService;
+        this.bookingsService = bookingsService;
     }
     answerFaq(body) {
         return this.aiService.answerFaq(body.question);
     }
     addKnowledge(body) {
         return this.aiService.addKnowledge(body.question, body.answer);
+    }
+    async handleConversation(body) {
+        const { message, customerId, history = [] } = body;
+        return this.aiService.handleConversation(message, customerId, history, this.bookingsService);
     }
 };
 exports.AiController = AiController;
@@ -41,8 +47,16 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], AiController.prototype, "addKnowledge", null);
+__decorate([
+    (0, common_1.Post)('conversation'),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], AiController.prototype, "handleConversation", null);
 exports.AiController = AiController = __decorate([
     (0, common_1.Controller)('ai'),
-    __metadata("design:paramtypes", [ai_service_1.AiService])
+    __metadata("design:paramtypes", [ai_service_1.AiService,
+        bookings_service_1.BookingsService])
 ], AiController);
 //# sourceMappingURL=ai.controller.js.map

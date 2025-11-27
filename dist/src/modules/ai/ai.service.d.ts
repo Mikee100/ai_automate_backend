@@ -2,6 +2,8 @@ import { Queue } from 'bull';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BookingsService } from '../bookings/bookings.service';
+import { MessagesService } from '../messages/messages.service';
+import { EscalationService } from '../escalation/escalation.service';
 type HistoryMsg = {
     role: 'user' | 'assistant';
     content: string;
@@ -9,8 +11,10 @@ type HistoryMsg = {
 export declare class AiService {
     private configService;
     private prisma;
-    private bookingsService;
-    private aiQueue;
+    private bookingsService?;
+    private messagesService?;
+    private escalationService?;
+    private aiQueue?;
     private readonly logger;
     private openai;
     private pinecone;
@@ -22,7 +26,7 @@ export declare class AiService {
     private readonly historyLimit;
     private readonly businessName;
     private readonly businessLocation;
-    constructor(configService: ConfigService, prisma: PrismaService, bookingsService: BookingsService, aiQueue: Queue);
+    constructor(configService: ConfigService, prisma: PrismaService, bookingsService?: BookingsService, messagesService?: MessagesService, escalationService?: EscalationService, aiQueue?: Queue);
     private initPineconeSafely;
     private normalizeDateTime;
     generateEmbedding(text: string): Promise<number[]>;
@@ -41,35 +45,35 @@ export declare class AiService {
     private generateBookingReply;
     getOrCreateDraft(customerId: string): Promise<{
         id: string;
+        name: string | null;
+        createdAt: Date;
+        updatedAt: Date;
         customerId: string;
         service: string | null;
         date: string | null;
         time: string | null;
         dateTimeIso: string | null;
-        name: string | null;
         recipientName: string | null;
         recipientPhone: string | null;
         isForSomeoneElse: boolean | null;
         step: string;
         version: number;
-        createdAt: Date;
-        updatedAt: Date;
     }>;
     mergeIntoDraft(customerId: string, extraction: any): Promise<{
         id: string;
+        name: string | null;
+        createdAt: Date;
+        updatedAt: Date;
         customerId: string;
         service: string | null;
         date: string | null;
         time: string | null;
         dateTimeIso: string | null;
-        name: string | null;
         recipientName: string | null;
         recipientPhone: string | null;
         isForSomeoneElse: boolean | null;
         step: string;
         version: number;
-        createdAt: Date;
-        updatedAt: Date;
     }>;
     checkAndCompleteIfConfirmed(draft: any, extraction: any, customerId: string, bookingsService: any): Promise<{
         action: string;
@@ -104,19 +108,19 @@ export declare class AiService {
         response: string;
         draft: {
             id: string;
+            name: string | null;
+            createdAt: Date;
+            updatedAt: Date;
             customerId: string;
             service: string | null;
             date: string | null;
             time: string | null;
             dateTimeIso: string | null;
-            name: string | null;
             recipientName: string | null;
             recipientPhone: string | null;
             isForSomeoneElse: boolean | null;
             step: string;
             version: number;
-            createdAt: Date;
-            updatedAt: Date;
         };
         updatedHistory: {
             role: string;

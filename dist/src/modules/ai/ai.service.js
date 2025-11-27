@@ -19,21 +19,25 @@ const bull_1 = require("@nestjs/bull");
 const config_1 = require("@nestjs/config");
 const openai_1 = require("openai");
 const pinecone_1 = require("@pinecone-database/pinecone");
+const chrono = require("chrono-node");
+const luxon_1 = require("luxon");
 const prisma_service_1 = require("../../prisma/prisma.service");
+const bookings_service_1 = require("../bookings/bookings.service");
+const messages_service_1 = require("../messages/messages.service");
+const escalation_service_1 = require("../escalation/escalation.service");
 function extractModelVersion(model) {
     if (!model)
         return '';
     const match = model.match(/(gpt-[^\s]+)/);
     return match ? match[1] : model;
 }
-const bookings_service_1 = require("../bookings/bookings.service");
-const chrono = require("chrono-node");
-const luxon_1 = require("luxon");
 let AiService = AiService_1 = class AiService {
-    constructor(configService, prisma, bookingsService, aiQueue) {
+    constructor(configService, prisma, bookingsService, messagesService, escalationService, aiQueue) {
         this.configService = configService;
         this.prisma = prisma;
         this.bookingsService = bookingsService;
+        this.messagesService = messagesService;
+        this.escalationService = escalationService;
         this.aiQueue = aiQueue;
         this.logger = new common_1.Logger(AiService_1.name);
         this.pinecone = null;
@@ -42,7 +46,7 @@ let AiService = AiService_1 = class AiService {
         this.historyLimit = 6;
         this.businessName = 'Fiesta House Attire maternity photoshoot studio';
         this.businessLocation = 'Our studio is located at 4th Avenue Parklands, Diamond Plaza Annex, 2nd Floor. We look forward to welcoming you! 💖';
-        this.openai = new openai_1.OpenAI({ apiKey: this.configService.get('OPENAI_API_KEY') });
+        this.openai = new openai_1.default({ apiKey: this.configService.get('OPENAI_API_KEY') });
         this.embeddingModel = this.configService.get('OPENAI_EMBEDDING_MODEL', 'text-embedding-3-small');
         this.extractorModel = this.configService.get('OPENAI_EXTRACTOR_MODEL', 'gpt-4o');
         this.chatModel = this.configService.get('OPENAI_CHAT_MODEL', 'gpt-4o');
@@ -373,6 +377,17 @@ Examples:
     async getOrCreateDraft(customerId) {
         let draft = await this.prisma.bookingDraft.findUnique({ where: { customerId } });
         if (!draft) {
+            let customer = await this.prisma.customer.findUnique({ where: { id: customerId } });
+            if (!customer) {
+                customer = await this.prisma.customer.create({
+                    data: {
+                        id: customerId,
+                        name: 'Guest',
+                        email: null,
+                        phone: null,
+                    },
+                });
+            }
             draft = await this.prisma.bookingDraft.create({
                 data: { customerId, step: 'service', version: 1 },
             });
@@ -487,6 +502,116 @@ Examples:
         let draft = await this.prisma.bookingDraft.findUnique({ where: { customerId } });
         const hasDraft = !!draft;
         const lower = (message || '').toLowerCase();
+        if (this.escalationService) {
+            const isEscalated = await this.escalationService.isCustomerEscalated(customerId);
+            if (isEscalated) {
+                this.logger.debug(`Skipping AI response for escalated customer ${customerId}`);
+                return { response: null, draft: null, updatedHistory: history };
+            }
+        }
+        if (/(talk|speak).*(human|person|agent|representative)/i.test(message) || /(stupid|useless|hate|annoying|bad bot)/i.test(message)) {
+            if (this.escalationService) {
+                this.logger.log(`[ESCALATION] Customer ${customerId} requested handoff`);
+                await this.escalationService.createEscalation(customerId, 'User requested human or expressed frustration');
+                const msg = "I understand you'd like to speak with a human agent. I've notified our team, and someone will be with you shortly. In the meantime, I'll pause my responses. 💖";
+                return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+            }
+        }
+        if (/(cancel).*(booking|appointment|session)/i.test(message)) {
+            const booking = await this.bookingsService.getLatestConfirmedBooking(customerId);
+            if (booking) {
+                if (/(yes|sure|confirm|please|do it)/i.test(message)) {
+                    await this.bookingsService.cancelBooking(booking.id);
+                    const msg = "Your booking has been cancelled. We hope to see you again soon! 💔";
+                    return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+                }
+                else {
+                    const msg = "Are you sure you want to cancel your upcoming booking? Reply 'yes' to confirm.";
+                    return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+                }
+            }
+        }
+        if (/(reschedule|change|move).*(booking|appointment|date|time)/i.test(message)) {
+            const booking = await this.bookingsService.getLatestConfirmedBooking(customerId);
+            if (booking) {
+                const parsed = chrono.parse(message);
+                if (parsed.length > 0) {
+                    const localDt = parsed[0].start.date();
+                    const dt = luxon_1.DateTime.fromJSDate(localDt).setZone(this.studioTz);
+                    const newDate = new Date(dt.toUTC().toISO());
+                    const avail = await this.bookingsService.checkAvailability(newDate, booking.service);
+                    if (avail.available) {
+                        await this.bookingsService.updateBooking(booking.id, { dateTime: newDate });
+                        const msg = `I've rescheduled your appointment to ${dt.toFormat('ccc, LLL dd, yyyy HH:mm')}. See you then! 💖`;
+                        return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+                    }
+                    else {
+                        const msg = `I'm sorry, that time slot isn't available. Could you try another time?`;
+                        return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+                    }
+                }
+                else {
+                    const msg = "I can help with that! Please reply with the new date and time you'd like (e.g., 'Move to next Friday at 2pm').";
+                    return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+                }
+            }
+        }
+        const isReminderAction = ((/(send|give|text|message).*(reminder|message|notification|it)/i.test(message) && /(again|now|right now|immediately|asap|today)/i.test(message)) ||
+            /(send|text|message).*(her|him|them).*(reminder|again)/i.test(message) ||
+            /(remind|text|message).*(her|him|them).*(now|again|please)/i.test(message));
+        if (isReminderAction) {
+            this.logger.log(`[SMART ACTION] Manual reminder request detected: "${message}"`);
+            const recentBooking = await this.prisma.booking.findFirst({
+                where: { customerId },
+                orderBy: { createdAt: 'desc' },
+                include: { customer: true }
+            });
+            if (recentBooking) {
+                const bookingDt = luxon_1.DateTime.fromJSDate(recentBooking.dateTime).setZone(this.studioTz);
+                const formattedDate = bookingDt.toFormat('MMMM d, yyyy');
+                const formattedTime = bookingDt.toFormat('h:mm a');
+                const recipientName = recentBooking.recipientName || recentBooking.customer?.name || 'there';
+                const recipientPhone = recentBooking.recipientPhone || recentBooking.customer?.phone;
+                if (recipientPhone) {
+                    const reminderMessage = `Hi ${recipientName}! 💖\n\n` +
+                        `This is a friendly reminder about your upcoming maternity photoshoot ` +
+                        `on *${formattedDate} at ${formattedTime}*. ` +
+                        `We're so excited to capture your beautiful moments! ✨📸\n\n` +
+                        `If you have any questions, feel free to reach out. See you soon! 🌸`;
+                    try {
+                        await this.messagesService.sendOutboundMessage(recipientPhone, reminderMessage, 'whatsapp');
+                        this.logger.log(`[SMART ACTION] Sent manual reminder to ${recipientPhone} for booking ${recentBooking.id}`);
+                        const confirmMsg = `Done! ✅ I've just sent a lovely reminder to ${recipientName} at ${recipientPhone.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3')}. She should receive it shortly. 💖`;
+                        return { response: confirmMsg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: confirmMsg }] };
+                    }
+                    catch (err) {
+                        this.logger.error('[SMART ACTION] Failed to send manual reminder', err);
+                        const errorMsg = `I tried to send the reminder, but encountered an issue. Could you please check the phone number or try again? 💕`;
+                        return { response: errorMsg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: errorMsg }] };
+                    }
+                }
+                else {
+                    const noPhoneMsg = `I'd love to send that reminder, but I don't have a phone number for ${recipientName}. Could you provide it? 🌸`;
+                    return { response: noPhoneMsg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: noPhoneMsg }] };
+                }
+            }
+            else {
+                const noBookingMsg = `I'd be happy to send a reminder, but I don't see any booking details yet. Would you like to book a session first? 💖`;
+                return { response: noBookingMsg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: noBookingMsg }] };
+            }
+        }
+        if (hasDraft && /(yes|yeah|yep|correct|that'?s? right|it is|yess)/i.test(message) && /(whatsapp|number|phone|reach)/i.test(lower)) {
+            this.logger.log(`[SMART EXTRACTION] Detected WhatsApp number confirmation: "${message}"`);
+            const customer = await this.prisma.customer.findUnique({ where: { id: customerId } });
+            if (customer?.phone && !draft.recipientPhone) {
+                await this.prisma.bookingDraft.update({
+                    where: { customerId },
+                    data: { recipientPhone: customer.phone }
+                });
+                this.logger.log(`[SMART EXTRACTION] Set recipientPhone to customer phone: ${customer.phone}`);
+                draft = await this.prisma.bookingDraft.findUnique({ where: { customerId } });
+            }
+        }
         const businessNameKeywords = ['business name', 'what is the business called', 'who are you', 'company name', 'studio name', 'what is this place', 'what is this business', 'what is your name'];
         if (businessNameKeywords.some((kw) => lower.includes(kw))) {
             const nameResponse = `Our business is called ${this.businessName}. If you have any questions about our services or need assistance, I'm here to help! 😊`;
@@ -498,6 +623,66 @@ Examples:
             const locationResponse = `Our business is called ${this.businessName}. ${this.businessLocation}`;
             const updatedHistory = [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: locationResponse }];
             return { response: locationResponse, draft: null, updatedHistory };
+        }
+        const isPackageQuery = /(package|price|pricing|cost|how much|offer|photoshoot|shoot|what do you have|what are|show me|tell me about)/i.test(message);
+        if (!hasDraft && isPackageQuery) {
+            this.logger.log(`[PACKAGE QUERY DETECTED] Message: "${message}"`);
+            try {
+                const allPackages = await this.bookingsService.getPackages();
+                this.logger.log(`[PACKAGE QUERY] Found ${allPackages?.length || 0} packages in DB`);
+                const lowerMsg = message.toLowerCase();
+                const matchedPackage = allPackages.find((p) => lowerMsg.includes(p.name.toLowerCase()));
+                if (matchedPackage) {
+                    let draft = await this.getOrCreateDraft(customerId);
+                    draft = await this.prisma.bookingDraft.update({
+                        where: { customerId },
+                        data: { service: matchedPackage.name },
+                    });
+                    this.logger.log(`[PACKAGE SELECTION] User selected package: ${matchedPackage.name}`);
+                    const extraction = { service: matchedPackage.name, subIntent: 'provide' };
+                    const merged = await this.mergeIntoDraft(customerId, extraction);
+                    const reply = await this.generateBookingReply(message, merged, extraction, history, this.bookingsService);
+                    return { response: reply, draft: merged, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: reply }] };
+                }
+                if (allPackages && allPackages.length > 0) {
+                    let packages = allPackages;
+                    let packageType = '';
+                    if (/(outdoor)/i.test(message)) {
+                        packages = allPackages.filter((p) => p.type?.toLowerCase() === 'outdoor');
+                        packageType = 'outdoor ';
+                    }
+                    else if (/(studio)/i.test(message)) {
+                        packages = allPackages.filter((p) => p.type?.toLowerCase() === 'studio');
+                        packageType = 'studio ';
+                    }
+                    if (packages.length > 0) {
+                        const packagesList = packages.map((p) => {
+                            const name = p.name ?? 'Unnamed package';
+                            const dur = p.duration ?? 'unknown duration';
+                            let price = 'price not available';
+                            if (p.price !== undefined && p.price !== null) {
+                                price = `KSH ${p.price}`;
+                            }
+                            let deposit = '';
+                            if (p.deposit !== undefined && p.deposit !== null) {
+                                deposit = ` (Deposit: KSH ${p.deposit})`;
+                            }
+                            return `*${name}*: ${dur}, ${price}${deposit}`;
+                        }).join('\\n\\n');
+                        const response = `Oh, my dear, I'm so delighted to share our ${packageType}packages with you! Each one is thoughtfully crafted to beautifully capture this precious time in your life. Here they are:\\n\\n${packagesList}\\n\\nIf you have any questions about any package, just let me know! 💖`;
+                        this.logger.log(`[PACKAGE QUERY] Returning package list (${packages.length} packages)`);
+                        return { response, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
+                    }
+                }
+                this.logger.warn('[PACKAGE QUERY] No matching packages found');
+                const response = "I'm not sure about our current packages. Would you like me to check and get back to you?";
+                return { response, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
+            }
+            catch (err) {
+                this.logger.error('[PACKAGE QUERY] Failed to fetch packages', err);
+                const response = "I'm not sure about our current packages. Would you like me to check and get back to you?";
+                return { response, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
+            }
         }
         let intent = 'other';
         if (hasDraft) {
@@ -524,51 +709,6 @@ Examples:
                 catch (e) {
                     this.logger.warn('intent classifier fallback failed', e);
                 }
-            }
-        }
-        if (intent !== 'booking' && /(package|price|cost|how much|offer|studio|outdoor)/.test(lower)) {
-            try {
-                this.logger.log('Fetching packages from DB for package-related query');
-                const allPackages = await this.bookingsService.getPackages();
-                if (allPackages && allPackages.length > 0) {
-                    let packages = allPackages;
-                    let packageType = '';
-                    if (/(outdoor)/.test(lower)) {
-                        packages = allPackages.filter((p) => p.type?.toLowerCase() === 'outdoor');
-                        packageType = 'outdoor ';
-                    }
-                    else if (/(studio)/.test(lower)) {
-                        packages = allPackages.filter((p) => p.type?.toLowerCase() === 'studio');
-                        packageType = 'studio ';
-                    }
-                    if (packages.length > 0) {
-                        const packagesList = packages.map((p) => {
-                            const name = p.name ?? 'Unnamed package';
-                            const dur = p.duration ?? 'unknown duration';
-                            let price = 'price not available';
-                            if (p.price !== undefined && p.price !== null) {
-                                price = `KSH ${p.price}`;
-                            }
-                            return `${name}: ${dur}, ${price}`;
-                        }).join('; ');
-                        const response = `Oh, my dear, I'm so delighted to share more about our ${packageType}packages with you! Each one is thoughtfully crafted to beautifully capture this precious time in your life. Here they are: ${packagesList}. If you have any questions about any package, just let me know! 💖`;
-                        return { response, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
-                    }
-                    else {
-                        const response = `I'm not sure about our current ${packageType}packages. Would you like me to check and get back to you?`;
-                        return { response, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
-                    }
-                }
-                else {
-                    this.logger.warn('No packages found in DB');
-                    const response = "I'm not sure about our current packages. Would you like me to check and get back to you?";
-                    return { response, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
-                }
-            }
-            catch (err) {
-                this.logger.error('Failed to fetch packages for FAQ', err);
-                const response = "I'm not sure about our current packages. Would you like me to check and get back to you?";
-                return { response, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
             }
         }
         if (intent === 'faq' || intent === 'other') {
@@ -736,9 +876,14 @@ exports.AiService = AiService;
 exports.AiService = AiService = AiService_1 = __decorate([
     (0, common_1.Injectable)(),
     __param(2, (0, common_1.Inject)((0, common_1.forwardRef)(() => bookings_service_1.BookingsService))),
-    __param(3, (0, bull_1.InjectQueue)('aiQueue')),
+    __param(2, (0, common_1.Optional)()),
+    __param(3, (0, common_1.Optional)()),
+    __param(4, (0, common_1.Optional)()),
+    __param(5, (0, bull_1.InjectQueue)('aiQueue')),
     __metadata("design:paramtypes", [config_1.ConfigService,
         prisma_service_1.PrismaService,
-        bookings_service_1.BookingsService, Object])
+        bookings_service_1.BookingsService,
+        messages_service_1.MessagesService,
+        escalation_service_1.EscalationService, Object])
 ], AiService);
 //# sourceMappingURL=ai.service.js.map

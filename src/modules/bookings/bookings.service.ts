@@ -54,10 +54,15 @@ export class BookingsService {
       if (!draft.name) throw new Error(`Draft missing name for customerId=${customerId}`);
       if (!draft.recipientPhone) throw new Error(`Draft missing recipientPhone for customerId=${customerId}`);
 
-      // Get package deposit amount
-      const pkg = await this.prisma.package.findFirst({ where: { name: draft.service } });
-      if (!pkg || !pkg.deposit) {
-        throw new Error(`Package deposit not configured for ${draft.service}`);
+      // Get package deposit amount (case-insensitive match)
+      const serviceName = draft.service ? draft.service.trim() : '';
+      const pkg = await this.prisma.package.findFirst({
+        where: {
+          name: { equals: serviceName, mode: 'insensitive' }
+        }
+      });
+      if (!pkg || pkg.deposit == null) {
+        throw new Error(`Package deposit not configured for ${serviceName}`);
       }
       const depositAmount = pkg.deposit;
 
@@ -85,7 +90,7 @@ export class BookingsService {
       // Do not confirm booking yet; wait for payment callback
       this.logger.log(`M-Pesa STK Push initiated for deposit of ${depositAmount} KSH for booking draft ${draft.id}`);
 
-      return { 
+      return {
         message: 'Deposit payment initiated. Please complete payment on your phone to confirm booking.',
         checkoutRequestId
       };
@@ -111,7 +116,7 @@ export class BookingsService {
     @InjectQueue('bookingQueue') private bookingQueue: Queue,
     private paymentsService: PaymentsService,
     private messagesService: MessagesService,
-  ) {}
+  ) { }
 
   /* --------------------------
    * Helpers
@@ -207,7 +212,7 @@ export class BookingsService {
       throw new Error('Either message or dateTime is required');
     }
 
-    const selectedService = opts.service?.trim();
+    const selectedService = opts.service ? opts.service.trim() : '';
     let packageInfo = null;
     let durationMinutes = 60;
     if (selectedService) {
@@ -397,6 +402,16 @@ export class BookingsService {
       const currentBooking = await tx.booking.findUnique({ where: { id: bookingId } });
       if (!currentBooking) throw new Error('Booking not found');
 
+      // 24-hour policy check
+      const now = new Date();
+      const bookingTime = new Date(currentBooking.dateTime);
+      const diffMs = bookingTime.getTime() - now.getTime();
+      const hoursUntilBooking = diffMs / (1000 * 60 * 60);
+
+      if (hoursUntilBooking < 24 && hoursUntilBooking > 0) {
+        throw new Error('Changes cannot be made within 24 hours of the appointment. Please contact support directly.');
+      }
+
       const newDateTime = updates.dateTime ?? new Date(currentBooking.dateTime);
       const newService = updates.service ?? currentBooking.service;
       let duration = currentBooking.durationMinutes ?? 60;
@@ -422,7 +437,16 @@ export class BookingsService {
       const updated = await tx.booking.update({
         where: { id: bookingId },
         data: { service: newService, dateTime: newDateTime, durationMinutes: duration },
+        include: { customer: true }
       });
+
+      // Send rescheduling confirmation
+      const msg = `Your appointment has been rescheduled to ${DateTime.fromJSDate(newDateTime).setZone(this.STUDIO_TZ).toFormat('ccc, LLL dd, yyyy HH:mm')}.`;
+      try {
+        await this.messagesService.sendOutboundMessage(updated.customerId, msg, 'whatsapp');
+      } catch (e) {
+        this.logger.error(`Failed to send reschedule notification to ${updated.customerId}`, e);
+      }
 
       return updated;
     });
@@ -436,10 +460,34 @@ export class BookingsService {
   }
 
   async cancelBooking(bookingId: string) {
-    return this.prisma.booking.update({
+    const currentBooking = await this.prisma.booking.findUnique({ where: { id: bookingId } });
+    if (!currentBooking) throw new Error('Booking not found');
+
+    // 24-hour policy check
+    const now = new Date();
+    const bookingTime = new Date(currentBooking.dateTime);
+    const diffMs = bookingTime.getTime() - now.getTime();
+    const hoursUntilBooking = diffMs / (1000 * 60 * 60);
+
+    if (hoursUntilBooking < 24 && hoursUntilBooking > 0) {
+      throw new Error('Cancellations cannot be made within 24 hours of the appointment. Please contact support directly.');
+    }
+
+    const booking = await this.prisma.booking.update({
       where: { id: bookingId },
       data: { status: 'cancelled' },
+      include: { customer: true }
     });
+
+    // Send cancellation confirmation
+    const msg = `Your appointment has been cancelled. We hope to see you again soon!`;
+    try {
+      await this.messagesService.sendOutboundMessage(booking.customerId, msg, 'whatsapp');
+    } catch (e) {
+      this.logger.error(`Failed to send cancellation notification to ${booking.customerId}`, e);
+    }
+
+    return booking;
   }
 
   async getBookings(customerId?: string) {
@@ -450,7 +498,7 @@ export class BookingsService {
     });
     return { bookings, total: bookings.length };
   }
-    // Create a new package
+  // Create a new package
   async createPackage(data: any) {
     return this.prisma.package.create({ data });
   }
@@ -465,7 +513,7 @@ export class BookingsService {
     return this.prisma.package.delete({ where: { id } });
   }
 
-    // Get the latest confirmed booking for a customer
+  // Get the latest confirmed booking for a customer
   async getLatestConfirmedBooking(customerId: string) {
     return this.prisma.booking.findFirst({
       where: {
