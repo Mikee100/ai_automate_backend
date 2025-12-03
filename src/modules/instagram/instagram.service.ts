@@ -32,9 +32,9 @@ export class InstagramService {
   }
 
   // -------------------------------------------
-// WEBHOOK VERIFY
+  // WEBHOOK VERIFY
   // -------------------------------------------
-// Instagram uses the same verification as Facebook
+  // Instagram uses the same verification as Facebook
   verifyWebhook(mode: string, challenge: string, token: string) {
     if (mode === 'subscribe' &&
       token === this.configService.get('INSTAGRAM_VERIFY_TOKEN')) {
@@ -44,18 +44,18 @@ export class InstagramService {
   }
 
   // -------------------------------------------
-// HANDLE WEBHOOK
+  // HANDLE WEBHOOK
   // -------------------------------------------
-// Note: Webhook handling is now done by webhooks.service to avoid duplicates
+  // Note: Webhook handling is now done by webhooks.service to avoid duplicates
   async handleWebhook(body: any) {
     // Note: Webhook handling is now done by webhooks.service to avoid duplicates
     return { status: 'ok' };
   }
 
   // -------------------------------------------
-// PROCESS INBOUND MESSAGE
+  // PROCESS INBOUND MESSAGE
   // -------------------------------------------
-// This is handled by webhooks.service
+  // This is handled by webhooks.service
   async processMessage(value: any) {
     const message = value.messaging[0];
 
@@ -87,12 +87,55 @@ export class InstagramService {
   }
 
   // -------------------------------------------
-// SEND INSTAGRAM MESSAGE (GRAPH API)
+  // SEND INSTAGRAM MESSAGE (GRAPH API)
   // -------------------------------------------
-// Instagram uses Facebook Graph API for messaging
+  // Instagram uses Facebook Graph API for messaging
+  async canSendMessage(instagramId: string): Promise<{
+    allowed: boolean;
+    reason?: string;
+    lastMessageAt?: Date;
+    hoursRemaining?: number;
+  }> {
+    const customer = await this.customersService.findByInstagramId(instagramId);
+
+    if (!customer?.lastInstagramMessageAt) {
+      return {
+        allowed: false,
+        reason: 'User has not messaged you yet. Instagram only allows replies to users who message you first.'
+      };
+    }
+
+    const now = new Date();
+    const hoursSinceLastMessage = (now.getTime() - customer.lastInstagramMessageAt.getTime()) / (1000 * 60 * 60);
+
+    if (hoursSinceLastMessage > 24) {
+      return {
+        allowed: false,
+        reason: '24-hour messaging window has expired. User must send a new message first.',
+        lastMessageAt: customer.lastInstagramMessageAt
+      };
+    }
+
+    const hoursRemaining = 24 - hoursSinceLastMessage;
+    return {
+      allowed: true,
+      lastMessageAt: customer.lastInstagramMessageAt,
+      hoursRemaining
+    };
+  }
+
   async sendMessage(to: string, message: string) {
     console.log('📤 Sending Instagram message to:', to);
     console.log('Message:', message);
+
+    // Check 24-hour window first
+    const canSend = await this.canSendMessage(to);
+    if (!canSend.allowed) {
+      console.error('❌ Cannot send message:', canSend.reason);
+      throw new Error(canSend.reason);
+    }
+
+    console.log(`✅ Within 24-hour window (${canSend.hoursRemaining?.toFixed(1)} hours remaining)`);
 
     try {
       if (!this.businessAccountId) {
@@ -136,9 +179,9 @@ export class InstagramService {
   }
 
   // -------------------------------------------
-// GET MESSAGES FOR UI
+  // GET MESSAGES FOR UI
   // -------------------------------------------
-// Similar to WhatsApp
+  // Similar to WhatsApp
   async getMessages(options: { page?: number; limit?: number; direction?: 'inbound' | 'outbound'; customerId?: string; }) {
     const messages = await this.messagesService.findAll();
     let filtered = messages.filter(m => m.platform === 'instagram');
@@ -179,9 +222,9 @@ export class InstagramService {
   }
 
   // -------------------------------------------
-// GET CONVERSATIONS FOR UI
+  // GET CONVERSATIONS FOR UI
   // -------------------------------------------
-// Similar to WhatsApp
+  // Similar to WhatsApp
   async getConversations() {
     const messages = await this.messagesService.findAll();
     const ig = messages.filter(m => m.platform === 'instagram');
@@ -222,9 +265,9 @@ export class InstagramService {
   }
 
   // -------------------------------------------
-// SETTINGS
+  // SETTINGS
   // -------------------------------------------
-// Similar to WhatsApp
+  // Similar to WhatsApp
   async getSettings() {
     return {
       businessAccountId: this.businessAccountId,
@@ -239,9 +282,9 @@ export class InstagramService {
   }
 
   // -------------------------------------------
-// CONNECTION TEST
+  // CONNECTION TEST
   // -------------------------------------------
-// Similar to WhatsApp
+  // Similar to WhatsApp
   async testConnection() {
     try {
       // Test Instagram API connection

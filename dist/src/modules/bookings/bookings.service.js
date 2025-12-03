@@ -14,29 +14,19 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 var BookingsService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BookingsService = void 0;
-function parseDurationToMinutes(duration) {
-    if (!duration)
-        return null;
-    const hrMatch = duration.match(/(\d+)\s*hr/);
-    const minMatch = duration.match(/(\d+)\s*min/);
-    let mins = 0;
-    if (hrMatch)
-        mins += parseInt(hrMatch[1], 10) * 60;
-    if (minMatch)
-        mins += parseInt(minMatch[1], 10);
-    return mins || null;
-}
 const common_1 = require("@nestjs/common");
 const bull_1 = require("@nestjs/bull");
+const event_emitter_1 = require("@nestjs/event-emitter");
 const prisma_service_1 = require("../../prisma/prisma.service");
 const payments_service_1 = require("../payments/payments.service");
 const messages_service_1 = require("../messages/messages.service");
+const notifications_service_1 = require("../notifications/notifications.service");
+const packages_service_1 = require("../packages/packages.service");
 const chrono = require("chrono-node");
 const luxon_1 = require("luxon");
 let BookingsService = BookingsService_1 = class BookingsService {
     async getPackages(type) {
-        const where = type ? { type } : {};
-        return this.prisma.package.findMany({ where });
+        return this.packagesService.getPackages(type);
     }
     async completeBookingDraft(customerId, providedDateTime) {
         this.logger.debug(`completeBookingDraft called for customerId=${customerId}`);
@@ -51,37 +41,37 @@ let BookingsService = BookingsService_1 = class BookingsService {
                 throw new Error(`Draft missing dateTimeIso for customerId=${customerId}`);
             if (!draft.name)
                 throw new Error(`Draft missing name for customerId=${customerId}`);
-            if (!draft.recipientPhone)
-                throw new Error(`Draft missing recipientPhone for customerId=${customerId}`);
-            const serviceName = draft.service ? draft.service.trim() : '';
-            const pkg = await this.prisma.package.findFirst({
-                where: {
-                    name: { equals: serviceName, mode: 'insensitive' }
+            let recipientPhone = draft.recipientPhone;
+            if (!recipientPhone) {
+                const customer = await this.prisma.customer.findUnique({ where: { id: customerId } });
+                if (customer?.phone) {
+                    recipientPhone = customer.phone;
                 }
-            });
+                else {
+                    throw new Error(`Draft missing recipientPhone for customerId=${customerId} and no customer phone found`);
+                }
+            }
+            const serviceName = draft.service ? draft.service.trim() : '';
+            const pkg = await this.packagesService.findPackageByName(serviceName);
             if (!pkg || pkg.deposit == null) {
                 throw new Error(`Package deposit not configured for ${serviceName}`);
             }
             const depositAmount = pkg.deposit;
-            let phone = draft.recipientPhone;
+            let phone = recipientPhone;
             if (!phone.startsWith('254')) {
                 phone = `254${phone.replace(/^0+/, '')}`;
             }
             this.logger.debug(`[STK] Using phone: ${phone}, amount: ${depositAmount}`);
-            const checkoutRequestId = await this.paymentsService.initiateSTKPush(draft.id, phone, depositAmount);
-            const depositMsg = `To confirm your booking, please pay the deposit of KSH ${depositAmount}. An M-Pesa prompt has been sent to your phone. Complete the payment to secure your slot!`;
-            this.logger.log(`[DepositPrompt] Attempting to send WhatsApp deposit prompt to customerId=${customerId}`);
-            try {
-                await this.messagesService.sendOutboundMessage(customerId, depositMsg, 'whatsapp');
-                this.logger.log(`[DepositPrompt] WhatsApp deposit prompt sent to customerId=${customerId}`);
-            }
-            catch (err) {
-                this.logger.error(`[DepositPrompt] Failed to send WhatsApp deposit prompt to customerId=${customerId}`, err);
-            }
-            this.logger.log(`M-Pesa STK Push initiated for deposit of ${depositAmount} KSH for booking draft ${draft.id}`);
+            this.eventEmitter.emit('booking.draft.completed', {
+                customerId,
+                draftId: draft.id,
+                service: draft.service,
+                dateTime: providedDateTime || new Date(draft.dateTimeIso),
+                recipientPhone,
+                depositAmount,
+            });
             return {
-                message: 'Deposit payment initiated. Please complete payment on your phone to confirm booking.',
-                checkoutRequestId
+                message: "I've sent a request to your phone for the deposit. 📲 Once you complete that, your magical session will be officially booked! ✨",
             };
         }
         catch (error) {
@@ -95,11 +85,14 @@ let BookingsService = BookingsService_1 = class BookingsService {
     async getStudioInfo() {
         return this.prisma.studioInfo.findFirst();
     }
-    constructor(prisma, bookingQueue, paymentsService, messagesService) {
+    constructor(prisma, bookingQueue, paymentsService, messagesService, notificationsService, packagesService, eventEmitter) {
         this.prisma = prisma;
         this.bookingQueue = bookingQueue;
         this.paymentsService = paymentsService;
         this.messagesService = messagesService;
+        this.notificationsService = notificationsService;
+        this.packagesService = packagesService;
+        this.eventEmitter = eventEmitter;
         this.logger = new common_1.Logger(BookingsService_1.name);
         this.STUDIO_TZ = 'Africa/Nairobi';
     }
@@ -132,7 +125,7 @@ let BookingsService = BookingsService_1 = class BookingsService {
         const draft = await this.prisma.bookingDraft.findUnique({ where: { customerId } });
         if (!draft || !draft.service)
             return null;
-        const pkg = await this.prisma.package.findFirst({ where: { name: draft.service } });
+        const pkg = await this.packagesService.findPackageByName(draft.service);
         return pkg?.deposit || null;
     }
     async createBookingDraft(customerId) {
@@ -145,6 +138,15 @@ let BookingsService = BookingsService_1 = class BookingsService {
     }
     async updateBookingDraft(customerId, updates) {
         const { packageId, ...rest } = updates;
+        let customer = await this.prisma.customer.findUnique({ where: { id: customerId } });
+        if (!customer) {
+            customer = await this.prisma.customer.create({
+                data: {
+                    id: customerId,
+                    name: updates.name || 'Customer',
+                },
+            });
+        }
         return this.prisma.bookingDraft.upsert({
             where: { customerId },
             update: { ...rest, updatedAt: new Date() },
@@ -174,14 +176,12 @@ let BookingsService = BookingsService_1 = class BookingsService {
         let packageInfo = null;
         let durationMinutes = 60;
         if (selectedService) {
-            packageInfo = await this.prisma.package.findFirst({
-                where: { name: { equals: selectedService, mode: 'insensitive' } }
-            });
+            packageInfo = await this.packagesService.findPackageByName(selectedService);
             if (!packageInfo) {
                 const allPackages = await this.prisma.package.findMany();
                 throw new Error(`Service "${selectedService}" not found. Available packages: ${allPackages.map(p => p.name).join(', ')}`);
             }
-            durationMinutes = parseDurationToMinutes(packageInfo.duration) || 60;
+            durationMinutes = BookingsService_1.parseDurationToMinutes(packageInfo.duration) || 60;
         }
         const serviceName = packageInfo ? packageInfo.name : 'General Appointment';
         let customer = await this.prisma.customer.findUnique({ where: { id: customerId } });
@@ -232,13 +232,13 @@ let BookingsService = BookingsService_1 = class BookingsService {
     async checkAvailability(requested, service) {
         let duration = 60;
         if (service) {
-            const pkg = await this.prisma.package.findFirst({ where: { name: service } });
+            const pkg = await this.packagesService.findPackageByName(service);
             if (pkg)
-                duration = parseDurationToMinutes(pkg.duration) || 60;
+                duration = BookingsService_1.parseDurationToMinutes(pkg.duration) || 60;
         }
-        const requestedDtInSalon = luxon_1.DateTime.fromJSDate(requested).setZone(this.STUDIO_TZ);
-        const dayStart = requestedDtInSalon.startOf('day').set({ hour: 9, minute: 0, second: 0, millisecond: 0 });
-        const dayEnd = requestedDtInSalon.startOf('day').set({ hour: 17, minute: 0, second: 0, millisecond: 0 });
+        const requestedDtInMaternity = luxon_1.DateTime.fromJSDate(requested).setZone(this.STUDIO_TZ);
+        const dayStart = requestedDtInMaternity.startOf('day').set({ hour: 9, minute: 0, second: 0, millisecond: 0 });
+        const dayEnd = requestedDtInMaternity.startOf('day').set({ hour: 17, minute: 0, second: 0, millisecond: 0 });
         const bookingsForDay = await this.prisma.booking.findMany({
             where: {
                 status: 'confirmed',
@@ -274,9 +274,9 @@ let BookingsService = BookingsService_1 = class BookingsService {
         return { available: false, suggestions };
     }
     async getAvailableSlotsForDate(date, service) {
-        const dateInSalon = luxon_1.DateTime.fromISO(date, { zone: this.STUDIO_TZ }).startOf('day');
-        const dayStart = dateInSalon.set({ hour: 9, minute: 0, second: 0, millisecond: 0 });
-        const dayEnd = dateInSalon.set({ hour: 17, minute: 0, second: 0, millisecond: 0 });
+        const dateInMaternity = luxon_1.DateTime.fromISO(date, { zone: this.STUDIO_TZ }).startOf('day');
+        const dayStart = dateInMaternity.set({ hour: 9, minute: 0, second: 0, millisecond: 0 });
+        const dayEnd = dateInMaternity.set({ hour: 17, minute: 0, second: 0, millisecond: 0 });
         const bookingsForDay = await this.prisma.booking.findMany({
             where: {
                 status: 'confirmed',
@@ -294,9 +294,9 @@ let BookingsService = BookingsService_1 = class BookingsService {
         });
         let duration = 60;
         if (service) {
-            const pkg = await this.prisma.package.findFirst({ where: { name: service } });
+            const pkg = await this.packagesService.findPackageByName(service);
             if (pkg)
-                duration = parseDurationToMinutes(pkg.duration) || 60;
+                duration = BookingsService_1.parseDurationToMinutes(pkg.duration) || 60;
         }
         const slots = [];
         let cursor = dayStart;
@@ -319,16 +319,21 @@ let BookingsService = BookingsService_1 = class BookingsService {
             const bookingTime = new Date(currentBooking.dateTime);
             const diffMs = bookingTime.getTime() - now.getTime();
             const hoursUntilBooking = diffMs / (1000 * 60 * 60);
-            if (hoursUntilBooking < 24 && hoursUntilBooking > 0) {
-                throw new Error('Changes cannot be made within 24 hours of the appointment. Please contact support directly.');
+            if (hoursUntilBooking < 72 && hoursUntilBooking > 0) {
+                throw new Error('Changes cannot be made within 72 hours of the appointment. Please contact support directly.');
             }
             const newDateTime = updates.dateTime ?? new Date(currentBooking.dateTime);
             const newService = updates.service ?? currentBooking.service;
             let duration = currentBooking.durationMinutes ?? 60;
             if (newService) {
-                const pkg = await tx.package.findFirst({ where: { name: newService } });
+                const cleanName = newService.trim();
+                let pkg = await tx.package.findFirst({ where: { name: { equals: cleanName, mode: 'insensitive' } } });
+                if (!pkg)
+                    pkg = await tx.package.findFirst({ where: { name: { equals: `${cleanName} Package`, mode: 'insensitive' } } });
+                if (!pkg)
+                    pkg = await tx.package.findFirst({ where: { name: { contains: cleanName, mode: 'insensitive' } } });
                 if (pkg)
-                    duration = parseDurationToMinutes(pkg.duration) || duration;
+                    duration = BookingsService_1.parseDurationToMinutes(pkg.duration) || duration;
             }
             const slotStart = luxon_1.DateTime.fromJSDate(newDateTime).toUTC().toJSDate();
             const slotEnd = luxon_1.DateTime.fromJSDate(newDateTime).plus({ minutes: duration }).toUTC().toJSDate();
@@ -370,8 +375,8 @@ let BookingsService = BookingsService_1 = class BookingsService {
         const bookingTime = new Date(currentBooking.dateTime);
         const diffMs = bookingTime.getTime() - now.getTime();
         const hoursUntilBooking = diffMs / (1000 * 60 * 60);
-        if (hoursUntilBooking < 24 && hoursUntilBooking > 0) {
-            throw new Error('Cancellations cannot be made within 24 hours of the appointment. Please contact support directly.');
+        if (hoursUntilBooking < 72 && hoursUntilBooking > 0) {
+            throw new Error('Cancellations cannot be made within 72 hours of the appointment. Please contact support directly.');
         }
         const booking = await this.prisma.booking.update({
             where: { id: bookingId },
@@ -411,7 +416,117 @@ let BookingsService = BookingsService_1 = class BookingsService {
                 status: 'confirmed',
             },
             orderBy: { dateTime: 'desc' },
+            include: { customer: true },
         });
+    }
+    async formatBookingConfirmationMessage(booking, mpesaReceipt, reminderTimes = []) {
+        const packageInfo = await this.packagesService.findPackageByName(booking.service);
+        if (!packageInfo) {
+            return "Payment successful! Your maternity photoshoot booking is now confirmed. We'll send you a reminder closer to the date. 💖";
+        }
+        const bookingDateTime = luxon_1.DateTime.fromJSDate(booking.dateTime).setZone('Africa/Nairobi');
+        const formattedDate = bookingDateTime.toFormat('MMMM d, yyyy');
+        const formattedTime = bookingDateTime.toFormat('h:mm a');
+        const features = [];
+        if (packageInfo.images)
+            features.push(`• ${packageInfo.images} soft copy images`);
+        if (packageInfo.makeup)
+            features.push(`• Professional makeup`);
+        if (packageInfo.outfits)
+            features.push(`• ${packageInfo.outfits} outfit change${packageInfo.outfits > 1 ? 's' : ''}`);
+        if (packageInfo.styling)
+            features.push(`• Professional styling`);
+        if (packageInfo.wig)
+            features.push(`• Styled wig`);
+        if (packageInfo.balloonBackdrop)
+            features.push(`• Customized balloon backdrop`);
+        if (packageInfo.photobook) {
+            const size = packageInfo.photobookSize ? ` (${packageInfo.photobookSize})` : '';
+            features.push(`• Photobook${size}`);
+        }
+        if (packageInfo.mount)
+            features.push(`• A3 mount`);
+        const featuresText = features.length > 0 ? features.join('\n') : '• Custom package features';
+        let remindersText = '';
+        if (reminderTimes.length > 0) {
+            const reminderLines = reminderTimes.map(({ days, dateTime }) => {
+                const reminderDate = dateTime.setZone('Africa/Nairobi');
+                return `• ${reminderDate.toFormat('MMMM d, yyyy')} at ${reminderDate.toFormat('h:mm a')} (${days} day${days > 1 ? 's' : ''} before)`;
+            });
+            remindersText = `\n\n⏰ *Reminders Scheduled:*\n${reminderLines.join('\n')}`;
+        }
+        const message = `✅ *Booking Confirmed!* ✨
+
+📦 *Package:* ${packageInfo.name} (${packageInfo.type === 'outdoor' ? 'Outdoor' : 'Studio'})
+⏱️ *Duration:* ${packageInfo.duration}
+💰 *Price:* ${packageInfo.price.toLocaleString()} KSH (Deposit: ${packageInfo.deposit.toLocaleString()} KSH paid)
+
+📅 *Your Session:*
+Date: ${formattedDate}
+Time: ${formattedTime} (EAT)
+
+👤 *Recipient:* ${booking.recipientName || booking.customer?.name || 'Guest'}
+📱 *Contact:* ${booking.recipientPhone || booking.customer?.phone}
+
+🎁 *Package Includes:*
+${featuresText}
+
+💳 *Payment Receipt:* ${mpesaReceipt}${remindersText}
+
+🔸 *Important Policies:*
+• Remaining balance is due after the shoot.
+• Edited photos are delivered in 10 working days.
+• Reschedules/Cancellations must be made at least 72 hours before the shoot to avoid forfeiting the fee.
+
+We can't wait to capture your beautiful memories! 💖`;
+        return message;
+    }
+    async countBookingsForCustomer(query) {
+        let customerWhere = {};
+        if (query.id)
+            customerWhere.id = query.id;
+        if (query.whatsappId)
+            customerWhere.whatsappId = query.whatsappId;
+        if (query.phone)
+            customerWhere.phone = query.phone;
+        const customer = await this.prisma.customer.findFirst({ where: customerWhere });
+        if (!customer)
+            return 0;
+        return this.prisma.booking.count({ where: { customerId: customer.id } });
+    }
+    async getBookingSummariesForCustomer(query) {
+        let customerWhere = {};
+        if (query.id)
+            customerWhere.id = query.id;
+        if (query.whatsappId)
+            customerWhere.whatsappId = query.whatsappId;
+        if (query.phone)
+            customerWhere.phone = query.phone;
+        const customer = await this.prisma.customer.findFirst({ where: customerWhere });
+        if (!customer)
+            return [];
+        const bookings = await this.prisma.booking.findMany({
+            where: { customerId: customer.id },
+            orderBy: { dateTime: 'desc' },
+            take: 10,
+        });
+        return bookings.map(b => ({
+            date: b.dateTime instanceof Date ? b.dateTime.toISOString().slice(0, 10) : String(b.dateTime).slice(0, 10),
+            service: b.service,
+            status: b.status,
+        }));
+    }
+    static parseDurationToMinutes(duration) {
+        if (!duration)
+            return null;
+        const hrMatch = duration.match(/(\d+)\s*hr/);
+        const minMatch = duration.match(/(\d+)\s*min/);
+        let mins = 0;
+        if (hrMatch)
+            mins += parseInt(hrMatch[1], 10) * 60;
+        if (minMatch)
+            mins += parseInt(minMatch[1], 10);
+        return mins || null;
     }
 };
 exports.BookingsService = BookingsService;
@@ -419,6 +534,9 @@ exports.BookingsService = BookingsService = BookingsService_1 = __decorate([
     (0, common_1.Injectable)(),
     __param(1, (0, bull_1.InjectQueue)('bookingQueue')),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService, Object, payments_service_1.PaymentsService,
-        messages_service_1.MessagesService])
+        messages_service_1.MessagesService,
+        notifications_service_1.NotificationsService,
+        packages_service_1.PackagesService,
+        event_emitter_1.EventEmitter2])
 ], BookingsService);
 //# sourceMappingURL=bookings.service.js.map

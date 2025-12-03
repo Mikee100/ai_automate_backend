@@ -19,19 +19,48 @@ export declare class AiService {
     private openai;
     private pinecone;
     private index;
+    private strategies;
     private readonly embeddingModel;
     private readonly extractorModel;
     private readonly chatModel;
     private readonly studioTz;
     private readonly historyLimit;
+    private readonly maxTokensPerDay;
+    private tokenUsageCache;
+    private packageCache;
+    private readonly CACHE_TTL;
     private readonly businessName;
     private readonly businessLocation;
+    private readonly businessWebsite;
+    private readonly customerCarePhone;
+    private readonly customerCareEmail;
+    private readonly businessHours;
     constructor(configService: ConfigService, prisma: PrismaService, bookingsService?: BookingsService, messagesService?: MessagesService, escalationService?: EscalationService, aiQueue?: Queue);
     private initPineconeSafely;
+    private checkRateLimit;
+    private trackTokenUsage;
+    private calculateTokenCount;
+    private pruneHistory;
+    private handleOpenAIFailure;
+    private detectFrustration;
+    getCachedPackages(): Promise<any[]>;
+    private sanitizeInput;
+    private validatePhoneNumber;
+    private checkBookingConflicts;
+    trackConversationMetrics(customerId: string, metrics: {
+        intent: string;
+        duration: number;
+        messagesCount: number;
+        resolved: boolean;
+    }): Promise<void>;
     private normalizeDateTime;
     generateEmbedding(text: string): Promise<number[]>;
     retrieveRelevantDocs(query: string, topK?: number): Promise<any>;
-    answerFaq(question: string, history?: HistoryMsg[], actual?: string, customerId?: string): Promise<string>;
+    private formatPackageDetails;
+    answerFaq(question: string, history?: HistoryMsg[], actual?: string, customerId?: string): Promise<{
+        text: string;
+        mediaUrls: string[];
+    }>;
     extractBookingDetails(message: string, history?: HistoryMsg[]): Promise<{
         service?: string;
         date?: string;
@@ -45,9 +74,9 @@ export declare class AiService {
     private generateBookingReply;
     getOrCreateDraft(customerId: string): Promise<{
         id: string;
-        name: string | null;
         createdAt: Date;
         updatedAt: Date;
+        name: string | null;
         customerId: string;
         service: string | null;
         date: string | null;
@@ -61,9 +90,9 @@ export declare class AiService {
     }>;
     mergeIntoDraft(customerId: string, extraction: any): Promise<{
         id: string;
-        name: string | null;
         createdAt: Date;
         updatedAt: Date;
+        name: string | null;
         customerId: string;
         service: string | null;
         date: string | null;
@@ -78,9 +107,18 @@ export declare class AiService {
     checkAndCompleteIfConfirmed(draft: any, extraction: any, customerId: string, bookingsService: any): Promise<{
         action: string;
         error: string;
-        suggestions?: undefined;
         message?: undefined;
+        suggestions?: undefined;
         checkoutRequestId?: undefined;
+        paymentId?: undefined;
+        missing?: undefined;
+    } | {
+        action: string;
+        message: string;
+        error?: undefined;
+        suggestions?: undefined;
+        checkoutRequestId?: undefined;
+        paymentId?: undefined;
         missing?: undefined;
     } | {
         action: string;
@@ -88,11 +126,13 @@ export declare class AiService {
         error?: undefined;
         message?: undefined;
         checkoutRequestId?: undefined;
+        paymentId?: undefined;
         missing?: undefined;
     } | {
         action: string;
         message: any;
         checkoutRequestId: any;
+        paymentId: any;
         error?: undefined;
         suggestions?: undefined;
         missing?: undefined;
@@ -100,37 +140,21 @@ export declare class AiService {
         action: string;
         missing: any[];
         error?: undefined;
-        suggestions?: undefined;
         message?: undefined;
+        suggestions?: undefined;
         checkoutRequestId?: undefined;
+        paymentId?: undefined;
     }>;
-    handleConversation(message: string, customerId: string, history?: HistoryMsg[], bookingsService?: any): Promise<{
-        response: string;
-        draft: {
-            id: string;
-            name: string | null;
-            createdAt: Date;
-            updatedAt: Date;
-            customerId: string;
-            service: string | null;
-            date: string | null;
-            time: string | null;
-            dateTimeIso: string | null;
-            recipientName: string | null;
-            recipientPhone: string | null;
-            isForSomeoneElse: boolean | null;
-            step: string;
-            version: number;
-        };
-        updatedHistory: {
-            role: string;
-            content: any;
-        }[];
-    }>;
+    handleConversation(message: string, customerId: string, history?: HistoryMsg[], bookingsService?: any, retryCount?: number): Promise<any>;
+    private attemptRecovery;
+    private processConversationLogic;
     addKnowledge(question: string, answer: string): Promise<void>;
     processAiRequest(data: {
         question: string;
-    }): Promise<string>;
+    }): Promise<{
+        text: string;
+        mediaUrls: string[];
+    }>;
     generateResponse(message: string, customerId: string, bookingsService: any, history?: any[], extractedBooking?: any, faqContext?: string): Promise<string>;
     extractStepBasedBookingDetails(message: string, currentStep: string, history?: any[]): Promise<any>;
     generateStepBasedBookingResponse(message: string, customerId: string, bookingsService: any, history: any[], draft: any, bookingResult: any): Promise<string>;

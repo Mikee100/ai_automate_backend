@@ -75,10 +75,17 @@ let MessageQueueProcessor = MessageQueueProcessor_1 = class MessageQueueProcesso
             }
         }
         let response = '';
+        let mediaUrls = [];
         let draft = null;
         try {
             const result = await this.aiService.handleConversation(messageContent, customerId, history, this.bookingsService);
-            response = result.response;
+            if (typeof result.response === 'object' && result.response !== null && 'text' in result.response) {
+                response = result.response.text;
+                mediaUrls = result.response.mediaUrls || [];
+            }
+            else {
+                response = typeof result.response === 'string' ? result.response : JSON.stringify(result.response);
+            }
             draft = result.draft;
         }
         catch (err) {
@@ -88,6 +95,12 @@ let MessageQueueProcessor = MessageQueueProcessor_1 = class MessageQueueProcesso
         if (platform === 'whatsapp' && from) {
             try {
                 await this.whatsappService.sendMessage(from, response);
+                if (mediaUrls && mediaUrls.length > 0) {
+                    for (const url of mediaUrls) {
+                        await this.whatsappService.sendImage(from, url);
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+                }
             }
             catch (err) {
                 this.logger.error('Error sending WhatsApp message', err);

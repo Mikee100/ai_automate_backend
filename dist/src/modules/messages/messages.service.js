@@ -130,6 +130,7 @@ exports.MessagesService = MessagesService;
 exports.MessagesService = MessagesService = __decorate([
     (0, common_1.Injectable)(),
     __param(1, (0, bull_1.InjectQueue)('messageQueue')),
+    __param(2, (0, common_1.Inject)((0, common_1.forwardRef)(() => ai_service_1.AiService))),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService, Object, ai_service_1.AiService])
 ], MessagesService);
 //# sourceMappingURL=messages.service.js.map

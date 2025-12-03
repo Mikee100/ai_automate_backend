@@ -7,8 +7,14 @@ export class EscalationService {
 
     constructor(private prisma: PrismaService) { }
 
-    async createEscalation(customerId: string, reason?: string) {
-        this.logger.log(`Escalating customer ${customerId} for reason: ${reason}`);
+    async createEscalation(
+        customerId: string,
+        reason?: string,
+        escalationType: string = 'manual',
+        metadata?: any,
+        sentimentScore?: number
+    ) {
+        this.logger.log(`Escalating customer ${customerId} for reason: ${reason} (type: ${escalationType})`);
 
         // 1. Create Escalation record
         const escalation = await this.prisma.escalation.create({
@@ -16,6 +22,9 @@ export class EscalationService {
                 customerId,
                 reason,
                 status: 'OPEN',
+                escalationType,
+                metadata: metadata || null,
+                sentimentScore: sentimentScore || null,
             },
         });
 

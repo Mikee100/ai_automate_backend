@@ -20,6 +20,10 @@ model Customer {
   messengerId String? @unique // Messenger sender ID
   aiEnabled Boolean  @default(true) // AI enabled for this customer
   isAiPaused Boolean @default(false) // Pauses AI for this customer (e.g. during escalation)
+  lastInstagramMessageAt DateTime? // Last inbound Instagram message for 24hr window tracking
+  dailyTokenUsage Int @default(0) // Token usage counter for rate limiting
+  tokenResetDate DateTime? // Date when token counter resets (24hr window)
+  totalTokensUsed Int @default(0) // Lifetime token usage for analytics
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -27,6 +31,7 @@ model Customer {
   bookings  Booking[]
   bookingDrafts BookingDraft[]
   escalations Escalation[]
+  conversationMetrics ConversationMetrics[]
 
   @@map("customers")
 }
@@ -70,9 +75,28 @@ model KnowledgeBase {
   answer    String
   category  String
   embedding Float[]  // vector for Pinecone
+  mediaUrls String[] @default([]) // Array of image URLs to include in responses
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("knowledge_base")
+}
+
+model MediaAsset {
+  id          String   @id @default(cuid())
+  url         String   // Direct image/video URL
+  title       String?  // Optional title/caption
+  description String?  // Optional description
+  category    String   // 'backdrop', 'portfolio', 'studio', 'outdoor', 'beach', 'family', etc.
+  subcategory String?  // More specific categorization
+  mediaType   String   @default("image") // 'image' or 'video'
+  source      String   @default("website") // 'website', 'manual', 'upload'
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("media_assets")
+  @@index([category])
+  @@index([subcategory])
 }
 
 model BookingDraft {
@@ -165,6 +189,8 @@ model AiPrediction {
   error        String?
   userFeedback Int?     // 1-5 rating
   modelVersion String?
+  tokensUsed   Int?     // Tokens consumed by this request
+  wasCached    Boolean  @default(false) // Whether response was cached
 }
 
 model Escalation {
@@ -173,8 +199,40 @@ model Escalation {
   customer  Customer @relation(fields: [customerId], references: [id])
   reason    String?
   status    String   @default("OPEN") // OPEN, RESOLVED
+  escalationType String @default("manual") // manual, frustration, quota, error
+  metadata  Json?    // Store sentiment analysis results and conversation context
+  sentimentScore Float? // Frustration score (0.0 - 1.0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("escalations")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  type      String   // 'booking', 'reschedule', 'payment'
+  title     String
+  message   String
+  metadata  Json?    // Flexible field for additional data
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("notifications")
+  @@index([read, createdAt])
+}
+
+model ConversationMetrics {
+  id            String   @id @default(cuid())
+  customerId    String
+  customer      Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  intent        String   // booking, faq, escalation, etc.
+  duration      Int      // conversation duration in seconds
+  messagesCount Int      // number of messages exchanged
+  resolved      Boolean  // whether issue was resolved
+  timestamp     DateTime @default(now())
+
+  @@map("conversation_metrics")
+  @@index([customerId])
+  @@index([timestamp])
+  @@index([intent])
 }

@@ -1,11 +1,9 @@
 # TODO: Update AI Social Media System for Maternity Photoshop Business
 
 ## Tasks
-- [ ] Update timezone references from "salonTz" to "studioTz" in ai.service.ts, bookings.service.ts, message-queue.processor.ts, utils/booking.ts
-- [ ] Change extractor prompt in ai.service.ts to "maternity photoshoot bookings"
-- [ ] Enhance AI prompts for more emotional, human-friendly language, increase temperature for dynamism
-- [ ] Replace hardcoded salon services in message-queue.processor.ts with dynamic package fetching and listing
-- [ ] Update any remaining salon references to maternity/studio
+- [ ] Update timezone references from "salonTz" to "maternityTz" in ai.service.ts, bookings.service.ts, message-queue.processor.ts, utils/booking.ts
+- [ ] Replace hardcoded salon services in message-queue.processor.ts with dynamic maternity package fetching and listing
+- [ ] Update any remaining salon references to Fiesta House Maternity/maternity
 
 ## Followup Steps
 - [ ] Run database migrations if needed

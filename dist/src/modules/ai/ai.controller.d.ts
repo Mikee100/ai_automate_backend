@@ -6,7 +6,10 @@ export declare class AiController {
     constructor(aiService: AiService, bookingsService: BookingsService);
     answerFaq(body: {
         question: string;
-    }): Promise<string>;
+    }): Promise<{
+        text: string;
+        mediaUrls: string[];
+    }>;
     addKnowledge(body: {
         question: string;
         answer: string;
@@ -18,27 +21,5 @@ export declare class AiController {
             role: 'user' | 'assistant';
             content: string;
         }[];
-    }): Promise<{
-        response: string;
-        draft: {
-            id: string;
-            name: string | null;
-            createdAt: Date;
-            updatedAt: Date;
-            customerId: string;
-            service: string | null;
-            date: string | null;
-            time: string | null;
-            dateTimeIso: string | null;
-            recipientName: string | null;
-            recipientPhone: string | null;
-            isForSomeoneElse: boolean | null;
-            step: string;
-            version: number;
-        };
-        updatedHistory: {
-            role: string;
-            content: any;
-        }[];
-    }>;
+    }): Promise<any>;
 }

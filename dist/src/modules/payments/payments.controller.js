@@ -50,6 +50,14 @@ let PaymentsController = PaymentsController_1 = class PaymentsController {
             return { success: false, error: error.message };
         }
     }
+    async handleWebhook(body) {
+        this.logger.log('🔔 Payment webhook received:', JSON.stringify(body));
+        if (!body.checkoutRequestId || !body.status) {
+            return { status: 'error', message: 'Missing checkoutRequestId or status' };
+        }
+        await this.paymentsService.handlePaymentWebhook(body.checkoutRequestId, body.status);
+        return { status: 'received' };
+    }
 };
 exports.PaymentsController = PaymentsController;
 __decorate([
@@ -79,6 +87,13 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], PaymentsController.prototype, "testStkPush", null);
+__decorate([
+    (0, common_1.Post)('webhook'),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], PaymentsController.prototype, "handleWebhook", null);
 exports.PaymentsController = PaymentsController = PaymentsController_1 = __decorate([
     (0, common_1.Controller)('mpesa'),
     __metadata("design:paramtypes", [payments_service_1.PaymentsService])

@@ -49,12 +49,22 @@ type HistoryMsg = { role: 'user' | 'assistant'; content: string };
  *
  * Note: Do NOT set PINECONE_ENVIRONMENT to a full URL (e.g., do NOT set it to PINECONE_HOST).
  */
+import { PackageInquiryStrategy } from './strategies/package-inquiry.strategy';
+import { BookingStrategy } from './strategies/booking.strategy';
+import { ResponseStrategy } from './strategies/response-strategy.interface';
+
+
+
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
   private openai: OpenAI;
   private pinecone: Pinecone | null = null;
   private index: any = null;
+
+  private strategies: ResponseStrategy[] = [];
+
+
 
   // Models (override with env)
   private readonly embeddingModel: string;
@@ -66,9 +76,21 @@ export class AiService {
   // How many history turns to send to the model
   private readonly historyLimit = 6;
 
+  // Rate limiting & cost control
+  private readonly maxTokensPerDay = 100000;
+  private tokenUsageCache = new Map<string, { count: number; resetTime: Date }>();
+
+  // Package caching
+  private packageCache: { data: any[]; timestamp: number } | null = null;
+  private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
   // Fixed business name and location string for responses
   private readonly businessName = 'Fiesta House Attire maternity photoshoot studio';
   private readonly businessLocation = 'Our studio is located at 4th Avenue Parklands, Diamond Plaza Annex, 2nd Floor. We look forward to welcoming you! 💖';
+  private readonly businessWebsite = 'https://fiestahouseattire.com/';
+  private readonly customerCarePhone = '0720 111928';
+  private readonly customerCareEmail = 'info@fiestahouseattire.com';
+  private readonly businessHours = 'Monday-Saturday: 9:00 AM - 6:00 PM';
 
   constructor(
     private configService: ConfigService,
@@ -88,6 +110,11 @@ export class AiService {
 
     // Initialize Pinecone safely (doesn't throw if misconfigured)
     this.initPineconeSafely();
+
+    this.strategies = [
+      new PackageInquiryStrategy(),
+      new BookingStrategy(),
+    ];
   }
 
   /**
@@ -178,6 +205,203 @@ export class AiService {
   }
 
   /* --------------------------
+   * Rate Limiting & Cost Control
+   * -------------------------- */
+  private async checkRateLimit(customerId: string): Promise<boolean> {
+    const usage = this.tokenUsageCache.get(customerId);
+    const now = new Date();
+
+    if (!usage || usage.resetTime < now) {
+      this.tokenUsageCache.set(customerId, {
+        count: 0,
+        resetTime: new Date(now.getTime() + 24 * 60 * 60 * 1000)
+      });
+      return true;
+    }
+
+    return usage.count < this.maxTokensPerDay;
+  }
+
+  private async trackTokenUsage(customerId: string, tokensUsed: number): Promise<void> {
+    // Update in-memory cache
+    const usage = this.tokenUsageCache.get(customerId);
+    if (usage) {
+      usage.count += tokensUsed;
+    }
+
+    // Update database
+    try {
+      const customer = await this.prisma.customer.findUnique({ where: { id: customerId } });
+      if (customer) {
+        const now = new Date();
+        const resetNeeded = !customer.tokenResetDate || customer.tokenResetDate < now;
+
+        await this.prisma.customer.update({
+          where: { id: customerId },
+          data: {
+            dailyTokenUsage: resetNeeded ? tokensUsed : customer.dailyTokenUsage + tokensUsed,
+            tokenResetDate: resetNeeded ? new Date(now.getTime() + 24 * 60 * 60 * 1000) : customer.tokenResetDate,
+            totalTokensUsed: customer.totalTokensUsed + tokensUsed,
+          },
+        });
+      }
+    } catch (err) {
+      this.logger.warn('Failed to track token usage in database', err);
+    }
+  }
+
+  /* --------------------------
+   * Conversation Context Management
+   * -------------------------- */
+  private calculateTokenCount(messages: any[]): number {
+    // Rough estimate: 1 token ≈ 4 characters
+    return messages.reduce((acc, msg) =>
+      acc + (msg.content?.length || 0) / 4, 0);
+  }
+
+  private pruneHistory(history: HistoryMsg[], maxTokens = 2000): HistoryMsg[] {
+    let total = 0;
+    const pruned: HistoryMsg[] = [];
+
+    for (let i = history.length - 1; i >= 0; i--) {
+      const tokens = history[i].content.length / 4;
+      if (total + tokens > maxTokens) break;
+      pruned.unshift(history[i]);
+      total += tokens;
+    }
+
+    return pruned;
+  }
+
+  /* --------------------------
+   * Fallback Mechanisms
+   * -------------------------- */
+  private async handleOpenAIFailure(error: any, customerId: string): Promise<string> {
+    this.logger.error('OpenAI API failure', error);
+
+    // Queue for retry
+    if (this.aiQueue) {
+      await this.aiQueue.add('retry-message', { customerId, error: error.message });
+    }
+
+    // Return graceful fallback
+    if (error.code === 'insufficient_quota') {
+      await this.escalationService?.createEscalation(
+        customerId,
+        'AI service quota exceeded'
+      );
+      return "I'm having technical difficulties. A team member will assist you shortly! 💖";
+    }
+
+    if (error.code === 'rate_limit_exceeded') {
+      return "I'm receiving a lot of messages right now. Please give me a moment and try again! 💕";
+    }
+
+    return "I'm having trouble right now. Could you rephrase that, or would you like to speak with someone? 💕";
+  }
+
+  /* --------------------------
+   * Sentiment Analysis for Escalation
+   * -------------------------- */
+  private async detectFrustration(message: string, history: HistoryMsg[]): Promise<boolean> {
+    const frustrationKeywords = [
+      'frustrated', 'angry', 'annoyed', 'disappointed',
+      'terrible', 'worst', 'horrible', 'ridiculous',
+      'useless', 'stupid', 'waste', 'pathetic'
+    ];
+
+    const repeatedQuestions = history
+      .filter(h => h.role === 'user')
+      .slice(-3)
+      .map(h => h.content.toLowerCase());
+
+    const hasRepetition = new Set(repeatedQuestions).size < repeatedQuestions.length;
+    const hasFrustrationWords = frustrationKeywords.some(kw =>
+      message.toLowerCase().includes(kw)
+    );
+    return hasRepetition || hasFrustrationWords;
+  }
+
+  /* --------------------------
+   * Package Caching
+   * -------------------------- */
+  public async getCachedPackages(): Promise<any[]> {
+    const now = Date.now();
+
+    if (this.packageCache && (now - this.packageCache.timestamp) < this.CACHE_TTL) {
+      return this.packageCache.data;
+    }
+
+    const packages = await this.getCachedPackages();
+    this.packageCache = { data: packages, timestamp: now };
+
+    return packages;
+  }
+
+  /* --------------------------
+   * Input Validation & Sanitization
+   * -------------------------- */
+  private sanitizeInput(message: string): string {
+    // Remove potential injection attempts
+    return message
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .trim()
+      .slice(0, 2000); // Max message length
+  }
+
+  private validatePhoneNumber(phone: string): boolean {
+    // Kenyan format: 07XX XXX XXX or +2547XX XXX XXX
+    const kenyanPattern = /^(\+254|0)[17]\d{8}$/;
+    return kenyanPattern.test(phone.replace(/\s/g, ''));
+  }
+
+  /* --------------------------
+   * Booking Conflict Detection
+   * -------------------------- */
+  private async checkBookingConflicts(customerId: string, dateTime: Date): Promise<string | null> {
+    const existingBookings = await this.prisma.booking.findMany({
+      where: {
+        customerId,
+        dateTime: {
+          gte: new Date(),
+        },
+        status: { in: ['confirmed', 'pending'] },
+      },
+    });
+
+    if (existingBookings.length > 0) {
+      const existing = DateTime.fromJSDate(existingBookings[0].dateTime);
+      return `You already have a booking on ${existing.toFormat('MMM dd')}. Would you like to modify that instead ? `;
+    }
+
+    return null;
+  }
+
+  /* --------------------------
+   * Analytics & Tracking
+   * -------------------------- */
+  async trackConversationMetrics(customerId: string, metrics: {
+    intent: string;
+    duration: number;
+    messagesCount: number;
+    resolved: boolean;
+  }) {
+    try {
+      await this.prisma.conversationMetrics.create({
+        data: {
+          customerId,
+          ...metrics,
+          timestamp: new Date(),
+        },
+      });
+    } catch (err) {
+      this.logger.warn('Failed to track conversation metrics', err);
+    }
+  }
+
+  /* --------------------------
+
+  /* --------------------------
    * Helper: normalize date/time using chrono + luxon
    * Returns null or { isoUtc, dateOnly, timeOnly }
    * More robust handling + logging for ambiguous dates.
@@ -217,8 +441,30 @@ export class AiService {
   // Defensive wrapper for Pinecone query
   async retrieveRelevantDocs(query: string, topK = 3) {
     if (!this.index) {
-      this.logger.debug('retrieveRelevantDocs: Pinecone index not available - returning empty result (DB-only).');
-      return [];
+      this.logger.debug('retrieveRelevantDocs: Pinecone index not available - falling back to DB keyword search.');
+      try {
+        // Simple fallback: fetch all (or top 20) and maybe filter by keyword if needed.
+        // For now, just fetching recent ones to populate context.
+        // In a real scenario, we'd do a full text search if supported by DB.
+        const faqs = await this.prisma.knowledgeBase.findMany({
+          take: 10,
+          orderBy: { createdAt: 'desc' },
+        });
+
+        // Map to Pinecone-like structure
+        return faqs.map(f => ({
+          id: f.id,
+          score: 0.8, // dummy confidence
+          metadata: {
+            answer: f.answer,
+            text: f.question, // use question as text for context
+            category: f.category
+          }
+        }));
+      } catch (err) {
+        this.logger.warn('retrieveRelevantDocs: DB fallback failed', err);
+        return [];
+      }
     }
     try {
       const vec = await this.generateEmbedding(query);
@@ -230,54 +476,200 @@ export class AiService {
     }
   }
 
+  /**
+   * Formats comprehensive package details for customer-facing messages
+   */
+  private formatPackageDetails(pkg: any, detailed: boolean = false): string {
+    if (!pkg) return '';
+
+    const name = pkg.name ?? 'Unnamed Package';
+    const type = pkg.type === 'outdoor' ? 'Outdoor' : 'Studio';
+    const duration = pkg.duration ?? 'Duration not specified';
+    const price = pkg.price !== undefined && pkg.price !== null ? `${pkg.price.toLocaleString()} KSH` : 'Price not available';
+    const deposit = pkg.deposit !== undefined && pkg.deposit !== null ? `${pkg.deposit.toLocaleString()} KSH` : 'Contact us';
+
+    // Build features list
+    const features: string[] = [];
+    if (pkg.images) features.push(`${pkg.images} soft copy image${pkg.images > 1 ? 's' : ''} `);
+    if (pkg.outfits) features.push(`${pkg.outfits} outfit change${pkg.outfits > 1 ? 's' : ''} `);
+    if (pkg.makeup) features.push('Professional makeup');
+    if (pkg.styling) features.push('Professional styling');
+    if (pkg.balloonBackdrop) features.push('Customized balloon backdrop');
+    if (pkg.wig) features.push('Styled wig');
+    if (pkg.photobook) {
+      const size = pkg.photobookSize ? ` (${pkg.photobookSize})` : '';
+      features.push(`Photobook${size} `);
+    }
+    if (pkg.mount) features.push('A3 mount');
+
+    if (detailed) {
+      // Detailed format for specific package inquiries
+      let message = `📦 * ${name}* (${type}) \n\n`;
+      message += `⏱️ Duration: ${duration} \n`;
+      message += `💰 Price: ${price} | Deposit: ${deposit} \n\n`;
+
+      if (features.length > 0) {
+        message += `✨ What's Included:\n`;
+        features.forEach(f => message += `• ${f}\n`);
+      }
+
+      if (pkg.notes) {
+        message += `\n📝 ${pkg.notes}`;
+      }
+
+      return message;
+    } else {
+      // Brief format for package lists
+      let brief = `*${name}*: ${duration}, ${price}`;
+      if (features.length > 0) {
+        const keyFeatures = features.slice(0, 3).join(', ');
+        brief += ` — Includes: ${keyFeatures}`;
+        if (features.length > 3) brief += `, and more`;
+      }
+      return brief;
+    }
+  }
+
+  /**
+   * Enhanced answerFaq: detects backdrop/background/media questions, fetches images, and returns mediaUrls
+   */
   async answerFaq(question: string, history: HistoryMsg[] = [], actual?: string, customerId?: string) {
     let prediction = '';
     let confidence: number | undefined = undefined;
     let error: string | undefined = undefined;
     const start = Date.now();
+    let mediaUrls: string[] = [];
     try {
-      const docs = await this.retrieveRelevantDocs(question, 3);
+      // Detect if the question is about backdrops, backgrounds, or images
+      const backdropRegex = /(backdrop|background|studio set|flower wall|portfolio|show.*(image|photo|picture|portfolio))/i;
+      let isBackdropQuery = backdropRegex.test(question);
+
+      this.logger.debug(`[AiService] Question: "${question}", isBackdropQuery: ${isBackdropQuery}`);
+
+      // If backdrop-related, fetch images from MediaAsset
+      if (isBackdropQuery) {
+        // Try to get up to 6 relevant images
+        const assets = await this.prisma.mediaAsset.findMany({
+          where: {
+            OR: [
+              { category: { in: ['backdrop', 'studio', 'portfolio'] } },
+              { description: { contains: 'backdrop', mode: 'insensitive' } },
+              { title: { contains: 'backdrop', mode: 'insensitive' } },
+            ],
+          },
+          take: 6,
+          orderBy: { createdAt: 'desc' },
+        });
+        mediaUrls = assets.map(a => a.url);
+        this.logger.debug(`[AiService] Found ${mediaUrls.length} media assets for backdrop query`);
+      }
+
+      // Retrieve relevant docs as before (increased from 3 to 5 for broader coverage)
+      const docs = await this.retrieveRelevantDocs(question, 5);
       if (docs.length > 0) {
         prediction = docs[0].metadata.answer;
         confidence = docs[0].score;
-        return prediction;
+
+        // If the doc has mediaUrls, add them
+        if (docs[0].metadata.mediaUrls && Array.isArray(docs[0].metadata.mediaUrls)) {
+          mediaUrls.push(...docs[0].metadata.mediaUrls);
+        }
+      } else {
+        // Fallback to LLM
+        const messages: any[] = [
+          {
+            role: 'system',
+            content:
+              `You are a warm, empathetic assistant for a maternity photoshoot studio. Always answer with warmth, flexibility, and genuine care.
+
+CRITICAL INSTRUCTIONS:
+- You MUST base your answer STRICTLY on the provided Context messages below
+- Do NOT invent, hallucinate, or add any information not in the contexts
+- **Business Policies (Always Enforce):**
+  * Remaining balance is due after the shoot.
+  * Edited photos are delivered in 10 working days.
+  * Reschedules must be made at least 72 hours before the shoot time to avoid forfeiting the session fee.
+  * Cancellations or changes made within 72 hours of the shoot are non-refundable, and the session fee will be forfeited.
+- When asked about packages:
+  * ONLY mention packages explicitly listed in the context
+  * NEVER create or mention package names not provided (e.g., don't say "Premium" or "Deluxe" if not in context)
+  * If asked about a feature, check which actual packages in the context have it
+  * If no packages match, say "Let me check our current packages for you" rather than inventing
+- When describing packages, include ALL features from context: images, outfits, makeup, styling, balloon backdrop, wigs, photobooks, mounts
+- If no relevant context provided, offer to help find the information`,
+          },
+        ];
+
+        // Add package context if the question is about packages
+        if (/(package|photobook|makeup|styling|balloon|wig|outfit|image|photo|shoot|session|include|feature|come with|have)/i.test(question)) {
+          try {
+            const packages = await this.getCachedPackages();
+            if (packages && packages.length > 0) {
+              let packageContext = '=== AVAILABLE PACKAGES FROM DATABASE ===\n\n';
+              packages.forEach((pkg: any) => {
+                packageContext += this.formatPackageDetails(pkg, true) + '\n\n---\n\n';
+              });
+              packageContext += '\nIMPORTANT: These are the ONLY packages that exist. You MUST NOT mention any package names not listed above.';
+              messages.push({ role: 'system', content: packageContext });
+              this.logger.debug(`answerFaq: Added ${packages.length} packages to context`);
+            }
+          } catch (err) {
+            this.logger.warn('answerFaq: Failed to fetch packages for context', err);
+          }
+        }
+
+        // Add the top doc contexts as separate system messages (keeps structure clear)
+        docs.forEach((d: any, i: number) => {
+          const md = d.metadata ?? {};
+          messages.push({ role: 'system', content: `Context ${i + 1}: ${md.answer ?? md.text ?? ''}` });
+        });
+
+        // Use token-aware history pruning instead of fixed limit
+        const prunedHistory = this.pruneHistory(history);
+        messages.push(...prunedHistory.map(h => ({ role: h.role, content: h.content })));
+        messages.push({ role: 'user', content: question });
+
+        // Keep OpenAI call compatible with the version you're using, with fallback handling
+        try {
+          const rsp = await this.openai.chat.completions.create({
+            model: this.chatModel,
+            messages,
+            max_tokens: 220,
+            temperature: 0.0,
+          });
+          prediction = rsp.choices[0].message.content.trim();
+
+          // Track token usage if customerId provided
+          if (customerId && rsp.usage?.total_tokens) {
+            await this.trackTokenUsage(customerId, rsp.usage.total_tokens);
+          }
+        } catch (err) {
+          // Use fallback handler for graceful degradation
+          if (customerId) {
+            prediction = await this.handleOpenAIFailure(err, customerId);
+          } else {
+            throw err;
+          }
+        }
       }
-      // If no relevant docs found, generate a general response
-      const messages: any[] = [
-        {
-          role: 'system',
-          content:
-            `You are a loving, emotionally intelligent assistant for a maternity photoshoot studio. Your clients are expectant mothers and their families, who may ask about anything—studio services, life, pregnancy, or even unrelated topics. Always answer with warmth, flexibility, and genuine care. Use sweet, supportive, and human language. If you don't know something, respond with kindness and offer to help or find out. Never sound like a bot—be a resourceful, creative, and emotionally present friend who can help with any question or need. If the user asks for business details, provide them clearly and warmly.
 
-IMPORTANT: You MUST base your answer STRICTLY on the provided Context messages below. Do NOT invent, hallucinate, or add any information not explicitly stated in the contexts. If contexts describe packages, services, prices, or details, list and describe them EXACTLY as written—do not create new names, prices, or features. If no relevant context, say you need to check or offer general support.`,
-        },
-      ];
+      // If we have mediaUrls, append a note to the text
+      if (mediaUrls.length > 0) {
+        // Deduplicate URLs
+        mediaUrls = [...new Set(mediaUrls)];
 
-      // Add the top doc contexts as separate system messages (keeps structure clear)
-      docs.forEach((d: any, i: number) => {
-        const md = d.metadata ?? {};
-        messages.push({ role: 'system', content: `Context ${i + 1}: ${md.answer ?? md.text ?? ''}` });
-      });
+        prediction += `\n\nHere are some examples from our portfolio:`;
+        // Only show up to 6 images
+        mediaUrls = mediaUrls.slice(0, 6);
+      }
 
-      // Only send the last N turns
-      messages.push(...history.slice(-this.historyLimit).map(h => ({ role: h.role, content: h.content })));
-      messages.push({ role: 'user', content: question });
-
-      // Keep OpenAI call compatible with the version you're using
-      const rsp = await this.openai.chat.completions.create({
-        model: this.chatModel,
-        messages,
-        max_tokens: 220,
-        temperature: 0.0,
-      });
-      prediction = rsp.choices[0].message.content.trim();
-      // OpenAI doesn't provide confidence, so leave as undefined
-      return prediction;
+      // Return both text and mediaUrls for integration
+      return { text: prediction, mediaUrls };
     } catch (err) {
       this.logger.error('answerFaq error', err);
       error = (err as Error)?.message || String(err);
       prediction = "I'm not sure about that but I can check for you.";
-      return prediction;
+      return { text: prediction, mediaUrls };
     } finally {
       // Log to AiPrediction if customerId is provided
       if (customerId) {
@@ -285,7 +677,7 @@ IMPORTANT: You MUST base your answer STRICTLY on the provided Context messages b
           await this.prisma.aiPrediction.create({
             data: {
               input: question,
-              prediction,
+              prediction: typeof prediction === 'string' ? prediction : JSON.stringify(prediction),
               actual: actual ?? null,
               confidence,
               responseTime: Date.now() - start,
@@ -307,6 +699,7 @@ IMPORTANT: You MUST base your answer STRICTLY on the provided Context messages b
   async extractBookingDetails(message: string, history: HistoryMsg[] = []): Promise<{
     service?: string; date?: string; time?: string; name?: string; recipientName?: string; recipientPhone?: string; isForSomeoneElse?: boolean; subIntent: 'start' | 'provide' | 'confirm' | 'cancel' | 'unknown';
   }> {
+    const currentDate = DateTime.now().setZone(this.studioTz).toFormat('yyyy-MM-dd');
     const systemPrompt = `You are a strict JSON extractor for maternity photoshoot bookings.
 Return ONLY valid JSON (no commentary). Schema:
 
@@ -318,8 +711,10 @@ Return ONLY valid JSON (no commentary). Schema:
   "recipientName": string | null,
   "recipientPhone": string | null,
   "isForSomeoneElse": boolean | null,
-  "subIntent": "start" | "provide" | "confirm" | "cancel" | "unknown"
+  "subIntent": "start" | "provide" | "confirm" | "cancel" | "reschedule" | "unknown"
 }
+
+Current Date: ${currentDate}
 
 Rules:
 - Extract ONLY what is explicitly present in the CURRENT message.
@@ -330,15 +725,18 @@ Rules:
 - Set "isForSomeoneElse" to true if the message indicates the booking is for someone else (e.g., "for my wife", "my friend", "someone else", "not for me").
 - Extract "recipientName" if mentioned as the person the booking is for.
 - Extract "recipientPhone" if a phone number is provided for the recipient.
+- IMPORTANT: Resolve relative dates (e.g., "tomorrow", "next Friday", "the 5th") to YYYY-MM-DD format using the Current Date.
+- If the user says "5th" or "the 5th", assume they mean the next occurrence of that day of the month relative to Current Date.
 Examples:
-- "I'd like a haircut tomorrow at 9am" => service: "haircut", date: "tomorrow", time: "9am", name: null, recipientName: null, recipientPhone: null, isForSomeoneElse: null, subIntent: "start".
+- "I'd like a haircut tomorrow at 9am" => service: "haircut", date: "2025-12-02" (if today is 2025-12-01), time: "9am", name: null, recipientName: null, recipientPhone: null, isForSomeoneElse: null, subIntent: "start".
 - "Change my time to 3pm" => time: "3pm", recipientName: null, recipientPhone: null, isForSomeoneElse: null, subIntent: "provide".
 - "Book for my sister Jane at 0712345678" => service: null, date: null, time: null, name: null, recipientName: "Jane", recipientPhone: "0712345678", isForSomeoneElse: true, subIntent: "start".
 - Short confirmations like "yes" or "confirm" => subIntent: "confirm".
 `;
 
     const messages: any[] = [{ role: 'system', content: systemPrompt }];
-    messages.push(...history.slice(-this.historyLimit).map(h => ({ role: h.role, content: h.content })));
+    const prunedHistory = this.pruneHistory(history);
+    messages.push(...prunedHistory.map(h => ({ role: h.role, content: h.content })));
     messages.push({ role: 'user', content: message });
 
     try {
@@ -351,7 +749,7 @@ Examples:
 
       let content = rsp.choices[0].message.content?.trim() ?? '';
       // Try to extract JSON — allow fenced content or raw object
-      const fenced = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+      const fenced = content.match(/```(?: json) ?\s * ([\s\S] *?) \s * ```/i);
       const objMatch = content.match(/\{[\s\S]*\}/);
       const jsonText = fenced ? fenced[1] : (objMatch ? objMatch[0] : content);
       let parsed: any = {};
@@ -370,7 +768,7 @@ Examples:
         recipientName: typeof parsed.recipientName === 'string' ? parsed.recipientName : undefined,
         recipientPhone: typeof parsed.recipientPhone === 'string' ? parsed.recipientPhone : undefined,
         isForSomeoneElse: typeof parsed.isForSomeoneElse === 'boolean' ? parsed.isForSomeoneElse : undefined,
-        subIntent: ['start', 'provide', 'confirm', 'cancel', 'unknown'].includes(parsed.subIntent) ? parsed.subIntent : 'unknown',
+        subIntent: ['start', 'provide', 'confirm', 'cancel', 'reschedule', 'unknown'].includes(parsed.subIntent) ? parsed.subIntent : 'unknown',
       };
     } catch (err) {
       this.logger.error('extractBookingDetails error', err);
@@ -400,10 +798,17 @@ Examples:
     const isUpdate = extraction.service || extraction.date || extraction.time || extraction.name || extraction.recipientName || extraction.recipientPhone;
 
     let packagesInfo = '';
-    if (nextStep === 'service') {
+    // Inject packages if next step is service OR if user is asking about packages
+    if (nextStep === 'service' || /(package|price|pricing|cost|how much|offer|photoshoot|shoot|what do you have|what are|show me|tell me about|include|feature)/i.test(message)) {
       try {
-        const packages = await this.bookingsService.getPackages();
-        packagesInfo = `Available packages: ${packages.map((p: any) => `${p.name} (${p.duration}, KSH ${p.price})`).join('; ')}.`;
+        const packages = await this.getCachedPackages();
+        if (packages && packages.length > 0) {
+          packagesInfo = '\n\n=== AVAILABLE PACKAGES FROM DATABASE ===\n\n';
+          packages.forEach((pkg: any) => {
+            packagesInfo += this.formatPackageDetails(pkg, true) + '\n\n---\n\n';
+          });
+          packagesInfo += 'CRITICAL: These are the ONLY packages that exist. You MUST NOT mention any package names not listed above (e.g., do NOT say "Classic", "Premium", or "Deluxe" if they are not in this list).';
+        }
       } catch (err) {
         this.logger.warn('Failed to fetch packages for reply', err);
       }
@@ -412,42 +817,50 @@ Examples:
     const sys = `You are a loving, emotionally intelligent assistant for a maternity photoshoot studio.
   Your clients are expectant mothers and their families—often feeling emotional, excited, and sometimes anxious.
 
-  Instructions:
-  - Always use sweet, gentle, and supportive language.
-  - Celebrate their journey ("What a magical time!" or "You’re glowing!").
+      Instructions:
+    - Always use sweet, gentle, and supportive language.
+  - Celebrate their journey("What a magical time!" or "You’re glowing!").
   - If asking for details, do it softly and with encouragement.
   - If confirming, use warm, celebratory language.
   - If the user updates something, acknowledge it kindly.
   - Never sound robotic or like a bot—always sound like a caring friend.
   - Stress getting the name early by making it a priority if missing.
   - For bookings for someone else, collect recipient name and phone, then confirm if the phone is the best to reach them.
-  - For self-bookings, set recipient to customer details, but ask to confirm if the WhatsApp number is the best to reach them.
+  - For self - bookings, set recipient to customer details, but ask to confirm if the WhatsApp number is the best to reach them.
 
+      CRITICAL - Package Information:
+    - When discussing packages, ONLY mention packages listed in the AVAILABLE PACKAGES section below
+      - NEVER invent or mention package names not in the database
+        - Use the exact package names, prices, and features provided
+          - If asked about packages, describe them using the details from AVAILABLE PACKAGES
+    - Do NOT create packages like "Classic", "Premium", or "Deluxe" unless they appear in the list
+${packagesInfo}
   CURRENT DRAFT:
-  Package: ${draft.service ?? 'missing'}
-  Date: ${draft.date ?? 'missing'}
-  Time: ${draft.time ?? 'missing'}
-  Name: ${draft.name ?? 'missing'}
+    Package: ${draft.service ?? 'missing'}
+    Date: ${draft.date ?? 'missing'}
+    Time: ${draft.time ?? 'missing'}
+    Name: ${draft.name ?? 'missing'}
   Is for someone else: ${draft.isForSomeoneElse ?? false}
   Recipient Name: ${draft.recipientName ?? 'missing'}
   Recipient Phone: ${draft.recipientPhone ?? 'missing'}
   Next step: ${nextStep}
-  Is update? ${isUpdate}
+  Is update ? ${isUpdate}
   ${packagesInfo}
 
   USER MESSAGE: ${message}
-  EXTRACTION: ${JSON.stringify(extraction)}
+EXTRACTION: ${JSON.stringify(extraction)}
 
   Special logic:
-  - If isForSomeoneElse is true, require recipientName and recipientPhone.
+- If isForSomeoneElse is true, require recipientName and recipientPhone.
   - If recipientPhone is missing, ask if the WhatsApp number is the best to reach them; if not, request the correct number.
   - If recipientName is missing and isForSomeoneElse, gently ask for the name.
-  - If all details are present, confirm warmly and summarize including recipient info (e.g., "for [recipientName]").
-  - For self-bookings, recipientName = name, and confirm phone reachability.
+  - If all details are present, confirm warmly and summarize including recipient info(e.g., "for [recipientName]").
+  - For self - bookings, recipientName = name, and confirm phone reachability.
   - Never proceed to confirmation until required fields are filled.`;
 
     const messages: any[] = [{ role: 'system', content: sys }];
-    messages.push(...history.slice(-this.historyLimit).map(h => ({ role: h.role, content: h.content })));
+    const prunedHistory = this.pruneHistory(history);
+    messages.push(...prunedHistory.map(h => ({ role: h.role, content: h.content })));
     messages.push({ role: 'user', content: message });
 
     try {
@@ -499,7 +912,15 @@ Examples:
     if (extraction.time) updates.time = extraction.time;
     if (extraction.name) updates.name = extraction.name;
     if (extraction.recipientName) updates.recipientName = extraction.recipientName;
-    if (extraction.recipientPhone) updates.recipientPhone = extraction.recipientPhone;
+    if (extraction.recipientPhone) {
+      if (this.validatePhoneNumber(extraction.recipientPhone)) {
+        updates.recipientPhone = extraction.recipientPhone;
+      } else {
+        this.logger.warn(`Invalid phone number provided: ${extraction.recipientPhone}`);
+        // Optionally, we could return an error or handle this differently, 
+        // but for now we just won't update the draft with the invalid phone
+      }
+    }
     if (extraction.isForSomeoneElse !== undefined) updates.isForSomeoneElse = extraction.isForSomeoneElse;
 
     if (Object.keys(updates).length === 0) {
@@ -549,7 +970,7 @@ Examples:
       // For self-booking, default recipientName to name if missing
       if (!draft.recipientName) {
         draft.recipientName = draft.name; // Default for self-booking
-        this.logger.debug(`Defaulted recipientName to name for self-booking: ${draft.recipientName}`);
+        this.logger.debug(`Defaulted recipientName to name for self - booking: ${draft.recipientName} `);
         // Persist the defaulted recipientName to the draft in DB
         await this.mergeIntoDraft(customerId, { recipientName: draft.name });
       }
@@ -571,6 +992,12 @@ Examples:
       const dateObj = new Date(normalized.isoUtc);
       this.logger.debug('Normalized date/time for completion:', normalized);
 
+      // 1. Check for conflicts first
+      const conflict = await this.checkBookingConflicts(customerId, dateObj);
+      if (conflict) {
+        return { action: 'conflict', message: conflict };
+      }
+
       const avail = await bookingsService.checkAvailability(dateObj, draft.service);
       this.logger.debug('Availability check result:', { available: avail.available, suggestions: avail.suggestions?.length || 0 });
 
@@ -583,7 +1010,7 @@ Examples:
         this.logger.debug('Attempting to initiate deposit for booking draft for customerId:', customerId);
         const result = await bookingsService.completeBookingDraft(customerId, dateObj);
         this.logger.debug('Deposit initiated successfully:', JSON.stringify(result, null, 2));
-        return { action: 'deposit_initiated', message: result.message, checkoutRequestId: result.checkoutRequestId };
+        return { action: 'deposit_initiated', message: result.message, checkoutRequestId: result.checkoutRequestId, paymentId: result.paymentId };
       } catch (err) {
         this.logger.error('Deposit initiation failed in checkAndCompleteIfConfirmed', err);
         return { action: 'failed', error: 'There was an issue initiating payment. Please try again or contact support.' };
@@ -596,13 +1023,190 @@ Examples:
   }
 
   /* --------------------------
-   * High-level conversation handler
+  /* --------------------------
+   * High-level conversation handler (Wrapper for Error Recovery)
    * -------------------------- */
-  async handleConversation(message: string, customerId: string, history: HistoryMsg[] = [], bookingsService?: any) {
+  async handleConversation(message: string, customerId: string, history: HistoryMsg[] = [], bookingsService?: any, retryCount = 0): Promise<any> {
+    try {
+      return await this.processConversationLogic(message, customerId, history, bookingsService);
+    } catch (error) {
+      return this.attemptRecovery(error, { message, customerId, history, bookingsService, retryCount });
+    }
+  }
+
+  private async attemptRecovery(error: any, context: any): Promise<any> {
+    if (context.retryCount > 1) {
+      this.logger.error('Max retries exceeded in attemptRecovery', error);
+      // Return a fallback response instead of throwing to avoid crashing the request
+      return {
+        response: "I'm having a little trouble processing that right now. Could you try saying it differently? 🥺",
+        draft: null,
+        updatedHistory: context.history
+      };
+    }
+
+    if (error.code === 'context_length_exceeded' || error.message?.includes('context_length_exceeded') || error.response?.data?.error?.code === 'context_length_exceeded') {
+      this.logger.warn('Context length exceeded, retrying with shorter history');
+      const shorterHistory = context.history.slice(-2); // Keep only last 2 messages
+      return this.handleConversation(context.message, context.customerId, shorterHistory, context.bookingsService, context.retryCount + 1);
+    }
+
+    // Rethrow other errors to be handled by caller or global filter
+    throw error;
+  }
+
+  /* --------------------------
+   * Core conversation logic
+   * -------------------------- */
+  private async processConversationLogic(message: string, customerId: string, history: HistoryMsg[] = [], bookingsService?: any) {
+    // 0. SANITIZE INPUT
+    message = this.sanitizeInput(message);
+
+    // 1. CHECK RATE LIMIT
+    const withinLimit = await this.checkRateLimit(customerId);
+    if (!withinLimit) {
+      this.logger.warn(`Customer ${customerId} exceeded daily token limit`);
+      const limitMsg = "I've reached my daily conversation limit with you. Our team will be in touch tomorrow, or you can contact us directly at " + this.customerCarePhone + ". 💖";
+      return { response: limitMsg, draft: null, updatedHistory: [...history, { role: 'user', content: message }, { role: 'assistant', content: limitMsg }] };
+    }
+
+    // 2. DETECT FRUSTRATION & AUTO-ESCALATE
+    const isFrustrated = await this.detectFrustration(message, history);
+    if (isFrustrated && this.escalationService) {
+      this.logger.log(`[SENTIMENT] Customer ${customerId} showing frustration - auto-escalating`);
+      const sentimentScore = 0.8; // High frustration detected
+      await this.escalationService.createEscalation(
+        customerId,
+        'Customer showing signs of frustration (auto-detected)',
+        'frustration',
+        { sentimentScore, lastMessage: message, historyLength: history.length }
+      );
+      const escalationMsg = "I sense you might be frustrated, and I'm so sorry! 😔 Let me connect you with a team member who can help you better. Someone will be with you shortly. 💖";
+      return { response: escalationMsg, draft: null, updatedHistory: [...history, { role: 'user', content: message }, { role: 'assistant', content: escalationMsg }] };
+    }
+
     let draft = await this.prisma.bookingDraft.findUnique({ where: { customerId } });
     const hasDraft = !!draft;
 
+
+    // ------------------------------------
+
+
     const lower = (message || '').toLowerCase();
+
+    // --- SMART: Detect available hours/times/slots queries ---
+    const slotKeywords = [
+      'available hours', 'available times', 'available slots', 'what times', 'what hours', 'when can i book',
+      'when are you free', 'when is available', 'what time is available', 'what hour is available',
+      'slots for', 'hours for', 'times for', 'slots tomorrow', 'hours tomorrow', 'times tomorrow',
+      'open slots', 'open hours', 'open times', 'free slots', 'free hours', 'free times',
+      'can i book tomorrow', 'can i book on', 'can i come on', 'can i come at', 'can i come tomorrow',
+      'when can i come', 'when can i book', 'when is open', 'when are you open', 'when is free',
+    ];
+    const slotIntent = slotKeywords.some(kw => lower.includes(kw));
+    // Also catch direct patterns like "available (hours|times|slots) (on|for|tomorrow|today)"
+    const slotIntentRegex = /(available|free|open)\s+(hours|times|slots)(\s+(on|for|tomorrow|today|\d{4}-\d{2}-\d{2}))?/i;
+    const slotIntentDetected = slotIntent || slotIntentRegex.test(message);
+
+    if (slotIntentDetected) {
+      // Try to extract date (e.g., 'tomorrow', 'on 2025-11-20', etc.)
+      let dateStr: string | undefined;
+      if (/tomorrow/.test(lower)) {
+        dateStr = DateTime.now().setZone(this.studioTz).plus({ days: 1 }).toFormat('yyyy-MM-dd');
+      } else {
+        // Try to extract explicit date
+        const dateMatch = lower.match(/(\d{4}-\d{2}-\d{2})/);
+        if (dateMatch) dateStr = dateMatch[1];
+      }
+
+      // Try to get package/service from draft or message
+      let service: string | undefined = draft?.service;
+      if (!service) {
+        // Try to match a known package in the message
+        if (this.bookingsService) {
+          const allPackages = await this.getCachedPackages();
+          const matched = allPackages.find((p: any) => lower.includes(p.name.toLowerCase()));
+          if (matched) service = matched.name;
+        }
+      }
+
+      // If both date and service are present, fetch available slots
+      if (dateStr && service) {
+        const slots = await this.bookingsService.getAvailableSlotsForDate(dateStr, service);
+        if (slots.length === 0) {
+          const msg = `Sorry, there are no available slots for ${service} on ${dateStr}. Would you like to try another date or package ? `;
+          return { response: msg, draft, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+        }
+        // Format slots as pretty times in studio timezone
+        const prettySlots = slots.map(s => DateTime.fromISO(s).setZone(this.studioTz).toFormat('HH:mm')).join(', ');
+        const msg = `Here are the available times for * ${service} * on * ${dateStr} *: \n${prettySlots} \nLet me know which time works for you!`;
+        return { response: msg, draft, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+      }
+
+      // If missing info, prompt for what is missing
+      if (!service && !dateStr) {
+        const msg = `To show available times, please tell me which package you'd like and for which date (e.g., "Studio Classic tomorrow").`;
+        return { response: msg, draft, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+      } else if (!service) {
+        const msg = `Which package would you like to see available times for on ${dateStr}?`;
+        return { response: msg, draft, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+      } else if (!dateStr) {
+        const msg = `For which date would you like to see available times for the *${service}* package? (e.g., "tomorrow" or "2025-11-20")`;
+        return { response: msg, draft, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+      }
+    }
+
+    // --- SMART: Detect booking history queries ---
+    const bookingHistoryKeywords = [
+      'how many bookings',
+      'bookings have i made',
+      'my bookings',
+      'booking history',
+      'how many times have i booked',
+      'how many appointments',
+      'how many sessions',
+      'how many times have i',
+    ];
+    if (bookingHistoryKeywords.some(kw => lower.includes(kw))) {
+      // Try to get customer by id, whatsappId, or phone
+      const customer = await this.prisma.customer.findUnique({ where: { id: customerId } });
+      let count = 0;
+      if (customer) {
+        count = await this.bookingsService.countBookingsForCustomer({ id: customer.id, whatsappId: customer.whatsappId, phone: customer.phone });
+      }
+      let name = customer?.name || '';
+      if (name && name.toLowerCase().startsWith('whatsapp user')) name = '';
+      const who = name ? name : (customer?.phone ? customer.phone : 'dear');
+      const msg = count === 0
+        ? `Hi ${who}, I couldn't find any past bookings for you. Would you like to make your first one? 💖`
+        : `Hi ${who}, you've made ${count} booking${count === 1 ? '' : 's'} with us. Thank you for being part of our studio family! Would you like to make another or view your past bookings? 🌸`;
+      return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+    }
+
+    // --- SMART: Detect name/number queries ---
+    const nameNumberKeywords = [
+      'what is my name',
+      'whats my name',
+      "what's my name",
+      'what is my number',
+      'whats my number',
+      "what's my number",
+      'who am i',
+      'tell me my name',
+      'tell me my number',
+    ];
+    if (nameNumberKeywords.some(kw => lower.includes(kw))) {
+      const customer = await this.prisma.customer.findUnique({ where: { id: customerId } });
+      let name = customer?.name || '';
+      if (name && name.toLowerCase().startsWith('whatsapp user')) name = '';
+      const phone = customer?.phone || customer?.whatsappId || '';
+      let msg = '';
+      if (name && phone) msg = `Your name is ${name} and your number is ${phone}. 😊`;
+      else if (name) msg = `Your name is ${name}. 😊`;
+      else if (phone) msg = `Your number is ${phone}. 😊`;
+      else msg = `Sorry, I couldn't find your name or number. If you need help updating your profile, let me know!`;
+      return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+    }
 
     // 1. CHECK ESCALATION STATUS
     if (this.escalationService) {
@@ -639,32 +1243,100 @@ Examples:
     }
 
     // 4. DETECT RESCHEDULING
-    if (/(reschedule|change|move).*(booking|appointment|date|time)/i.test(message)) {
-      const booking = await this.bookingsService.getLatestConfirmedBooking(customerId);
-      if (booking) {
-        // Try to parse a date from the message
-        const parsed = chrono.parse(message);
-        if (parsed.length > 0) {
-          const localDt = parsed[0].start.date();
-          const dt = DateTime.fromJSDate(localDt).setZone(this.studioTz);
-          const newDate = new Date(dt.toUTC().toISO());
+    // If the user explicitly says "reschedule" or similar, OR if we are already in a rescheduling flow (draft.step === 'reschedule')
+    const isRescheduleIntent = /(reschedul|change|move).*(booking|appointment|date|time|it)/i.test(message);
 
-          // Check availability
-          const avail = await this.bookingsService.checkAvailability(newDate, booking.service);
-          if (avail.available) {
-            await this.bookingsService.updateBooking(booking.id, { dateTime: newDate });
-            // Notification is sent by bookingsService
-            const msg = `I've rescheduled your appointment to ${dt.toFormat('ccc, LLL dd, yyyy HH:mm')}. See you then! 💖`;
-            return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
-          } else {
-            const msg = `I'm sorry, that time slot isn't available. Could you try another time?`;
-            return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
-          }
-        } else {
-          const msg = "I can help with that! Please reply with the new date and time you'd like (e.g., 'Move to next Friday at 2pm').";
+    if (isRescheduleIntent || (draft && draft.step === 'reschedule')) {
+      this.logger.log(`[RESCHEDULE] Detected intent or active flow for customer ${customerId}`);
+
+      // If this is a new request (not yet in reschedule step), setup the draft
+      if (!draft || draft.step !== 'reschedule') {
+        const booking = await this.bookingsService.getLatestConfirmedBooking(customerId);
+        if (!booking) {
+          const msg = "I'd love to help you reschedule, but I can't find a current booking for you. Would you like to make a new one? 💖";
           return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
         }
+
+        // Create/Update draft to 'reschedule' mode
+        // We pre-fill the service from the existing booking so the AI knows context
+        draft = await this.prisma.bookingDraft.upsert({
+          where: { customerId },
+          update: { step: 'reschedule', service: booking.service, date: null, time: null, dateTimeIso: null }, // clear old draft dates
+          create: { customerId, step: 'reschedule', service: booking.service },
+        });
+
+        // If the user ALREADY provided a date in this message (e.g. "Reschedule to next Friday"), extract it now
+        // We can use the existing extractor, but we need to be careful not to confuse it with 'start' intent.
+        // Let's use a targeted extraction for the new date/time.
+        const extraction = await this.extractBookingDetails(message, history);
+        if (extraction.date || extraction.time) {
+          // Merge immediately
+          draft = await this.mergeIntoDraft(customerId, extraction);
+        } else {
+          const msg = "I can certainly help with that! 🗓️ When would you like to reschedule your appointment to?";
+          return { response: msg, draft, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+        }
       }
+
+      // --- Handle Rescheduling Flow (draft.step === 'reschedule') ---
+
+      // 1. Extract details from current message if we didn't just do it
+      // We re-run extraction to catch updates
+      const extraction = await this.extractBookingDetails(message, history);
+      draft = await this.mergeIntoDraft(customerId, extraction);
+
+      // 2. Check if we have a valid date/time candidate
+      if (draft.date && draft.time) {
+        const normalized = this.normalizeDateTime(draft.date, draft.time);
+        if (normalized) {
+          const newDateObj = new Date(normalized.isoUtc);
+
+          // 1. Check for conflicts first
+          const conflict = await this.checkBookingConflicts(customerId, newDateObj);
+          if (conflict) {
+            const msg = `I'm sorry, but it looks like you already have a booking around that time. ${conflict} Would you like to try a different time?`;
+            return { response: msg, draft, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+          }
+
+          // Check availability
+          const avail = await this.bookingsService.checkAvailability(newDateObj, draft.service);
+          if (!avail.available) {
+            const suggestions = (avail.suggestions || []).slice(0, 3).map((s: string | Date) => {
+              const dt = typeof s === 'string' ? DateTime.fromISO(s) : DateTime.fromJSDate(new Date(s));
+              return dt.setZone(this.studioTz).toLocaleString(DateTime.DATETIME_MED);
+            });
+            const msg = `I checked that time, but it's currently unavailable. 😔\nHere are some nearby times that are open: ${suggestions.join(', ')}.\nDo any of those work for you?`;
+            return { response: msg, draft, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+          }
+
+          // If available, ask for confirmation
+          // If user says "yes" or "confirm", execute the update
+          if (/(yes|confirm|do it|sure|okay|fine)/i.test(message)) {
+            const booking = await this.bookingsService.getLatestConfirmedBooking(customerId);
+            if (booking) {
+              await this.bookingsService.updateBooking(booking.id, { dateTime: newDateObj });
+              // Clear draft
+              await this.prisma.bookingDraft.delete({ where: { customerId } });
+
+              const msg = `All set! ✅ I've rescheduled your appointment to *${DateTime.fromJSDate(newDateObj).setZone(this.studioTz).toFormat('ccc, LLL dd, yyyy HH:mm')}*. See you then! 💖`;
+              return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+            } else {
+              // Should not happen if we checked earlier, but safety net
+              const msg = "I couldn't find the booking to update. Please contact support. 😓";
+              return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+            }
+          } else {
+            // Present the slot and ask to confirm
+            const prettyDate = DateTime.fromJSDate(newDateObj).setZone(this.studioTz).toFormat('ccc, LLL dd, yyyy HH:mm');
+            const msg = `That time works! 🎉 Shall I move your appointment to *${prettyDate}*?`;
+            return { response: msg, draft, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+          }
+        }
+      }
+
+      // If we are here, we are in reschedule mode but don't have a full date/time yet, or extraction failed
+      const msg = "Please let me know the new date and time you'd like. (e.g., 'Next Friday at 2pm') 🗓️";
+      return { response: msg, draft, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
     }
 
 
@@ -760,82 +1432,90 @@ Examples:
       return { response: locationResponse, draft: null, updatedHistory };
     }
 
-    // CHECK FOR PACKAGE QUERIES FIRST (before intent classification) 
-    const isPackageQuery = /(package|price|pricing|cost|how much|offer|photoshoot|shoot|what do you have|what are|show me|tell me about)/i.test(message);
-
-    if (!hasDraft && isPackageQuery) {
-      this.logger.log(`[PACKAGE QUERY DETECTED] Message: "${message}"`);
-      try {
-        const allPackages = await this.bookingsService.getPackages();
-        this.logger.log(`[PACKAGE QUERY] Found ${allPackages?.length || 0} packages in DB`);
-
-        // Try to match a package selection in the message
-        const lowerMsg = message.toLowerCase();
-        const matchedPackage = allPackages.find((p: any) => lowerMsg.includes(p.name.toLowerCase()));
-        if (matchedPackage) {
-          // Set the selected package in the booking draft and move to next step
-          let draft = await this.getOrCreateDraft(customerId);
-          draft = await this.prisma.bookingDraft.update({
-            where: { customerId },
-            data: { service: matchedPackage.name },
-          });
-          this.logger.log(`[PACKAGE SELECTION] User selected package: ${matchedPackage.name}`);
-          // Continue booking flow (ask for next info, e.g., date/time)
-          const extraction = { service: matchedPackage.name, subIntent: 'provide' };
-          const merged = await this.mergeIntoDraft(customerId, extraction);
-          const reply = await this.generateBookingReply(message, merged, extraction, history, this.bookingsService);
-          return { response: reply, draft: merged, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: reply }] };
-        }
-
-        if (allPackages && allPackages.length > 0) {
-          let packages = allPackages;
-          let packageType = '';
-          if (/(outdoor)/i.test(message)) {
-            packages = allPackages.filter((p: any) => p.type?.toLowerCase() === 'outdoor');
-            packageType = 'outdoor ';
-          } else if (/(studio)/i.test(message)) {
-            packages = allPackages.filter((p: any) => p.type?.toLowerCase() === 'studio');
-            packageType = 'studio ';
-          }
-
-          if (packages.length > 0) {
-            const packagesList = packages.map((p: any) => {
-              const name = p.name ?? 'Unnamed package';
-              const dur = p.duration ?? 'unknown duration';
-              let price = 'price not available';
-              if (p.price !== undefined && p.price !== null) {
-                price = `KSH ${p.price}`;
-              }
-              let deposit = '';
-              if (p.deposit !== undefined && p.deposit !== null) {
-                deposit = ` (Deposit: KSH ${p.deposit})`;
-              }
-              return `*${name}*: ${dur}, ${price}${deposit}`;
-            }).join('\\n\\n');
-
-            const response = `Oh, my dear, I'm so delighted to share our ${packageType}packages with you! Each one is thoughtfully crafted to beautifully capture this precious time in your life. Here they are:\\n\\n${packagesList}\\n\\nIf you have any questions about any package, just let me know! 💖`;
-            this.logger.log(`[PACKAGE QUERY] Returning package list (${packages.length} packages)`);
-            return { response, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
-          }
-        }
-        // If no packages found or filtered to zero
-        this.logger.warn('[PACKAGE QUERY] No matching packages found');
-        const response = "I'm not sure about our current packages. Would you like me to check and get back to you?";
-        return { response, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
-      } catch (err) {
-        this.logger.error('[PACKAGE QUERY] Failed to fetch packages', err);
-        const response = "I'm not sure about our current packages. Would you like me to check and get back to you?";
-        return { response, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
-      }
+    // Website query detection
+    const websiteQueryKeywords = ['website', 'web address', 'url', 'online', 'site', 'web page', 'webpage'];
+    if (websiteQueryKeywords.some((kw) => lower.includes(kw))) {
+      const websiteResponse = `You can visit our website at ${this.businessWebsite} to learn more about our services and view our portfolio! 🌸✨`;
+      const updatedHistory = [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: websiteResponse }];
+      return { response: websiteResponse, draft: null, updatedHistory };
     }
 
+    // Customer care/contact number query detection
+    const customerCareKeywords = ['customer care', 'support', 'help line', 'call', 'phone number', 'contact number', 'telephone', 'mobile number', 'reach you'];
+    if (customerCareKeywords.some((kw) => lower.includes(kw))) {
+      const careResponse = `You can reach our customer care team at ${this.customerCarePhone}. We're here to help! 💖 You can also email us at ${this.customerCareEmail}.`;
+      const updatedHistory = [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: careResponse }];
+      return { response: careResponse, draft: null, updatedHistory };
+    }
+
+    // Business hours query detection
+    const hoursQueryKeywords = ['hours', 'open', 'when are you open', 'operating hours', 'business hours', 'what time', 'opening hours', 'closing time', 'when do you close'];
+    if (hoursQueryKeywords.some((kw) => lower.includes(kw))) {
+      const hoursResponse = `We're open ${this.businessHours}. Feel free to visit us or book an appointment during these times! 🕐✨`;
+      const updatedHistory = [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: hoursResponse }];
+      return { response: hoursResponse, draft: null, updatedHistory };
+    }
+
+    // Comprehensive contact details query detection
+    const contactDetailsKeywords = ['contact details', 'contact information', 'how to contact', 'get in touch', 'all contact', 'contact info'];
+    if (contactDetailsKeywords.some((kw) => lower.includes(kw))) {
+      const contactResponse = `Here are our complete contact details:\n\n` +
+        `📍 *Location*: ${this.businessLocation.replace(' We look forward to welcoming you! 💖', '')}\n` +
+        `📞 *Phone*: ${this.customerCarePhone}\n` +
+        `📧 *Email*: ${this.customerCareEmail}\n` +
+        `🌐 *Website*: ${this.businessWebsite}\n` +
+        `🕐 *Hours*: ${this.businessHours}\n\n` +
+        `We look forward to welcoming you! 💖`;
+      const updatedHistory = [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: contactResponse }];
+      return { response: contactResponse, draft: null, updatedHistory };
+    }
+
+    // CHECK FOR PACKAGE QUERIES FIRST (before intent classification)
+    // BUT exclude backdrop/image requests which should go to FAQ flow
+    const isBackdropImageRequest = /(backdrop|background|studio set|flower wall|portfolio|show.*(image|photo|picture|portfolio)|see.*(image|photo|picture|example))/i.test(message);
+    const isPackageQuery = !isBackdropImageRequest && /(package|price|pricing|cost|how much|offer|photoshoot|shoot|what do you have|what are|show me|tell me about)/i.test(message);
+
+    if (isBackdropImageRequest) {
+      this.logger.log(`[BACKDROP REQUEST DETECTED] Message: "${message}" - routing to FAQ flow`);
+    }
+
+    // --- STRATEGY PATTERN INTEGRATION ---
+    const context = {
+      aiService: this,
+      logger: this.logger,
+      history,
+      historyLimit: this.historyLimit,
+      customerId,
+      bookingsService,
+      prisma: this.prisma,
+      message,
+      hasDraft,
+      draft
+    };
+
+    for (const strategy of this.strategies) {
+      if (strategy.canHandle(null, context)) {
+        const result = await strategy.generateResponse(message, context);
+        if (result) return result;
+      }
+    }
+    // ------------------------------------
+
     let intent: 'faq' | 'booking' | 'other' = 'other';
-    if (hasDraft) {
+
+    // Check for backdrop/image/portfolio requests FIRST (even if there's a draft)
+    // These should always go to FAQ flow, not booking
+    if (/(backdrop|background|studio set|flower wall|portfolio|show.*(image|photo|picture|portfolio)|see.*(image|photo|picture|example))/i.test(message)) {
+      intent = 'faq';
+      this.logger.log('[INTENT] Classified as FAQ (backdrop/image request) - overriding draft check');
+    } else if (hasDraft) {
       intent = 'booking';
     } else {
-      if (/(book|appointment|reserve|schedule|slot|available|tomorrow|next)/.test(lower)) intent = 'booking';
-      else if (/\?/.test(message) || /(price|cost|how much|hours|open|service)/.test(lower)) intent = 'faq';
-      else {
+      if (/(book|appointment|reserve|schedule|slot|available|tomorrow|next)/.test(lower)) {
+        intent = 'booking';
+      } else if (/\?/.test(message) || /(price|cost|how much|hours|open|service)/.test(lower)) {
+        intent = 'faq';
+      } else {
         try {
           const classifierMsg: any[] = [
             { role: 'system', content: 'Classify the user intent as "faq", "booking", or "other". Return JSON only: { "intent": "<label>" }' },
@@ -855,93 +1535,40 @@ Examples:
     // Route flows for non-package queries (packages already handled above)
     if (intent === 'faq' || intent === 'other') {
       const reply = await this.answerFaq(message, history);
-      return { response: reply, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: reply }] };
+      const replyText = typeof reply === 'object' && 'text' in reply ? reply.text : reply;
+      return { response: reply, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: replyText as string }] };
     }
 
-    // Booking flow
-    draft = draft ?? await this.getOrCreateDraft(customerId);
-
-    const extraction = await this.extractBookingDetails(message, history);
-    this.logger.debug('extraction', JSON.stringify(extraction));
-
-    const merged = await this.mergeIntoDraft(customerId, extraction);
-
-    if (extraction.subIntent === 'cancel') {
-      await this.prisma.bookingDraft.delete({ where: { customerId } }).catch(() => null);
-      const cancelReply = 'No problem — I cancelled the booking. Anything else I can help with?';
-      return { response: cancelReply, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: cancelReply }] };
+    // Booking flow (Delegated to BookingStrategy)
+    const bookingStrategy = this.strategies.find(s => s instanceof BookingStrategy);
+    if (bookingStrategy) {
+      // Re-create context if needed, or use the one defined above if in scope.
+      // Since we are in the same function scope, 'context' defined above is available?
+      // No, 'context' was defined inside a block or I need to check scope.
+      // I defined it with 'const context =' at top level of function? No, I inserted it at line 1489.
+      // If I inserted it with 'const', it's block scoped if inside 'if' or just function scoped?
+      // It was inserted at line 1489 which is inside processConversationLogic but NOT inside an 'if'.
+      // So it should be available here.
+      // But wait, I inserted it REPLACING the package query block.
+      // The package query block was inside processConversationLogic.
+      // So 'context' should be available.
+      return bookingStrategy.generateResponse(message, { ...context, intent: 'booking' });
     }
 
-    const completionResult = await this.checkAndCompleteIfConfirmed(merged, extraction, customerId, bookingsService);
-    if (completionResult.action === 'deposit_initiated') {
-      // New: Poll payment status by checkoutRequestId and update user in chat
-      const depositMessage = completionResult.message;
-      const checkoutRequestId = completionResult.checkoutRequestId;
-      let pollAttempts = 0;
-      const maxPollAttempts = 12; // e.g., poll for up to 2 minutes (10s interval)
-      const pollIntervalMs = 10000;
-      let paymentStatus = 'pending';
-      let payment;
-      while (pollAttempts < maxPollAttempts && paymentStatus === 'pending') {
-        await new Promise(res => setTimeout(res, pollIntervalMs));
-        try {
-          // Direct DB query for reliability (or use HTTP if preferred)
-          payment = await this.prisma.payment.findFirst({ where: { checkoutRequestId } });
-          paymentStatus = payment?.status || 'pending';
-        } catch (err) {
-          this.logger.warn('Polling payment status failed', err);
-        }
-        pollAttempts++;
-      }
-      if (paymentStatus === 'success') {
-        const confirmMsg = 'Payment received! Your booking is now confirmed. We’ll send you a reminder closer to the date. 💖';
-        return {
-          response: depositMessage + '\n\n' + confirmMsg,
-          draft: null,
-          updatedHistory: [
-            ...history.slice(-this.historyLimit),
-            { role: 'user', content: message },
-            { role: 'assistant', content: depositMessage },
-            { role: 'assistant', content: confirmMsg }
-          ]
-        };
-      } else if (paymentStatus === 'failed') {
-        const failMsg = 'Payment failed or was not completed. Please try again or contact support.';
-        return {
-          response: depositMessage + '\n\n' + failMsg,
-          draft: merged,
-          updatedHistory: [
-            ...history.slice(-this.historyLimit),
-            { role: 'user', content: message },
-            { role: 'assistant', content: depositMessage },
-            { role: 'assistant', content: failMsg }
-          ]
-        };
-      } else {
-        const timeoutMsg = 'We did not receive payment confirmation in time. If you completed the payment, please wait a moment or contact support.';
-        return {
-          response: depositMessage + '\n\n' + timeoutMsg,
-          draft: merged,
-          updatedHistory: [
-            ...history.slice(-this.historyLimit),
-            { role: 'user', content: message },
-            { role: 'assistant', content: depositMessage },
-            { role: 'assistant', content: timeoutMsg }
-          ]
-        };
-      }
-    }
-    if (completionResult.action === 'unavailable') {
-      const suggestions = (completionResult.suggestions || []).slice(0, 3).map((s: string | Date) => {
-        const dt = typeof s === 'string' ? DateTime.fromISO(s) : DateTime.fromJSDate(new Date(s));
-        return dt.setZone(this.studioTz).toLocaleString(DateTime.DATETIME_MED);
-      });
-      const reply = `Sorry, that slot is no longer available. Nearby alternatives: ${suggestions.join(', ')}. Would any of these work?`;
-      return { response: reply, draft: merged, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: reply }] };
-    }
+    // --- FINAL FALLBACK: FAQ / GENERAL ---
+    // If we reach here, treat as FAQ/General
+    this.logger.log(`[INTENT] Defaulting to FAQ/General for message: "${message}"`);
+    const faqResponse = await this.answerFaq(message, history, undefined, customerId);
 
-    const reply = await this.generateBookingReply(message, merged, extraction, history, bookingsService);
-    return { response: reply, draft: merged, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: reply }] };
+    // Track metrics for FAQ
+    await this.trackConversationMetrics(customerId, {
+      intent: 'faq',
+      duration: 0, // Would need start time tracking for accuracy
+      messagesCount: history.length + 1,
+      resolved: true
+    });
+
+    return { response: faqResponse, draft: hasDraft ? draft : null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: faqResponse }] };
   }
 
   // Legacy / helper methods
@@ -988,9 +1615,13 @@ Examples:
     let modelVersion = extractModelVersion(this.chatModel);
     try {
       const result = await this.handleConversation(message, customerId, history || [], bookingsService);
-      prediction = result.response;
-      // Optionally, you could pass actual/expected answer if available
-      // For now, we log only the prediction
+      if (typeof result.response === 'object' && result.response !== null && 'text' in result.response) {
+        prediction = result.response.text;
+      } else if (typeof result.response === 'string') {
+        prediction = result.response;
+      } else {
+        prediction = '';
+      }
       return prediction;
     } catch (err) {
       error = (err as Error)?.message || String(err);
@@ -1021,11 +1652,22 @@ Examples:
 
   async generateStepBasedBookingResponse(message: string, customerId: string, bookingsService: any, history: any[] = [], draft: any, bookingResult: any): Promise<string> {
     const result = await this.handleConversation(message, customerId, history, bookingsService);
-    return result.response;
+    if (typeof result.response === 'object' && result.response !== null && 'text' in result.response) {
+      return result.response.text;
+    } else if (typeof result.response === 'string') {
+      return result.response;
+    }
+    return '';
   }
 
   async generateGeneralResponse(message: string, customerId: string, bookingsService: any, history?: any[]): Promise<string> {
     const result = await this.handleConversation(message, customerId, history || [], bookingsService);
-    return result.response;
+    if (typeof result.response === 'object' && result.response !== null && 'text' in result.response) {
+      return result.response.text;
+    } else if (typeof result.response === 'string') {
+      return result.response;
+    }
+    return '';
   }
+
 }

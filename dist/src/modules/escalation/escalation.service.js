@@ -18,13 +18,16 @@ let EscalationService = EscalationService_1 = class EscalationService {
         this.prisma = prisma;
         this.logger = new common_1.Logger(EscalationService_1.name);
     }
-    async createEscalation(customerId, reason) {
-        this.logger.log(`Escalating customer ${customerId} for reason: ${reason}`);
+    async createEscalation(customerId, reason, escalationType = 'manual', metadata, sentimentScore) {
+        this.logger.log(`Escalating customer ${customerId} for reason: ${reason} (type: ${escalationType})`);
         const escalation = await this.prisma.escalation.create({
             data: {
                 customerId,
                 reason,
                 status: 'OPEN',
+                escalationType,
+                metadata: metadata || null,
+                sentimentScore: sentimentScore || null,
             },
         });
         await this.prisma.customer.update({

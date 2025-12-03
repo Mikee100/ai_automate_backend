@@ -27,7 +27,7 @@ export class MessageQueueProcessor {
     private customersService: CustomersService,
     private instagramService: InstagramService,
     private websocketGateway: WebsocketGateway,
-  ) {}
+  ) { }
 
   /**
    * process: main worker function for incoming messages
@@ -88,11 +88,19 @@ export class MessageQueueProcessor {
 
     // 4) Use AI service to handle the entire conversation (it manages intent, extraction, draft, and generates human-like responses)
     let response = '';
+    let mediaUrls: string[] = [];
     let draft: any = null;
 
     try {
       const result = await this.aiService.handleConversation(messageContent, customerId, history as any, this.bookingsService);
-      response = result.response;
+
+      if (typeof result.response === 'object' && result.response !== null && 'text' in result.response) {
+        response = result.response.text;
+        mediaUrls = result.response.mediaUrls || [];
+      } else {
+        response = typeof result.response === 'string' ? result.response : JSON.stringify(result.response);
+      }
+
       draft = result.draft;
     } catch (err) {
       this.logger.error('Error in AI conversation handling', err);
@@ -102,7 +110,17 @@ export class MessageQueueProcessor {
     // 11) Send reply back via channel and record message. Always create outbound message record exactly once.
     if (platform === 'whatsapp' && from) {
       try {
+        // Send text message first
         await this.whatsappService.sendMessage(from, response);
+
+        // Send images if any
+        if (mediaUrls && mediaUrls.length > 0) {
+          for (const url of mediaUrls) {
+            await this.whatsappService.sendImage(from, url);
+            // Small delay to ensure order
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
       } catch (err) {
         this.logger.error('Error sending WhatsApp message', err);
         return { processed: false, error: 'Failed to send WhatsApp message' };
@@ -115,7 +133,7 @@ export class MessageQueueProcessor {
           customerId,
         });
         // Emit to websocket (non-blocking)
-        const customer = await this.customersService.findOne(customerId).catch(()=>null);
+        const customer = await this.customersService.findOne(customerId).catch(() => null);
         this.websocketGateway.emitNewMessage('whatsapp', {
           id: outboundMessage.id,
           from: '',
@@ -143,7 +161,7 @@ export class MessageQueueProcessor {
           direction: 'outbound',
           customerId,
         });
-        const customer = await this.customersService.findOne(customerId).catch(()=>null);
+        const customer = await this.customersService.findOne(customerId).catch(() => null);
         this.websocketGateway.emitNewMessage('instagram', {
           id: outboundMessage.id,
           from: '',
@@ -166,7 +184,7 @@ export class MessageQueueProcessor {
           direction: 'outbound',
           customerId,
         });
-        const customer = await this.customersService.findOne(customerId).catch(()=>null);
+        const customer = await this.customersService.findOne(customerId).catch(() => null);
         this.websocketGateway.emitNewMessage(platform || 'unknown', {
           id: outboundMessage.id,
           from: '',

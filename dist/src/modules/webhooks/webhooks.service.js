@@ -48,6 +48,7 @@ let WebhooksService = class WebhooksService {
         return { status: 'ok' };
     }
     async processWhatsAppMessage(value) {
+        console.log('[AI DEBUG] processWhatsAppMessage called', JSON.stringify(value));
         const messages = value?.messages;
         if (!messages || messages.length === 0) {
             console.log('No messages in webhook payload - ignoring');
@@ -62,14 +63,12 @@ let WebhooksService = class WebhooksService {
             console.log("Ignoring non-text message");
             return;
         }
-        console.log('Received text message from', from, ':', text);
-        const existing = await this.messagesService.findByExternalId(messageId);
-        if (existing) {
-            console.log("Duplicate inbound message ignored");
-            return;
-        }
         let customer = await this.customersService.findByWhatsappId(from);
-        if (!customer) {
+        if (customer) {
+            console.log(`[AI DEBUG] WhatsApp: customerId=${customer.id}, aiEnabled=${customer.aiEnabled}`);
+        }
+        else {
+            console.log(`[AI DEBUG] WhatsApp: customer not found for from=${from}`);
             console.log("Creating customer:", from);
             customer = await this.customersService.create({
                 name: `WhatsApp User ${from}`,
@@ -77,6 +76,12 @@ let WebhooksService = class WebhooksService {
                 phone: from,
                 email: `${from}@whatsapp.local`,
             });
+        }
+        console.log('Received text message from', from, ':', text);
+        const existing = await this.messagesService.findByExternalId(messageId);
+        if (existing) {
+            console.log("Duplicate inbound message ignored");
+            return;
         }
         const created = await this.messagesService.create({
             content: text,
@@ -148,6 +153,8 @@ let WebhooksService = class WebhooksService {
                 });
             }
             console.log('Customer found/created:', customer.id);
+            await this.customersService.updateLastInstagramMessageAt(from, new Date());
+            console.log('✅ Updated lastInstagramMessageAt for 24-hour window tracking');
             const createdMessage = await this.messagesService.create({
                 content: text,
                 platform: 'instagram',
@@ -167,6 +174,7 @@ let WebhooksService = class WebhooksService {
             });
             const globalAiEnabled = await this.aiSettingsService.isAiEnabled();
             const customerAiEnabled = customer.aiEnabled;
+            console.log(`[AI DEBUG] Instagram: customerId=${customer.id}, aiEnabled=${customer.aiEnabled}`);
             if (globalAiEnabled && customerAiEnabled) {
                 console.log('Adding Instagram message to queue for processing...');
                 await this.messageQueue.add('processMessage', {

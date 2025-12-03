@@ -3,7 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class CustomersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async create(data: any) {
     return this.prisma.customer.create({ data });
@@ -88,6 +88,13 @@ export class CustomersService {
         name: `Messenger User ${messengerId}`,
         email: `${messengerId}@messenger.local`, // Placeholder email
       },
+    });
+  }
+
+  async updateLastInstagramMessageAt(instagramId: string, timestamp: Date) {
+    return this.prisma.customer.update({
+      where: { instagramId },
+      data: { lastInstagramMessageAt: timestamp },
     });
   }
 }

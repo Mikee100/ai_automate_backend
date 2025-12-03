@@ -15,6 +15,12 @@ export declare class InstagramService {
         status: string;
     }>;
     processMessage(value: any): Promise<void>;
+    canSendMessage(instagramId: string): Promise<{
+        allowed: boolean;
+        reason?: string;
+        lastMessageAt?: Date;
+        hoursRemaining?: number;
+    }>;
     sendMessage(to: string, message: string): Promise<any>;
     getMessages(options: {
         page?: number;

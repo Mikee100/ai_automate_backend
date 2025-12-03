@@ -63,9 +63,39 @@ let InstagramService = class InstagramService {
             });
         }
     }
+    async canSendMessage(instagramId) {
+        const customer = await this.customersService.findByInstagramId(instagramId);
+        if (!customer?.lastInstagramMessageAt) {
+            return {
+                allowed: false,
+                reason: 'User has not messaged you yet. Instagram only allows replies to users who message you first.'
+            };
+        }
+        const now = new Date();
+        const hoursSinceLastMessage = (now.getTime() - customer.lastInstagramMessageAt.getTime()) / (1000 * 60 * 60);
+        if (hoursSinceLastMessage > 24) {
+            return {
+                allowed: false,
+                reason: '24-hour messaging window has expired. User must send a new message first.',
+                lastMessageAt: customer.lastInstagramMessageAt
+            };
+        }
+        const hoursRemaining = 24 - hoursSinceLastMessage;
+        return {
+            allowed: true,
+            lastMessageAt: customer.lastInstagramMessageAt,
+            hoursRemaining
+        };
+    }
     async sendMessage(to, message) {
         console.log('📤 Sending Instagram message to:', to);
         console.log('Message:', message);
+        const canSend = await this.canSendMessage(to);
+        if (!canSend.allowed) {
+            console.error('❌ Cannot send message:', canSend.reason);
+            throw new Error(canSend.reason);
+        }
+        console.log(`✅ Within 24-hour window (${canSend.hoursRemaining?.toFixed(1)} hours remaining)`);
         try {
             if (!this.businessAccountId) {
                 throw new Error('businessAccountId is undefined');

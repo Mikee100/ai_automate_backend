@@ -11,11 +11,15 @@ const common_1 = require("@nestjs/common");
 const axios_1 = require("@nestjs/axios");
 const bull_1 = require("@nestjs/bull");
 const payments_service_1 = require("./payments.service");
+const payments_processor_1 = require("./payments.processor");
 const payments_controller_1 = require("./payments.controller");
 const prisma_module_1 = require("../../prisma/prisma.module");
 const messages_module_1 = require("../messages/messages.module");
 const bookings_module_1 = require("../bookings/bookings.module");
 const ai_module_1 = require("../ai/ai.module");
+const notifications_module_1 = require("../notifications/notifications.module");
+const payment_listener_1 = require("./listeners/payment.listener");
+const packages_module_1 = require("../packages/packages.module");
 let PaymentsModule = class PaymentsModule {
 };
 exports.PaymentsModule = PaymentsModule;
@@ -25,13 +29,18 @@ exports.PaymentsModule = PaymentsModule = __decorate([
             prisma_module_1.PrismaModule,
             axios_1.HttpModule,
             messages_module_1.MessagesModule,
+            notifications_module_1.NotificationsModule,
+            packages_module_1.PackagesModule,
             (0, common_1.forwardRef)(() => bookings_module_1.BookingsModule),
             bull_1.BullModule.registerQueue({
                 name: 'aiQueue',
             }),
+            bull_1.BullModule.registerQueue({
+                name: 'paymentsQueue',
+            }),
             (0, common_1.forwardRef)(() => ai_module_1.AiModule),
         ],
-        providers: [payments_service_1.PaymentsService],
+        providers: [payments_service_1.PaymentsService, payments_processor_1.PaymentsProcessor, payment_listener_1.PaymentListener],
         controllers: [payments_controller_1.PaymentsController],
         exports: [payments_service_1.PaymentsService],
     })

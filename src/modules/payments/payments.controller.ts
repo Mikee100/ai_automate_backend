@@ -7,7 +7,7 @@ import { PaymentsService } from './payments.service';
 export class PaymentsController {
   private readonly logger = new Logger(PaymentsController.name);
 
-  constructor(private readonly paymentsService: PaymentsService) {}
+  constructor(private readonly paymentsService: PaymentsService) { }
 
   @Get('status/:checkoutRequestId')
   async getPaymentStatus(@Param('checkoutRequestId') checkoutRequestId: string) {
@@ -22,11 +22,11 @@ export class PaymentsController {
   @Post('callback')
   async handleCallback(@Body() body: any) {
     this.logger.log('✅ M-Pesa callback received:', JSON.stringify(body));
-    
+
     await this.paymentsService.handleCallback(body);
 
     // This response MUST be returned so M-Pesa stops re-sending callbacks
-    return { 
+    return {
       ResultCode: 0,
       ResultDesc: 'Accepted'
     };
@@ -37,7 +37,7 @@ export class PaymentsController {
     return { status: 'ok', message: 'M-Pesa callback endpoint is up. Use POST for callbacks.' };
   }
 
-    @Post('test-stk-push')
+  @Post('test-stk-push')
   async testStkPush(@Body() body: { phone: string; amount: number }) {
     this.logger.log(`[TEST] STK Push requested for phone: ${body.phone}, amount: ${body.amount}`);
     try {
@@ -47,6 +47,18 @@ export class PaymentsController {
       this.logger.error(`[TEST] STK Push failed: ${error.message}`);
       return { success: false, error: error.message };
     }
+  }
+
+  @Post('webhook')
+  async handleWebhook(@Body() body: { checkoutRequestId: string; status: string }) {
+    this.logger.log('🔔 Payment webhook received:', JSON.stringify(body));
+
+    if (!body.checkoutRequestId || !body.status) {
+      return { status: 'error', message: 'Missing checkoutRequestId or status' };
+    }
+
+    await this.paymentsService.handlePaymentWebhook(body.checkoutRequestId, body.status);
+    return { status: 'received' };
   }
 
 }

@@ -15,6 +15,12 @@ export declare class InstagramController {
         success: boolean;
         message: string;
     }>;
+    canSendMessage(instagramId: string): Promise<{
+        allowed: boolean;
+        reason?: string;
+        lastMessageAt?: Date;
+        hoursRemaining?: number;
+    }>;
     sendMessage(body: {
         to: string;
         message: string;

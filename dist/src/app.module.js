@@ -10,6 +10,7 @@ exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const bull_1 = require("@nestjs/bull");
+const event_emitter_1 = require("@nestjs/event-emitter");
 const prisma_module_1 = require("./prisma/prisma.module");
 const auth_module_1 = require("./modules/auth/auth.module");
 const bookings_module_1 = require("./modules/bookings/bookings.module");
@@ -26,6 +27,10 @@ const websocket_module_1 = require("./websockets/websocket.module");
 const analytics_module_1 = require("./modules/analytics/analytics.module");
 const payments_module_1 = require("./modules/payments/payments.module");
 const escalation_module_1 = require("./modules/escalation/escalation.module");
+const notifications_module_1 = require("./modules/notifications/notifications.module");
+const knowledge_base_module_1 = require("./modules/knowledge-base/knowledge-base.module");
+const content_scraper_module_1 = require("./modules/content-scraper/content-scraper.module");
+const packages_module_1 = require("./modules/packages/packages.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -38,6 +43,7 @@ exports.AppModule = AppModule = __decorate([
             bull_1.BullModule.forRoot({
                 redis: process.env.REDIS_URL || 'redis://localhost:6379',
             }),
+            event_emitter_1.EventEmitterModule.forRoot(),
             prisma_module_1.PrismaModule,
             auth_module_1.AuthModule,
             bookings_module_1.BookingsModule,
@@ -54,6 +60,10 @@ exports.AppModule = AppModule = __decorate([
             analytics_module_1.AnalyticsModule,
             payments_module_1.PaymentsModule,
             escalation_module_1.EscalationModule,
+            notifications_module_1.NotificationsModule,
+            knowledge_base_module_1.KnowledgeBaseModule,
+            content_scraper_module_1.ContentScraperModule,
+            packages_module_1.PackagesModule,
         ],
     })
 ], AppModule);

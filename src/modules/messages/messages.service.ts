@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -10,8 +10,8 @@ export class MessagesService {
   constructor(
     private prisma: PrismaService,
     @InjectQueue('messageQueue') private messageQueue: Queue,
-    private aiService: AiService,
-  ) {}
+    @Inject(forwardRef(() => AiService)) private aiService: AiService,
+  ) { }
 
   async create(createMessageDto: CreateMessageDto) {
     const message = await this.prisma.message.create({
@@ -99,7 +99,7 @@ Respond with only the intent (e.g., booking_details).`;
       console.log('Classified as booking_inquiry');
       return 'booking_inquiry';
     }
-    // Removed old salon service keywords. Use AI for all booking details.
+    // Removed old salon service keywords. Use AI for all Fiesta House Maternity booking details.
     if (lower.includes('help') || lower.includes('question') || lower.includes('info') || lower.includes('what') || lower.includes('how') || lower.includes('price') || lower.includes('cost') || lower.includes('hours') || lower.includes('location')) {
       console.log('Classified as faq');
       return 'faq';

@@ -22,16 +22,20 @@ export declare class MessagesService {
     findAll(): Promise<({
         customer: {
             id: string;
-            name: string;
+            phone: string | null;
             createdAt: Date;
             updatedAt: Date;
+            name: string;
             email: string | null;
-            phone: string | null;
             whatsappId: string | null;
             instagramId: string | null;
             messengerId: string | null;
             aiEnabled: boolean;
             isAiPaused: boolean;
+            lastInstagramMessageAt: Date | null;
+            dailyTokenUsage: number;
+            tokenResetDate: Date | null;
+            totalTokensUsed: number;
         };
     } & {
         id: string;
@@ -49,16 +53,20 @@ export declare class MessagesService {
     findByCustomer(customerId: string): Promise<({
         customer: {
             id: string;
-            name: string;
+            phone: string | null;
             createdAt: Date;
             updatedAt: Date;
+            name: string;
             email: string | null;
-            phone: string | null;
             whatsappId: string | null;
             instagramId: string | null;
             messengerId: string | null;
             aiEnabled: boolean;
             isAiPaused: boolean;
+            lastInstagramMessageAt: Date | null;
+            dailyTokenUsage: number;
+            tokenResetDate: Date | null;
+            totalTokensUsed: number;
         };
     } & {
         id: string;
@@ -75,16 +83,20 @@ export declare class MessagesService {
     findOne(id: string): Promise<{
         customer: {
             id: string;
-            name: string;
+            phone: string | null;
             createdAt: Date;
             updatedAt: Date;
+            name: string;
             email: string | null;
-            phone: string | null;
             whatsappId: string | null;
             instagramId: string | null;
             messengerId: string | null;
             aiEnabled: boolean;
             isAiPaused: boolean;
+            lastInstagramMessageAt: Date | null;
+            dailyTokenUsage: number;
+            tokenResetDate: Date | null;
+            totalTokensUsed: number;
         };
     } & {
         id: string;
@@ -101,16 +113,20 @@ export declare class MessagesService {
     findByExternalId(externalId: string): Promise<{
         customer: {
             id: string;
-            name: string;
+            phone: string | null;
             createdAt: Date;
             updatedAt: Date;
+            name: string;
             email: string | null;
-            phone: string | null;
             whatsappId: string | null;
             instagramId: string | null;
             messengerId: string | null;
             aiEnabled: boolean;
             isAiPaused: boolean;
+            lastInstagramMessageAt: Date | null;
+            dailyTokenUsage: number;
+            tokenResetDate: Date | null;
+            totalTokensUsed: number;
         };
     } & {
         id: string;

@@ -6,6 +6,9 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { MessagesService } from '../messages/messages.service';
 import { DateTime } from 'luxon';
 import { AiService } from '../ai/ai.service';
+import { BookingsService } from '../bookings/bookings.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { PackagesService } from '../packages/packages.service';
 import { firstValueFrom } from 'rxjs';
 
 @Injectable()
@@ -22,9 +25,13 @@ export class PaymentsService {
     private prisma: PrismaService,
     private httpService: HttpService,
     private messagesService: MessagesService,
+    private notificationsService: NotificationsService,
     @Inject(forwardRef(() => AiService)) private aiService: AiService,
+    @Inject(forwardRef(() => BookingsService)) private bookingsService: BookingsService,
     @InjectQueue('aiQueue') private aiQueue: Queue,
-  ) {}
+    @InjectQueue('paymentsQueue') private paymentsQueue: Queue,
+    private packagesService: PackagesService,
+  ) { }
 
   async getPaymentByCheckoutRequestId(checkoutRequestId: string) {
     return this.prisma.payment.findFirst({
@@ -32,38 +39,40 @@ export class PaymentsService {
     });
   }
 
-async getAccessToken(): Promise<string> {
-  if (!this.consumerKey || !this.consumerSecret) {
-    throw new Error('MPesa credentials not configured.');
+  async getAccessToken(): Promise<string> {
+    if (!this.consumerKey || !this.consumerSecret) {
+      throw new Error('MPesa credentials not configured.');
+    }
+
+    const auth = Buffer.from(`${this.consumerKey}:${this.consumerSecret}`).toString('base64');
+    const url = `${this.mpesaBaseUrl}/oauth/v1/generate?grant_type=client_credentials`;
+
+    this.logger.log(`Getting access token from: ${url}`);
+    this.logger.log(`Authorization header: Basic ${auth.substring(0, 10)}...`);
+
+    // MUST BE GET (not POST)
+    const response = await firstValueFrom(
+      this.httpService.get(url, {
+        headers: {
+          Authorization: `Basic ${auth}`,
+        },
+      }),
+    );
+
+    this.logger.log(`Access token response data: ${JSON.stringify(response.data)}`);
+
+    if (!response.data || !response.data.access_token) {
+      throw new Error(`Invalid access token response: ${JSON.stringify(response.data)}`);
+    }
+
+    return response.data.access_token;
   }
 
-  const auth = Buffer.from(`${this.consumerKey}:${this.consumerSecret}`).toString('base64');
-  const url = `${this.mpesaBaseUrl}/oauth/v1/generate?grant_type=client_credentials`;
-
-  this.logger.log(`Getting access token from: ${url}`);
-  this.logger.log(`Authorization header: Basic ${auth.substring(0, 10)}...`);
-
-  // MUST BE GET (not POST)
-  const response = await firstValueFrom(
-    this.httpService.get(url, {
-      headers: {
-        Authorization: `Basic ${auth}`,
-      },
-    }),
-  );
-
-  this.logger.log(`Access token response data: ${JSON.stringify(response.data)}`);
-
-  if (!response.data || !response.data.access_token) {
-    throw new Error(`Invalid access token response: ${JSON.stringify(response.data)}`);
-  }
-
-  return response.data.access_token;
-}
 
 
 
-  async initiateSTKPush(bookingDraftId: string, phone: string, amount: number): Promise<string> {
+
+  async initiateSTKPush(bookingDraftId: string, phone: string, amount: number): Promise<{ checkoutRequestId: string; paymentId: string }> {
     const draft = await this.prisma.bookingDraft.findUnique({
       where: { id: bookingDraftId },
       include: { customer: true },
@@ -73,7 +82,7 @@ async getAccessToken(): Promise<string> {
       throw new Error('No valid booking draft found');
     }
 
-    const packageInfo = await this.prisma.package.findFirst({ where: { name: draft.service } });
+    const packageInfo = await this.packagesService.findPackageByName(draft.service);
     if (!packageInfo) {
       throw new Error('Package not found');
     }
@@ -83,33 +92,61 @@ async getAccessToken(): Promise<string> {
       where: { bookingDraftId },
     });
 
+    let payment;
+
     if (existingPayment) {
       if (existingPayment.status === 'success') {
         throw new Error('Payment already completed for this booking draft');
       }
       if (existingPayment.status === 'pending' && existingPayment.checkoutRequestId) {
-        this.logger.log(`Reusing existing pending payment ${existingPayment.id}, CheckoutRequestID: ${existingPayment.checkoutRequestId}`);
-        return existingPayment.checkoutRequestId;
+        // Check if it's stale (> 1 minute)
+        const now = new Date();
+        const paymentTime = new Date(existingPayment.updatedAt);
+        const diffMs = now.getTime() - paymentTime.getTime();
+
+        if (diffMs > 60000) {
+          this.logger.warn(`Found stale pending payment ${existingPayment.id} (> 1 min), marking as failed`);
+          await this.prisma.payment.update({
+            where: { id: existingPayment.id },
+            data: { status: 'failed' },
+          });
+          // Proceed to create/reset payment below (fall through to next if block or logic)
+          // We need to make sure we don't return here.
+          // Since we updated it to failed, the next check (status === 'failed') will catch it if we re-fetch or just let it fall through.
+          // However, existingPayment object is stale now. Let's update the local object status.
+          existingPayment.status = 'failed';
+        } else {
+          this.logger.log(`Reusing existing pending payment ${existingPayment.id}, CheckoutRequestID: ${existingPayment.checkoutRequestId}`);
+          return { checkoutRequestId: existingPayment.checkoutRequestId, paymentId: existingPayment.id };
+        }
       }
-      // If failed or pending without CheckoutRequestID, just update the existing payment to pending and reuse it
+      // If failed or pending without CheckoutRequestID, reset and reuse the existing payment
       if (existingPayment.status === 'failed' || (existingPayment.status === 'pending' && !existingPayment.checkoutRequestId)) {
-        await this.prisma.payment.update({
+        payment = await this.prisma.payment.update({
           where: { id: existingPayment.id },
-          data: { status: 'pending', checkoutRequestId: null },
+          data: {
+            status: 'pending',
+            checkoutRequestId: null,
+            amount,
+            phone: phone.startsWith('254') ? phone : `254${phone.substring(1)}`,
+          },
         });
         this.logger.log(`Reset old payment ${existingPayment.id} for draft ${bookingDraftId}`);
+      } else {
+        // Fallback: reuse existing payment as-is
+        payment = existingPayment;
       }
+    } else {
+      // Create new pending payment only if none exists
+      payment = await this.prisma.payment.create({
+        data: {
+          bookingDraftId,
+          amount,
+          phone: phone.startsWith('254') ? phone : `254${phone.substring(1)}`, // Format to 254...
+          status: 'pending',
+        },
+      });
     }
-
-    // Create pending payment
-    const payment = await this.prisma.payment.create({
-      data: {
-        bookingDraftId,
-        amount,
-        phone: phone.startsWith('254') ? phone : `254${phone.substring(1)}`, // Format to 254...
-        status: 'pending',
-      },
-    });
 
     const timestamp = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, -3);
     const password = Buffer.from(`${this.shortcode}${this.passkey}${timestamp}`).toString('base64');
@@ -158,7 +195,20 @@ async getAccessToken(): Promise<string> {
       });
 
       this.logger.log(`STK Push initiated for payment ${payment.id}, CheckoutRequestID: ${data.CheckoutRequestID}`);
-      return data.CheckoutRequestID;
+
+      // Schedule timeout job for 60 seconds
+      await this.paymentsQueue.add(
+        'timeoutPayment',
+        { paymentId: payment.id },
+        {
+          delay: 60000, // 60 seconds
+          removeOnComplete: true,
+          removeOnFail: true,
+        },
+      );
+      this.logger.log(`Scheduled timeout for payment ${payment.id} in 60s`);
+
+      return { checkoutRequestId: data.CheckoutRequestID, paymentId: payment.id };
     } catch (error) {
       this.logger.error(`STK Push request failed: ${error.message}`, error.response?.data || error);
       await this.prisma.payment.update({
@@ -168,6 +218,8 @@ async getAccessToken(): Promise<string> {
       throw error;
     }
   }
+
+
 
   async handleCallback(body: any) {
     // M-Pesa sends validation and confirmation callbacks
@@ -183,7 +235,6 @@ async getAccessToken(): Promise<string> {
 
     if (!payment) {
       this.logger.warn(`Payment not found for CheckoutRequestID: ${CheckoutRequestID}`);
-      // Do not delete or clear any payment record, just return
       return;
     }
 
@@ -194,109 +245,187 @@ async getAccessToken(): Promise<string> {
         const item = CallbackMetadata.Item.find((i: any) => i.Name === 'MpesaReceiptNumber');
         if (item) receipt = item.Value;
       }
-
-      await this.prisma.payment.update({
-        where: { id: payment.id },
-        data: {
-          status: 'success',
-          mpesaReceipt: receipt,
-        },
-      });
-
-      // Confirm booking if payment success
-      if (payment.bookingDraft) {
-        this.logger.log(`Payment successful for booking draft ${payment.bookingDraft.id}, confirming booking`);
-
-        // Create confirmed booking from draft
-        const draft = payment.bookingDraft;
-        const booking = await this.prisma.booking.create({
-          data: {
-            customerId: draft.customerId,
-            service: draft.service,
-            dateTime: new Date(draft.dateTimeIso),
-            status: 'confirmed',
-            // Add other fields from draft if available, e.g., recipientName, recipientPhone
-          },
-        });
-
-        // Delete the draft
-        await this.prisma.bookingDraft.delete({
-          where: { id: draft.id },
-        });
-
-        // Send confirmation message to customer (WhatsApp)
-        await this.messagesService.sendOutboundMessage(
-          draft.customerId,
-          "Payment successful! Your maternity photoshoot booking is now confirmed. We'll send you a reminder closer to the date. 💖",
-          'whatsapp'
-        );
-
-        // Send confirmation message to customer (AI chat)
-            try {
-              const bookingDate = booking.dateTime;
-              const tz = 'Africa/Nairobi';
-              const { DateTime } = require('luxon');
-              const dt = DateTime.fromJSDate(bookingDate).setZone(tz);
-              const formattedDate = dt.toFormat("MMMM d 'at' h:mm a");
-              const confirmMsg = `Payment received! Your booking is now confirmed for ${formattedDate}. We'll send you a reminder closer to the date. 💖`;
-              await this.aiService.generateGeneralResponse(
-                confirmMsg,
-                draft.customerId,
-                null,
-                []
-              );
-            } catch (err) {
-              this.logger.warn('Failed to send AI chat confirmation after payment', err);
-            }
-
-
-        // SCHEDULE REMINDERS 2 DAYS AND 1 DAY BEFORE
-        const bookingDate = DateTime.fromJSDate(booking.dateTime);
-        const reminderTimes = [
-          { days: 2, label: '2' },
-          { days: 1, label: '1' },
-        ];
-        for (const { days, label } of reminderTimes) {
-          const reminderTime = bookingDate.minus({ days });
-          const delay = reminderTime.diffNow().as('milliseconds');
-          if (delay > 0) {
-            await this.aiQueue.add(
-              'sendReminder',
-              {
-                customerId: draft.customerId,
-                bookingId: booking.id,
-                date: draft.date,
-                time: draft.time,
-                recipientName: draft.recipientName || draft.name,
-                daysBefore: label,
-              },
-              {
-                delay,
-                removeOnComplete: true,
-                removeOnFail: true,
-              }
-            );
-            this.logger.log(`Reminder scheduled for: ${reminderTime.toISO()} (${label} days before)`);
-          } else {
-            this.logger.warn(`Reminder delay negative for bookingId=${booking.id}, skipping ${label}-day reminder`);
-          }
-        }
-
-        this.logger.log(`Booking ${booking.id} confirmed from draft ${draft.id}`);
-      }
-
-      this.logger.log(`Payment ${payment.id} confirmed: ${receipt}`);
+      await this.confirmPayment(payment, receipt);
     } else {
       // Failed
-      await this.prisma.payment.update({
-        where: { id: payment.id },
-        data: { status: 'failed' },
-      });
-      this.logger.error(`STK Push failed for ${payment.id}: ${ResultDesc}`);
+      await this.handlePaymentFailure(payment, ResultDesc, ResultCode);
     }
   }
 
-    // TEST endpoint for STK Push, not tied to a booking draft
+  async handlePaymentWebhook(checkoutRequestId: string, status: string) {
+    const payment = await this.prisma.payment.findFirst({
+      where: { checkoutRequestId },
+      include: { bookingDraft: { include: { customer: true } } },
+    });
+
+    if (!payment) {
+      this.logger.warn(`Payment not found for webhook CheckoutRequestID: ${checkoutRequestId}`);
+      return;
+    }
+
+    if (status === 'success') {
+      // For webhook, we might not have the receipt, so we use a placeholder or generic one
+      await this.confirmPayment(payment, 'ConfirmedViaWebhook');
+    } else {
+      await this.handlePaymentFailure(payment, 'Failed via webhook update');
+    }
+  }
+
+  private async confirmPayment(payment: any, receipt: string) {
+    await this.prisma.payment.update({
+      where: { id: payment.id },
+      data: {
+        status: 'success',
+        mpesaReceipt: receipt,
+      },
+    });
+
+    // Confirm booking if payment success
+    if (payment.bookingDraft) {
+      this.logger.log(`Payment successful for booking draft ${payment.bookingDraft.id}, confirming booking`);
+
+      // Create confirmed booking from draft
+      const draft = payment.bookingDraft;
+      const booking = await this.prisma.booking.create({
+        data: {
+          customerId: draft.customerId,
+          service: draft.service,
+          dateTime: new Date(draft.dateTimeIso),
+          status: 'confirmed',
+          recipientName: draft.recipientName,
+          recipientPhone: draft.recipientPhone,
+        },
+      });
+
+      // Delete the draft
+      await this.prisma.bookingDraft.delete({
+        where: { id: draft.id },
+      });
+
+      // SCHEDULE REMINDERS
+      const bookingDate = DateTime.fromJSDate(booking.dateTime);
+      const scheduledReminders: Array<{ days: number; dateTime: DateTime }> = [];
+      const reminderConfigs = [
+        { days: 2, label: '2' },
+        { days: 1, label: '1' },
+      ];
+
+      for (const { days, label } of reminderConfigs) {
+        const reminderTime = bookingDate.minus({ days });
+        const delay = reminderTime.diffNow().as('milliseconds');
+        if (delay > 0) {
+          scheduledReminders.push({ days, dateTime: reminderTime });
+        }
+      }
+
+      // Format and send comprehensive confirmation message
+      const confirmationMessage = await this.bookingsService.formatBookingConfirmationMessage(
+        booking,
+        receipt,
+        scheduledReminders,
+      );
+      await this.messagesService.sendOutboundMessage(
+        draft.customerId,
+        confirmationMessage,
+        'whatsapp'
+      );
+
+      // Actually schedule the reminder jobs
+      for (const { days, dateTime } of scheduledReminders) {
+        const delay = dateTime.diffNow().as('milliseconds');
+        await this.aiQueue.add(
+          'sendReminder',
+          {
+            customerId: draft.customerId,
+            bookingId: booking.id,
+            date: draft.date,
+            time: draft.time,
+            recipientName: draft.recipientName || draft.name,
+            daysBefore: days.toString(),
+          },
+          {
+            delay,
+            removeOnComplete: true,
+            removeOnFail: true,
+          }
+        );
+        this.logger.log(`Reminder scheduled for: ${dateTime.toISO()} (${days} days before)`);
+      }
+
+      // Create notifications
+      try {
+        await this.notificationsService.createNotification({
+          type: 'payment',
+          title: `Payment Received - KSH ${payment.amount}`,
+          message: `Deposit of KSH ${payment.amount.toLocaleString()} received from ${draft.customer.name || 'Customer'} (Receipt: ${receipt})`,
+          metadata: {
+            amount: payment.amount,
+            receipt: receipt,
+            customerName: draft.customer.name,
+            customerId: draft.customerId,
+            bookingId: booking.id,
+          },
+        });
+
+        const bookingDateTime = DateTime.fromJSDate(booking.dateTime).setZone('Africa/Nairobi');
+        await this.notificationsService.createNotification({
+          type: 'booking',
+          title: `New Booking - ${draft.service}`,
+          message: `${draft.customer.name || 'Customer'} booked ${draft.service} on ${bookingDateTime.toFormat('LLL dd, yyyy')} at ${bookingDateTime.toFormat('h:mm a')}`,
+          metadata: {
+            bookingId: booking.id,
+            customerId: draft.customerId,
+            customerName: draft.customer.name,
+            service: draft.service,
+            dateTime: booking.dateTime.toISOString(),
+            recipientName: draft.recipientName,
+            recipientPhone: draft.recipientPhone,
+          },
+        });
+      } catch (notifError) {
+        this.logger.error(`Failed to create notifications for booking ${booking.id}`, notifError);
+      }
+
+      this.logger.log(`Booking ${booking.id} confirmed from draft ${draft.id}`);
+    }
+
+    this.logger.log(`Payment ${payment.id} confirmed: ${receipt}`);
+  }
+
+  private async handlePaymentFailure(payment: any, reason: string, resultCode?: number | string) {
+    await this.prisma.payment.update({
+      where: { id: payment.id },
+      data: { status: 'failed' },
+    });
+    this.logger.error(`Payment failed for ${payment.id}: ${reason}`);
+
+    // Notify user about failure
+    if (payment.bookingDraft) {
+      let userMessage = "We couldn't process your payment. Please try again.";
+
+      if (resultCode) {
+        if (resultCode === 11 || resultCode === '11') {
+          userMessage = "It seems your payment failed because of a pending transaction on your phone. Please check your phone for any open M-Pesa prompts, cancel them if needed, and then try again. 📲";
+        } else if (resultCode === 1032 || resultCode === '1032') {
+          userMessage = "You cancelled the payment request. If this was a mistake, you can try again anytime! 💖";
+        } else if (resultCode === 1 || resultCode === '1') {
+          userMessage = "The balance was insufficient for the transaction. Please top up and try again. 💰";
+        } else {
+          userMessage = `Payment failed: ${reason}. Please try again.`;
+        }
+      } else {
+        userMessage = `Payment failed: ${reason}. Please try again.`;
+      }
+
+      await this.messagesService.sendOutboundMessage(
+        payment.bookingDraft.customerId,
+        userMessage,
+        'whatsapp'
+      );
+    }
+  }
+
+  // TEST endpoint for STK Push, not tied to a booking draft
   async testStkPush(phone: string, amount: number) {
     const timestamp = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, -3);
     const password = Buffer.from(`${this.shortcode}${this.passkey}${timestamp}`).toString('base64');

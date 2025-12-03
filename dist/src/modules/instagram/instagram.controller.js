@@ -28,9 +28,20 @@ let InstagramController = class InstagramController {
     testConnection() {
         return this.instagramService.testConnection();
     }
-    sendMessage(body) {
+    async canSendMessage(instagramId) {
+        return this.instagramService.canSendMessage(instagramId);
+    }
+    async sendMessage(body) {
         console.log('📤 Controller: sendMessage called with body:', body);
-        return this.instagramService.sendMessage(body.to, body.message);
+        try {
+            return await this.instagramService.sendMessage(body.to, body.message);
+        }
+        catch (error) {
+            throw new common_1.HttpException({
+                message: error.message,
+                suggestion: 'Instagram only allows replies within 24 hours of a user\'s message. The user must message you first before you can respond.'
+            }, common_1.HttpStatus.BAD_REQUEST);
+        }
     }
     getMessages(page, limit, direction, customerId) {
         return this.instagramService.getMessages({
@@ -65,11 +76,18 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], InstagramController.prototype, "testConnection", null);
 __decorate([
+    (0, common_1.Get)('can-send/:instagramId'),
+    __param(0, (0, common_1.Param)('instagramId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], InstagramController.prototype, "canSendMessage", null);
+__decorate([
     (0, common_1.Post)('send'),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
-    __metadata("design:returntype", void 0)
+    __metadata("design:returntype", Promise)
 ], InstagramController.prototype, "sendMessage", null);
 __decorate([
     (0, common_1.Get)('messages'),

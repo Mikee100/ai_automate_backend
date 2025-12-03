@@ -1,22 +1,14 @@
 
-// Helper to parse duration string like '2 hrs 30 mins' to minutes
-function parseDurationToMinutes(duration: string | null | undefined): number | null {
-  if (!duration) return null;
-  const hrMatch = duration.match(/(\d+)\s*hr/);
-  const minMatch = duration.match(/(\d+)\s*min/);
-  let mins = 0;
-  if (hrMatch) mins += parseInt(hrMatch[1], 10) * 60;
-  if (minMatch) mins += parseInt(minMatch[1], 10);
-  return mins || null;
-}
-// src/modules/bookings/bookings.service.ts
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PaymentsService } from '../payments/payments.service';
 import { MessagesService } from '../messages/messages.service';
 import { CalendarService } from '../calendar/calendar.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { PackagesService } from '../packages/packages.service';
 import * as chrono from 'chrono-node';
 import { DateTime, Duration } from 'luxon';
 
@@ -27,11 +19,13 @@ export class BookingsService {
   private readonly logger = new Logger(BookingsService.name);
   private readonly STUDIO_TZ = 'Africa/Nairobi';
 
+
   // Fetch all packages (optionally filter by type: 'outdoor' | 'studio')
   async getPackages(type?: string) {
-    const where = type ? { type } : {};
-    return this.prisma.package.findMany({ where });
+    return this.packagesService.getPackages(type);
   }
+
+
 
   /* --------------------------
    * completeBookingDraft: used by queue consumer or when user confirms
@@ -48,51 +42,51 @@ export class BookingsService {
       this.logger.debug(`Fetched bookingDraft: ${JSON.stringify(draft)}`);
 
       // Validation for required fields
+      // Validation for required fields
       if (!draft) throw new Error(`No booking draft found for customerId=${customerId}`);
       if (!draft.service) throw new Error(`Draft missing service for customerId=${customerId}`);
       if (!draft.dateTimeIso && !providedDateTime) throw new Error(`Draft missing dateTimeIso for customerId=${customerId}`);
       if (!draft.name) throw new Error(`Draft missing name for customerId=${customerId}`);
-      if (!draft.recipientPhone) throw new Error(`Draft missing recipientPhone for customerId=${customerId}`);
+
+      // Handle missing recipientPhone by checking customer profile
+      let recipientPhone = draft.recipientPhone;
+      if (!recipientPhone) {
+        const customer = await this.prisma.customer.findUnique({ where: { id: customerId } });
+        if (customer?.phone) {
+          recipientPhone = customer.phone;
+        } else {
+          throw new Error(`Draft missing recipientPhone for customerId=${customerId} and no customer phone found`);
+        }
+      }
 
       // Get package deposit amount (case-insensitive match)
       const serviceName = draft.service ? draft.service.trim() : '';
-      const pkg = await this.prisma.package.findFirst({
-        where: {
-          name: { equals: serviceName, mode: 'insensitive' }
-        }
-      });
+      const pkg = await this.packagesService.findPackageByName(serviceName);
+
       if (!pkg || pkg.deposit == null) {
         throw new Error(`Package deposit not configured for ${serviceName}`);
       }
       const depositAmount = pkg.deposit;
 
       // Format phone
-      let phone = draft.recipientPhone;
+      let phone = recipientPhone;
       if (!phone.startsWith('254')) {
         phone = `254${phone.replace(/^0+/, '')}`;
       }
       this.logger.debug(`[STK] Using phone: ${phone}, amount: ${depositAmount}`);
 
-      // Initiate M-Pesa STK Push for deposit and get checkoutRequestId
-      const checkoutRequestId = await this.paymentsService.initiateSTKPush(draft.id, phone, depositAmount);
-
-
-      // Send WhatsApp message to prompt deposit payment
-      const depositMsg = `To confirm your booking, please pay the deposit of KSH ${depositAmount}. An M-Pesa prompt has been sent to your phone. Complete the payment to secure your slot!`;
-      this.logger.log(`[DepositPrompt] Attempting to send WhatsApp deposit prompt to customerId=${customerId}`);
-      try {
-        await this.messagesService.sendOutboundMessage(customerId, depositMsg, 'whatsapp');
-        this.logger.log(`[DepositPrompt] WhatsApp deposit prompt sent to customerId=${customerId}`);
-      } catch (err) {
-        this.logger.error(`[DepositPrompt] Failed to send WhatsApp deposit prompt to customerId=${customerId}`, err);
-      }
-
-      // Do not confirm booking yet; wait for payment callback
-      this.logger.log(`M-Pesa STK Push initiated for deposit of ${depositAmount} KSH for booking draft ${draft.id}`);
+      // Emit event for payment initiation
+      this.eventEmitter.emit('booking.draft.completed', {
+        customerId,
+        draftId: draft.id,
+        service: draft.service,
+        dateTime: providedDateTime || new Date(draft.dateTimeIso),
+        recipientPhone,
+        depositAmount,
+      });
 
       return {
-        message: 'Deposit payment initiated. Please complete payment on your phone to confirm booking.',
-        checkoutRequestId
+        message: "I've sent a request to your phone for the deposit. 📲 Once you complete that, your magical session will be officially booked! ✨",
       };
     } catch (error) {
       this.logger.error(`completeBookingDraft failed for customerId=${customerId}`, error);
@@ -116,6 +110,9 @@ export class BookingsService {
     @InjectQueue('bookingQueue') private bookingQueue: Queue,
     private paymentsService: PaymentsService,
     private messagesService: MessagesService,
+    private notificationsService: NotificationsService,
+    private packagesService: PackagesService,
+    private eventEmitter: EventEmitter2,
   ) { }
 
   /* --------------------------
@@ -164,7 +161,7 @@ export class BookingsService {
   async getDepositForDraft(customerId: string) {
     const draft = await this.prisma.bookingDraft.findUnique({ where: { customerId } });
     if (!draft || !draft.service) return null;
-    const pkg = await this.prisma.package.findFirst({ where: { name: draft.service } });
+    const pkg = await this.packagesService.findPackageByName(draft.service);
     return pkg?.deposit || null;
   }
 
@@ -180,6 +177,17 @@ export class BookingsService {
   async updateBookingDraft(customerId: string, updates: Partial<any>) {
     // Remove packageId if present, as bookingDraft does not have this field
     const { packageId, ...rest } = updates;
+    // Ensure customer exists before upsert
+    let customer = await this.prisma.customer.findUnique({ where: { id: customerId } });
+    if (!customer) {
+      // Auto-create customer if they don't exist (e.g. manual booking for new client)
+      customer = await this.prisma.customer.create({
+        data: {
+          id: customerId,
+          name: updates.name || 'Customer',
+        },
+      });
+    }
     return this.prisma.bookingDraft.upsert({
       where: { customerId },
       update: { ...rest, updatedAt: new Date() },
@@ -216,14 +224,12 @@ export class BookingsService {
     let packageInfo = null;
     let durationMinutes = 60;
     if (selectedService) {
-      packageInfo = await this.prisma.package.findFirst({
-        where: { name: { equals: selectedService, mode: 'insensitive' } }
-      });
+      packageInfo = await this.packagesService.findPackageByName(selectedService);
       if (!packageInfo) {
         const allPackages = await this.prisma.package.findMany();
         throw new Error(`Service "${selectedService}" not found. Available packages: ${allPackages.map(p => p.name).join(', ')}`);
       }
-      durationMinutes = parseDurationToMinutes(packageInfo.duration) || 60;
+      durationMinutes = BookingsService.parseDurationToMinutes(packageInfo.duration) || 60;
     }
     const serviceName = packageInfo ? packageInfo.name : 'General Appointment';
 
@@ -297,14 +303,14 @@ export class BookingsService {
   async checkAvailability(requested: Date, service?: string): Promise<{ available: boolean; suggestions?: string[] }> {
     let duration = 60;
     if (service) {
-      const pkg = await this.prisma.package.findFirst({ where: { name: service } });
-      if (pkg) duration = parseDurationToMinutes(pkg.duration) || 60;
+      const pkg = await this.packagesService.findPackageByName(service);
+      if (pkg) duration = BookingsService.parseDurationToMinutes(pkg.duration) || 60;
     }
 
-    // Normalize requested to salon timezone for slot suggestions
-    const requestedDtInSalon = DateTime.fromJSDate(requested).setZone(this.STUDIO_TZ);
-    const dayStart = requestedDtInSalon.startOf('day').set({ hour: 9, minute: 0, second: 0, millisecond: 0 });
-    const dayEnd = requestedDtInSalon.startOf('day').set({ hour: 17, minute: 0, second: 0, millisecond: 0 });
+    // Normalize requested to maternity timezone for slot suggestions
+    const requestedDtInMaternity = DateTime.fromJSDate(requested).setZone(this.STUDIO_TZ);
+    const dayStart = requestedDtInMaternity.startOf('day').set({ hour: 9, minute: 0, second: 0, millisecond: 0 });
+    const dayEnd = requestedDtInMaternity.startOf('day').set({ hour: 17, minute: 0, second: 0, millisecond: 0 });
 
     // Fetch all confirmed bookings for that day (single DB call)
     const bookingsForDay = await this.prisma.booking.findMany({
@@ -333,7 +339,7 @@ export class BookingsService {
       return { available: true };
     }
 
-    // Build suggestions: iterate hour-by-hour within salon hours and pick free slots
+    // Build suggestions: iterate hour-by-hour within maternity hours and pick free slots
     const suggestions: string[] = [];
     let cursor = dayStart;
     while (cursor < dayEnd && suggestions.length < 5) {
@@ -355,9 +361,9 @@ export class BookingsService {
    * getAvailableSlotsForDate: returns Date[] (UTC ISO strings) for easy display
    * -------------------------- */
   async getAvailableSlotsForDate(date: string, service?: string): Promise<string[]> {
-    const dateInSalon = DateTime.fromISO(date, { zone: this.STUDIO_TZ }).startOf('day');
-    const dayStart = dateInSalon.set({ hour: 9, minute: 0, second: 0, millisecond: 0 });
-    const dayEnd = dateInSalon.set({ hour: 17, minute: 0, second: 0, millisecond: 0 });
+    const dateInMaternity = DateTime.fromISO(date, { zone: this.STUDIO_TZ }).startOf('day');
+    const dayStart = dateInMaternity.set({ hour: 9, minute: 0, second: 0, millisecond: 0 });
+    const dayEnd = dateInMaternity.set({ hour: 17, minute: 0, second: 0, millisecond: 0 });
 
     const bookingsForDay = await this.prisma.booking.findMany({
       where: {
@@ -378,8 +384,8 @@ export class BookingsService {
 
     let duration = 60;
     if (service) {
-      const pkg = await this.prisma.package.findFirst({ where: { name: service } });
-      if (pkg) duration = parseDurationToMinutes(pkg.duration) || 60;
+      const pkg = await this.packagesService.findPackageByName(service);
+      if (pkg) duration = BookingsService.parseDurationToMinutes(pkg.duration) || 60;
     }
     const slots: string[] = [];
     let cursor = dayStart;
@@ -408,16 +414,24 @@ export class BookingsService {
       const diffMs = bookingTime.getTime() - now.getTime();
       const hoursUntilBooking = diffMs / (1000 * 60 * 60);
 
-      if (hoursUntilBooking < 24 && hoursUntilBooking > 0) {
-        throw new Error('Changes cannot be made within 24 hours of the appointment. Please contact support directly.');
+      if (hoursUntilBooking < 72 && hoursUntilBooking > 0) {
+        throw new Error('Changes cannot be made within 72 hours of the appointment. Please contact support directly.');
       }
 
       const newDateTime = updates.dateTime ?? new Date(currentBooking.dateTime);
       const newService = updates.service ?? currentBooking.service;
       let duration = currentBooking.durationMinutes ?? 60;
       if (newService) {
-        const pkg = await tx.package.findFirst({ where: { name: newService } });
-        if (pkg) duration = parseDurationToMinutes(pkg.duration) || duration;
+        // We can't use this.findPackageByName inside transaction easily unless we refactor to accept tx or just use prisma.package directly
+        // For simplicity and since this is less critical, I'll use the same logic inline or just assume exact match for update if not critical
+        // But better to be consistent. I'll use the same logic but with tx.
+
+        const cleanName = newService.trim();
+        let pkg = await tx.package.findFirst({ where: { name: { equals: cleanName, mode: 'insensitive' } } });
+        if (!pkg) pkg = await tx.package.findFirst({ where: { name: { equals: `${cleanName} Package`, mode: 'insensitive' } } });
+        if (!pkg) pkg = await tx.package.findFirst({ where: { name: { contains: cleanName, mode: 'insensitive' } } });
+
+        if (pkg) duration = BookingsService.parseDurationToMinutes(pkg.duration) || duration;
       }
 
       const slotStart = DateTime.fromJSDate(newDateTime).toUTC().toJSDate();
@@ -469,8 +483,8 @@ export class BookingsService {
     const diffMs = bookingTime.getTime() - now.getTime();
     const hoursUntilBooking = diffMs / (1000 * 60 * 60);
 
-    if (hoursUntilBooking < 24 && hoursUntilBooking > 0) {
-      throw new Error('Cancellations cannot be made within 24 hours of the appointment. Please contact support directly.');
+    if (hoursUntilBooking < 72 && hoursUntilBooking > 0) {
+      throw new Error('Cancellations cannot be made within 72 hours of the appointment. Please contact support directly.');
     }
 
     const booking = await this.prisma.booking.update({
@@ -521,7 +535,149 @@ export class BookingsService {
         status: 'confirmed',
       },
       orderBy: { dateTime: 'desc' },
+      include: { customer: true },
     });
+  }
+
+  /**
+   * Formats a comprehensive booking confirmation message with all relevant details
+   */
+  async formatBookingConfirmationMessage(
+    booking: any,
+    mpesaReceipt: string,
+    reminderTimes: Array<{ days: number; dateTime: DateTime }> = [],
+  ): Promise<string> {
+    // Fetch package details
+    const packageInfo = await this.packagesService.findPackageByName(booking.service);
+    if (!packageInfo) {
+      // Fallback to basic message if package not found
+      return "Payment successful! Your maternity photoshoot booking is now confirmed. We'll send you a reminder closer to the date. 💖";
+    }
+
+    // Format DateTime in Africa/Nairobi timezone
+    const bookingDateTime = DateTime.fromJSDate(booking.dateTime).setZone('Africa/Nairobi');
+    const formattedDate = bookingDateTime.toFormat('MMMM d, yyyy');
+    const formattedTime = bookingDateTime.toFormat('h:mm a');
+
+    // Build package features list
+    const features: string[] = [];
+    if (packageInfo.images) features.push(`• ${packageInfo.images} soft copy images`);
+    if (packageInfo.makeup) features.push(`• Professional makeup`);
+    if (packageInfo.outfits) features.push(`• ${packageInfo.outfits} outfit change${packageInfo.outfits > 1 ? 's' : ''}`);
+    if (packageInfo.styling) features.push(`• Professional styling`);
+    if (packageInfo.wig) features.push(`• Styled wig`);
+    if (packageInfo.balloonBackdrop) features.push(`• Customized balloon backdrop`);
+    if (packageInfo.photobook) {
+      const size = packageInfo.photobookSize ? ` (${packageInfo.photobookSize})` : '';
+      features.push(`• Photobook${size}`);
+    }
+    if (packageInfo.mount) features.push(`• A3 mount`);
+
+    const featuresText = features.length > 0 ? features.join('\n') : '• Custom package features';
+
+    // Format reminders schedule
+    let remindersText = '';
+    if (reminderTimes.length > 0) {
+      const reminderLines = reminderTimes.map(({ days, dateTime }) => {
+        const reminderDate = dateTime.setZone('Africa/Nairobi');
+        return `• ${reminderDate.toFormat('MMMM d, yyyy')} at ${reminderDate.toFormat('h:mm a')} (${days} day${days > 1 ? 's' : ''} before)`;
+      });
+      remindersText = `\n\n⏰ *Reminders Scheduled:*\n${reminderLines.join('\n')}`;
+    }
+
+    // Format the comprehensive message
+    const message = `✅ *Booking Confirmed!* ✨
+
+📦 *Package:* ${packageInfo.name} (${packageInfo.type === 'outdoor' ? 'Outdoor' : 'Studio'})
+⏱️ *Duration:* ${packageInfo.duration}
+💰 *Price:* ${packageInfo.price.toLocaleString()} KSH (Deposit: ${packageInfo.deposit.toLocaleString()} KSH paid)
+
+📅 *Your Session:*
+Date: ${formattedDate}
+Time: ${formattedTime} (EAT)
+
+👤 *Recipient:* ${booking.recipientName || booking.customer?.name || 'Guest'}
+📱 *Contact:* ${booking.recipientPhone || booking.customer?.phone}
+
+🎁 *Package Includes:*
+${featuresText}
+
+💳 *Payment Receipt:* ${mpesaReceipt}${remindersText}
+
+🔸 *Important Policies:*
+• Remaining balance is due after the shoot.
+• Edited photos are delivered in 10 working days.
+• Reschedules/Cancellations must be made at least 72 hours before the shoot to avoid forfeiting the fee.
+
+We can't wait to capture your beautiful memories! 💖`;
+
+    return message;
+  }
+
+  /**
+ * Count bookings for a customer by id, whatsappId, or phone
+ * Accepts an object: { id?: string, whatsappId?: string, phone?: string }
+ * Returns the number of bookings (all statuses)
+ */
+  async countBookingsForCustomer(query: { id?: string; whatsappId?: string; phone?: string }): Promise<number> {
+    // Build where clause for customer
+    let customerWhere: any = {};
+    if (query.id) customerWhere.id = query.id;
+    if (query.whatsappId) customerWhere.whatsappId = query.whatsappId;
+    if (query.phone) customerWhere.phone = query.phone;
+
+    // Find the customer
+    const customer = await this.prisma.customer.findFirst({ where: customerWhere });
+    if (!customer) return 0;
+
+    // Count bookings for this customer
+    return this.prisma.booking.count({ where: { customerId: customer.id } });
+  }
+
+  // ...existing code...
+
+  // ...existing code...
+  /**
+   * Get a summary list of bookings for a customer (date, service, status)
+   * Accepts an object: { id?: string, whatsappId?: string, phone?: string }
+   * Returns an array of { date, service, status }
+   */
+  async getBookingSummariesForCustomer(query: { id?: string; whatsappId?: string; phone?: string }): Promise<Array<{ date: string; service: string; status: string }>> {
+    // Build where clause for customer
+    let customerWhere: any = {};
+    if (query.id) customerWhere.id = query.id;
+    if (query.whatsappId) customerWhere.whatsappId = query.whatsappId;
+    if (query.phone) customerWhere.phone = query.phone;
+
+    // Find the customer
+    const customer = await this.prisma.customer.findFirst({ where: customerWhere });
+    if (!customer) return [];
+
+    // Get bookings for this customer, most recent first
+    const bookings = await this.prisma.booking.findMany({
+      where: { customerId: customer.id },
+      orderBy: { dateTime: 'desc' },
+      take: 10, // limit to last 10 bookings
+    });
+    // Format summary
+    return bookings.map(b => ({
+      date: b.dateTime instanceof Date ? b.dateTime.toISOString().slice(0, 10) : String(b.dateTime).slice(0, 10),
+      service: b.service,
+      status: b.status,
+    }));
+  }
+
+  /**
+   * Helper to parse duration string like '2 hrs 30 mins' to minutes
+   */
+  private static parseDurationToMinutes(duration: string | null | undefined): number | null {
+    if (!duration) return null;
+    const hrMatch = duration.match(/(\d+)\s*hr/);
+    const minMatch = duration.match(/(\d+)\s*min/);
+    let mins = 0;
+    if (hrMatch) mins += parseInt(hrMatch[1], 10) * 60;
+    if (minMatch) mins += parseInt(minMatch[1], 10);
+    return mins || null;
   }
 
 }

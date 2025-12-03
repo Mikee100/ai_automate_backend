@@ -3,8 +3,8 @@ export declare class CustomersService {
     private prisma;
     constructor(prisma: PrismaService);
     create(data: any): Promise<{
-        id: string;
         name: string;
+        id: string;
         createdAt: Date;
         updatedAt: Date;
         email: string | null;
@@ -14,10 +14,14 @@ export declare class CustomersService {
         phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
+        lastInstagramMessageAt: Date | null;
+        dailyTokenUsage: number;
+        tokenResetDate: Date | null;
+        totalTokensUsed: number;
     }>;
     findByWhatsappId(whatsappId: string): Promise<{
-        id: string;
         name: string;
+        id: string;
         createdAt: Date;
         updatedAt: Date;
         email: string | null;
@@ -27,10 +31,14 @@ export declare class CustomersService {
         phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
+        lastInstagramMessageAt: Date | null;
+        dailyTokenUsage: number;
+        tokenResetDate: Date | null;
+        totalTokensUsed: number;
     }>;
     findByInstagramId(instagramId: string): Promise<{
-        id: string;
         name: string;
+        id: string;
         createdAt: Date;
         updatedAt: Date;
         email: string | null;
@@ -40,10 +48,14 @@ export declare class CustomersService {
         phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
+        lastInstagramMessageAt: Date | null;
+        dailyTokenUsage: number;
+        tokenResetDate: Date | null;
+        totalTokensUsed: number;
     }>;
     findByMessengerId(messengerId: string): Promise<{
-        id: string;
         name: string;
+        id: string;
         createdAt: Date;
         updatedAt: Date;
         email: string | null;
@@ -53,10 +65,14 @@ export declare class CustomersService {
         phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
+        lastInstagramMessageAt: Date | null;
+        dailyTokenUsage: number;
+        tokenResetDate: Date | null;
+        totalTokensUsed: number;
     }>;
     findByEmail(email: string): Promise<{
-        id: string;
         name: string;
+        id: string;
         createdAt: Date;
         updatedAt: Date;
         email: string | null;
@@ -66,10 +82,15 @@ export declare class CustomersService {
         phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
+        lastInstagramMessageAt: Date | null;
+        dailyTokenUsage: number;
+        tokenResetDate: Date | null;
+        totalTokensUsed: number;
     }>;
     findOne(id: string): Promise<{
         messages: {
             id: string;
+            customerId: string;
             createdAt: Date;
             content: string;
             platform: string;
@@ -78,24 +99,23 @@ export declare class CustomersService {
             handledBy: string | null;
             isResolved: boolean | null;
             isEscalated: boolean | null;
-            customerId: string;
         }[];
         bookings: {
             id: string;
-            createdAt: Date;
-            updatedAt: Date;
             customerId: string;
-            status: string;
             service: string;
             recipientName: string | null;
             recipientPhone: string | null;
+            createdAt: Date;
+            updatedAt: Date;
+            status: string;
             dateTime: Date;
             durationMinutes: number | null;
             googleEventId: string | null;
         }[];
     } & {
-        id: string;
         name: string;
+        id: string;
         createdAt: Date;
         updatedAt: Date;
         email: string | null;
@@ -105,10 +125,15 @@ export declare class CustomersService {
         phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
+        lastInstagramMessageAt: Date | null;
+        dailyTokenUsage: number;
+        tokenResetDate: Date | null;
+        totalTokensUsed: number;
     }>;
     findById(id: string): Promise<{
         messages: {
             id: string;
+            customerId: string;
             createdAt: Date;
             content: string;
             platform: string;
@@ -117,24 +142,23 @@ export declare class CustomersService {
             handledBy: string | null;
             isResolved: boolean | null;
             isEscalated: boolean | null;
-            customerId: string;
         }[];
         bookings: {
             id: string;
-            createdAt: Date;
-            updatedAt: Date;
             customerId: string;
-            status: string;
             service: string;
             recipientName: string | null;
             recipientPhone: string | null;
+            createdAt: Date;
+            updatedAt: Date;
+            status: string;
             dateTime: Date;
             durationMinutes: number | null;
             googleEventId: string | null;
         }[];
     } & {
-        id: string;
         name: string;
+        id: string;
         createdAt: Date;
         updatedAt: Date;
         email: string | null;
@@ -144,10 +168,14 @@ export declare class CustomersService {
         phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
+        lastInstagramMessageAt: Date | null;
+        dailyTokenUsage: number;
+        tokenResetDate: Date | null;
+        totalTokensUsed: number;
     }>;
     updatePhone(whatsappId: string, phone: string): Promise<{
-        id: string;
         name: string;
+        id: string;
         createdAt: Date;
         updatedAt: Date;
         email: string | null;
@@ -157,10 +185,14 @@ export declare class CustomersService {
         phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
+        lastInstagramMessageAt: Date | null;
+        dailyTokenUsage: number;
+        tokenResetDate: Date | null;
+        totalTokensUsed: number;
     }>;
     toggleAiEnabled(customerId: string, enabled: boolean): Promise<{
-        id: string;
         name: string;
+        id: string;
         createdAt: Date;
         updatedAt: Date;
         email: string | null;
@@ -170,10 +202,15 @@ export declare class CustomersService {
         phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
+        lastInstagramMessageAt: Date | null;
+        dailyTokenUsage: number;
+        tokenResetDate: Date | null;
+        totalTokensUsed: number;
     }>;
     getAll(): Promise<({
         messages: {
             id: string;
+            customerId: string;
             createdAt: Date;
             content: string;
             platform: string;
@@ -182,24 +219,23 @@ export declare class CustomersService {
             handledBy: string | null;
             isResolved: boolean | null;
             isEscalated: boolean | null;
-            customerId: string;
         }[];
         bookings: {
             id: string;
-            createdAt: Date;
-            updatedAt: Date;
             customerId: string;
-            status: string;
             service: string;
             recipientName: string | null;
             recipientPhone: string | null;
+            createdAt: Date;
+            updatedAt: Date;
+            status: string;
             dateTime: Date;
             durationMinutes: number | null;
             googleEventId: string | null;
         }[];
     } & {
-        id: string;
         name: string;
+        id: string;
         createdAt: Date;
         updatedAt: Date;
         email: string | null;
@@ -209,10 +245,15 @@ export declare class CustomersService {
         phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
+        lastInstagramMessageAt: Date | null;
+        dailyTokenUsage: number;
+        tokenResetDate: Date | null;
+        totalTokensUsed: number;
     })[]>;
     findAll(): Promise<({
         messages: {
             id: string;
+            customerId: string;
             createdAt: Date;
             content: string;
             platform: string;
@@ -221,24 +262,23 @@ export declare class CustomersService {
             handledBy: string | null;
             isResolved: boolean | null;
             isEscalated: boolean | null;
-            customerId: string;
         }[];
         bookings: {
             id: string;
-            createdAt: Date;
-            updatedAt: Date;
             customerId: string;
-            status: string;
             service: string;
             recipientName: string | null;
             recipientPhone: string | null;
+            createdAt: Date;
+            updatedAt: Date;
+            status: string;
             dateTime: Date;
             durationMinutes: number | null;
             googleEventId: string | null;
         }[];
     } & {
-        id: string;
         name: string;
+        id: string;
         createdAt: Date;
         updatedAt: Date;
         email: string | null;
@@ -248,10 +288,14 @@ export declare class CustomersService {
         phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
+        lastInstagramMessageAt: Date | null;
+        dailyTokenUsage: number;
+        tokenResetDate: Date | null;
+        totalTokensUsed: number;
     })[]>;
     update(id: string, updateCustomerDto: Partial<any>): Promise<{
-        id: string;
         name: string;
+        id: string;
         createdAt: Date;
         updatedAt: Date;
         email: string | null;
@@ -261,10 +305,14 @@ export declare class CustomersService {
         phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
+        lastInstagramMessageAt: Date | null;
+        dailyTokenUsage: number;
+        tokenResetDate: Date | null;
+        totalTokensUsed: number;
     }>;
     remove(id: string): Promise<{
-        id: string;
         name: string;
+        id: string;
         createdAt: Date;
         updatedAt: Date;
         email: string | null;
@@ -274,10 +322,14 @@ export declare class CustomersService {
         phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
+        lastInstagramMessageAt: Date | null;
+        dailyTokenUsage: number;
+        tokenResetDate: Date | null;
+        totalTokensUsed: number;
     }>;
     createWithMessengerId(messengerId: string): Promise<{
-        id: string;
         name: string;
+        id: string;
         createdAt: Date;
         updatedAt: Date;
         email: string | null;
@@ -287,5 +339,26 @@ export declare class CustomersService {
         phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
+        lastInstagramMessageAt: Date | null;
+        dailyTokenUsage: number;
+        tokenResetDate: Date | null;
+        totalTokensUsed: number;
+    }>;
+    updateLastInstagramMessageAt(instagramId: string, timestamp: Date): Promise<{
+        name: string;
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        email: string | null;
+        whatsappId: string | null;
+        instagramId: string | null;
+        messengerId: string | null;
+        phone: string | null;
+        aiEnabled: boolean;
+        isAiPaused: boolean;
+        lastInstagramMessageAt: Date | null;
+        dailyTokenUsage: number;
+        tokenResetDate: Date | null;
+        totalTokensUsed: number;
     }>;
 }

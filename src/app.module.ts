@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { BullModule } from '@nestjs/bull';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BookingsModule } from './modules/bookings/bookings.module';
@@ -17,6 +18,10 @@ import { WebsocketModule } from './websockets/websocket.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { EscalationModule } from './modules/escalation/escalation.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { KnowledgeBaseModule } from './modules/knowledge-base/knowledge-base.module';
+import { ContentScraperModule } from './modules/content-scraper/content-scraper.module';
+import { PackagesModule } from './modules/packages/packages.module';
 
 @Module({
   imports: [
@@ -26,6 +31,7 @@ import { EscalationModule } from './modules/escalation/escalation.module';
     BullModule.forRoot({
       redis: process.env.REDIS_URL || 'redis://localhost:6379',
     }),
+    EventEmitterModule.forRoot(),
     PrismaModule,
     AuthModule,
     BookingsModule,
@@ -42,6 +48,10 @@ import { EscalationModule } from './modules/escalation/escalation.module';
     AnalyticsModule,
     PaymentsModule,
     EscalationModule,
+    NotificationsModule,
+    KnowledgeBaseModule,
+    ContentScraperModule,
+    PackagesModule,
   ],
 })
 export class AppModule { }

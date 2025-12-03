@@ -5,12 +5,16 @@ import { BookingsController } from './bookings.controller';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { PaymentsModule } from '../payments/payments.module';
 import { MessagesModule } from '../messages/messages.module';
+import { NotificationsModule } from '../notifications/notifications.module';
+import { PackagesModule } from '../packages/packages.module';
 
 @Module({
   imports: [
     PrismaModule,
     PaymentsModule,
     MessagesModule,
+    NotificationsModule,
+    PackagesModule,
     BullModule.registerQueue({
       name: 'bookingQueue',
     }),
@@ -19,4 +23,4 @@ import { MessagesModule } from '../messages/messages.module';
   controllers: [BookingsController],
   exports: [BookingsService],
 })
-export class BookingsModule {}
+export class BookingsModule { }

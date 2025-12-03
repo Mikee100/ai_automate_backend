@@ -10,10 +10,12 @@ export declare class KnowledgeBaseService {
     }): Promise<{
         id: string;
         createdAt: Date;
+        updatedAt: Date;
         question: string;
         answer: string;
         category: string;
         embedding: number[];
+        mediaUrls: string[];
     }>;
     findAll(params?: {
         category?: string;
@@ -24,20 +26,24 @@ export declare class KnowledgeBaseService {
         items: {
             id: string;
             createdAt: Date;
+            updatedAt: Date;
             question: string;
             answer: string;
             category: string;
             embedding: number[];
+            mediaUrls: string[];
         }[];
         total: number;
     }>;
     findOne(id: string): Promise<{
         id: string;
         createdAt: Date;
+        updatedAt: Date;
         question: string;
         answer: string;
         category: string;
         embedding: number[];
+        mediaUrls: string[];
     }>;
     update(id: string, data: Partial<{
         question: string;
@@ -46,17 +52,21 @@ export declare class KnowledgeBaseService {
     }>): Promise<{
         id: string;
         createdAt: Date;
+        updatedAt: Date;
         question: string;
         answer: string;
         category: string;
         embedding: number[];
+        mediaUrls: string[];
     }>;
     remove(id: string): Promise<{
         id: string;
         createdAt: Date;
+        updatedAt: Date;
         question: string;
         answer: string;
         category: string;
         embedding: number[];
+        mediaUrls: string[];
     }>;
 }

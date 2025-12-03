@@ -10,14 +10,14 @@ export declare class PaymentsController {
         status: string;
         payment: {
             id: string;
-            createdAt: Date;
-            updatedAt: Date;
-            status: string;
-            phone: string;
             bookingDraftId: string | null;
             amount: number;
+            phone: string;
+            status: string;
             mpesaReceipt: string | null;
             checkoutRequestId: string | null;
+            createdAt: Date;
+            updatedAt: Date;
         };
     }>;
     handleCallback(body: any): Promise<{
@@ -39,5 +39,15 @@ export declare class PaymentsController {
     } | {
         success: boolean;
         error: any;
+    }>;
+    handleWebhook(body: {
+        checkoutRequestId: string;
+        status: string;
+    }): Promise<{
+        status: string;
+        message: string;
+    } | {
+        status: string;
+        message?: undefined;
     }>;
 }

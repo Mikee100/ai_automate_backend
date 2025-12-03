@@ -14,6 +14,8 @@ const bookings_controller_1 = require("./bookings.controller");
 const prisma_module_1 = require("../../prisma/prisma.module");
 const payments_module_1 = require("../payments/payments.module");
 const messages_module_1 = require("../messages/messages.module");
+const notifications_module_1 = require("../notifications/notifications.module");
+const packages_module_1 = require("../packages/packages.module");
 let BookingsModule = class BookingsModule {
 };
 exports.BookingsModule = BookingsModule;
@@ -23,6 +25,8 @@ exports.BookingsModule = BookingsModule = __decorate([
             prisma_module_1.PrismaModule,
             payments_module_1.PaymentsModule,
             messages_module_1.MessagesModule,
+            notifications_module_1.NotificationsModule,
+            packages_module_1.PackagesModule,
             bull_1.BullModule.registerQueue({
                 name: 'bookingQueue',
             }),

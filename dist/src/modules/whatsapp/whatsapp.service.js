@@ -67,6 +67,12 @@ let WhatsappService = class WhatsappService {
     async sendMessage(to, message) {
         console.log('📤 Sending WhatsApp message to:', to);
         console.log('Message:', message);
+        if (!to || typeof to !== 'string' || !to.trim()) {
+            throw new Error("Recipient phone number or WhatsApp ID ('to') is required.");
+        }
+        if (!message || typeof message !== 'string' || !message.trim()) {
+            throw new Error("Message body ('message') is required.");
+        }
         try {
             if (!this.phoneNumberId) {
                 throw new Error('phoneNumberId is undefined');
@@ -94,10 +100,54 @@ let WhatsappService = class WhatsappService {
                 });
             }
             return response.data;
+            return response.data;
         }
         catch (error) {
             console.error('❌ WhatsApp send error:', error.response?.data || error.message);
             throw error;
+        }
+    }
+    async sendImage(to, imageUrl, caption) {
+        console.log('📤 Sending WhatsApp image to:', to);
+        console.log('Image URL:', imageUrl);
+        if (!to || !imageUrl) {
+            throw new Error("Recipient ('to') and 'imageUrl' are required.");
+        }
+        try {
+            if (!this.phoneNumberId) {
+                throw new Error('phoneNumberId is undefined');
+            }
+            const url = `https://graph.facebook.com/v21.0/${this.phoneNumberId}/messages`;
+            const payload = {
+                messaging_product: "whatsapp",
+                to,
+                type: "image",
+                image: {
+                    link: imageUrl,
+                    caption: caption || ''
+                }
+            };
+            const response = await axios_1.default.post(url, payload, {
+                headers: {
+                    Authorization: `Bearer ${this.accessToken}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+            console.log('✔️ WhatsApp API response (image):', response.data);
+            const customer = await this.customersService.findByWhatsappId(to);
+            if (customer) {
+                await this.messagesService.create({
+                    content: `[Image Sent] ${caption ? caption + ' ' : ''}${imageUrl}`,
+                    platform: 'whatsapp',
+                    direction: 'outbound',
+                    customerId: customer.id,
+                });
+            }
+            return response.data;
+        }
+        catch (error) {
+            console.error('❌ WhatsApp send image error:', error.response?.data || error.message);
+            return null;
         }
     }
     async getMessages(customerId) {
@@ -132,17 +182,17 @@ let WhatsappService = class WhatsappService {
             if (!acc[cid]) {
                 acc[cid] = {
                     customerId: cid,
-                    customerName: msg.customer.name,
-                    phone: msg.customer.whatsappId || msg.customer.phone,
+                    customerName: msg.customer?.name,
+                    phone: msg.customer?.whatsappId || msg.customer?.phone,
                     latestMessage: msg.content,
-                    latestTimestamp: msg.createdAt.toISOString(),
+                    latestTimestamp: msg.createdAt?.toISOString?.() || msg.createdAt,
                     unreadCount: msg.direction === 'inbound' ? 1 : 0,
                 };
             }
             else {
                 if (new Date(msg.createdAt) > new Date(acc[cid].latestTimestamp)) {
                     acc[cid].latestMessage = msg.content;
-                    acc[cid].latestTimestamp = msg.createdAt.toISOString();
+                    acc[cid].latestTimestamp = msg.createdAt?.toISOString?.() || msg.createdAt;
                 }
                 if (msg.direction === 'inbound') {
                     acc[cid].unreadCount++;

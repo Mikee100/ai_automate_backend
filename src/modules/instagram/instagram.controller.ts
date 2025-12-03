@@ -1,9 +1,9 @@
-import { Controller, Get, Post, Body, Query, Param } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Param, HttpException, HttpStatus } from '@nestjs/common';
 import { InstagramService } from './instagram.service';
 
 @Controller('instagram')
 export class InstagramController {
-  constructor(private readonly instagramService: InstagramService) {}
+  constructor(private readonly instagramService: InstagramService) { }
 
   @Get('settings')
   getSettings() {
@@ -20,10 +20,25 @@ export class InstagramController {
     return this.instagramService.testConnection();
   }
 
+  @Get('can-send/:instagramId')
+  async canSendMessage(@Param('instagramId') instagramId: string) {
+    return this.instagramService.canSendMessage(instagramId);
+  }
+
   @Post('send')
-  sendMessage(@Body() body: { to: string; message: string }) {
+  async sendMessage(@Body() body: { to: string; message: string }) {
     console.log('📤 Controller: sendMessage called with body:', body);
-    return this.instagramService.sendMessage(body.to, body.message);
+    try {
+      return await this.instagramService.sendMessage(body.to, body.message);
+    } catch (error) {
+      throw new HttpException(
+        {
+          message: error.message,
+          suggestion: 'Instagram only allows replies within 24 hours of a user\'s message. The user must message you first before you can respond.'
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
   }
 
   @Get('messages')

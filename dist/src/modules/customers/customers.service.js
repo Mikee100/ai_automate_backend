@@ -88,6 +88,12 @@ let CustomersService = class CustomersService {
             },
         });
     }
+    async updateLastInstagramMessageAt(instagramId, timestamp) {
+        return this.prisma.customer.update({
+            where: { instagramId },
+            data: { lastInstagramMessageAt: timestamp },
+        });
+    }
 };
 exports.CustomersService = CustomersService;
 exports.CustomersService = CustomersService = __decorate([
