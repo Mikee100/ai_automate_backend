@@ -19,8 +19,8 @@ exports.WhatsappModule = WhatsappModule;
 exports.WhatsappModule = WhatsappModule = __decorate([
     (0, common_1.Module)({
         imports: [
-            messages_module_1.MessagesModule,
-            customers_module_1.CustomersModule,
+            (0, common_1.forwardRef)(() => messages_module_1.MessagesModule),
+            (0, common_1.forwardRef)(() => customers_module_1.CustomersModule),
             bull_1.BullModule.registerQueue({
                 name: 'messageQueue',
             }),

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { BullModule } from '@nestjs/bull';
 import { WhatsappController } from './whatsapp.controller';
 import { WhatsappService } from './whatsapp.service';
@@ -7,8 +7,8 @@ import { CustomersModule } from '../customers/customers.module';
 
 @Module({
   imports: [
-    MessagesModule,
-    CustomersModule,
+    forwardRef(() => MessagesModule),
+    forwardRef(() => CustomersModule),
     BullModule.registerQueue({
       name: 'messageQueue',
     }),

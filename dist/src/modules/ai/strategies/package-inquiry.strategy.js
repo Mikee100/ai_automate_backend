@@ -14,8 +14,34 @@ class PackageInquiryStrategy {
         try {
             const allPackages = await aiService.getCachedPackages();
             logger.log(`[PACKAGE QUERY] Found ${allPackages?.length || 0} packages in DB`);
-            const lowerMsg = message.toLowerCase();
-            const matchedPackage = allPackages.find((p) => lowerMsg.includes(p.name.toLowerCase()));
+            const matchPackage = (msg, packageName) => {
+                const lowerMsg = msg.toLowerCase();
+                const lowerPkg = packageName.toLowerCase();
+                if (lowerMsg.includes(lowerPkg))
+                    return true;
+                const variations = {
+                    'standard package': ['standard one', 'standard', 'basic package', 'basic one'],
+                    'executive package': ['executive one', 'executive'],
+                    'gold package': ['gold one', 'gold'],
+                    'platinum package': ['platinum one', 'platinum'],
+                    'vip package': ['vip one', 'vip'],
+                    'vvip package': ['vvip one', 'vvip', 'v vip', 'v-vip'],
+                };
+                for (const [canonical, vars] of Object.entries(variations)) {
+                    if (lowerPkg === canonical) {
+                        if (vars.some(v => lowerMsg.includes(v)))
+                            return true;
+                    }
+                }
+                for (const [canonical, vars] of Object.entries(variations)) {
+                    if (vars.some(v => lowerMsg.includes(v))) {
+                        if (lowerPkg === canonical)
+                            return true;
+                    }
+                }
+                return false;
+            };
+            const matchedPackage = allPackages.find((p) => matchPackage(message, p.name));
             if (matchedPackage) {
                 let draft = await prisma.bookingDraft.findUnique({ where: { customerId } });
                 if (!draft) {
@@ -45,7 +71,7 @@ class PackageInquiryStrategy {
                     packageType = 'studio ';
                 }
                 if (packages.length > 0) {
-                    const specificPackage = packages.find((p) => lowerMsg.includes(p.name.toLowerCase()) &&
+                    const specificPackage = packages.find((p) => matchPackage(message, p.name) &&
                         /(tell me about|what is|what's|details|include|come with|feature)/i.test(message));
                     if (specificPackage) {
                         const detailedInfo = aiService.formatPackageDetails(specificPackage, true);

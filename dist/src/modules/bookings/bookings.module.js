@@ -23,7 +23,7 @@ exports.BookingsModule = BookingsModule = __decorate([
     (0, common_1.Module)({
         imports: [
             prisma_module_1.PrismaModule,
-            payments_module_1.PaymentsModule,
+            (0, common_1.forwardRef)(() => payments_module_1.PaymentsModule),
             messages_module_1.MessagesModule,
             notifications_module_1.NotificationsModule,
             packages_module_1.PackagesModule,

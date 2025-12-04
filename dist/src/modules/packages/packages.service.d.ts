@@ -4,8 +4,8 @@ export declare class PackagesService {
     private readonly logger;
     constructor(prisma: PrismaService);
     getPackages(type?: string): Promise<{
-        name: string;
         id: string;
+        name: string;
         type: string;
         price: number;
         deposit: number;
@@ -24,8 +24,8 @@ export declare class PackagesService {
         updatedAt: Date;
     }[]>;
     getPackageById(id: string): Promise<{
-        name: string;
         id: string;
+        name: string;
         type: string;
         price: number;
         deposit: number;
@@ -44,8 +44,8 @@ export declare class PackagesService {
         updatedAt: Date;
     }>;
     createPackage(data: any): Promise<{
-        name: string;
         id: string;
+        name: string;
         type: string;
         price: number;
         deposit: number;
@@ -64,8 +64,8 @@ export declare class PackagesService {
         updatedAt: Date;
     }>;
     updatePackage(id: string, data: any): Promise<{
-        name: string;
         id: string;
+        name: string;
         type: string;
         price: number;
         deposit: number;
@@ -84,8 +84,8 @@ export declare class PackagesService {
         updatedAt: Date;
     }>;
     deletePackage(id: string): Promise<{
-        name: string;
         id: string;
+        name: string;
         type: string;
         price: number;
         deposit: number;
@@ -104,8 +104,8 @@ export declare class PackagesService {
         updatedAt: Date;
     }>;
     findPackageByName(name: string): Promise<{
-        name: string;
         id: string;
+        name: string;
         type: string;
         price: number;
         deposit: number;

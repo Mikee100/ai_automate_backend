@@ -163,7 +163,7 @@ export class PaymentsService {
       PartyB: this.shortcode,
       PhoneNumber: phone.startsWith('254') ? phone : `254${phone.substring(1)}`,
       CallBackURL: this.callbackUrl,
-      AccountReference: `BookingDeposit-${draft.id}`,
+      AccountReference: 'Fiesta House',
       TransactionDesc: `Deposit for ${draft.service} booking`,
     };
     const stkUrl = `${this.mpesaBaseUrl}/mpesa/stkpush/v1/processrequest`;

@@ -31,6 +31,8 @@ const notifications_module_1 = require("./modules/notifications/notifications.mo
 const knowledge_base_module_1 = require("./modules/knowledge-base/knowledge-base.module");
 const content_scraper_module_1 = require("./modules/content-scraper/content-scraper.module");
 const packages_module_1 = require("./modules/packages/packages.module");
+const reminders_module_1 = require("./modules/reminders/reminders.module");
+const followups_module_1 = require("./modules/followups/followups.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -64,6 +66,8 @@ exports.AppModule = AppModule = __decorate([
             knowledge_base_module_1.KnowledgeBaseModule,
             content_scraper_module_1.ContentScraperModule,
             packages_module_1.PackagesModule,
+            reminders_module_1.RemindersModule,
+            followups_module_1.FollowupsModule,
         ],
     })
 ], AppModule);

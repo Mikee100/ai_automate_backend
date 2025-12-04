@@ -15,9 +15,11 @@ const common_1 = require("@nestjs/common");
 const event_emitter_1 = require("@nestjs/event-emitter");
 const booking_events_1 = require("../../bookings/events/booking.events");
 const payments_service_1 = require("../payments.service");
+const messages_service_1 = require("../../messages/messages.service");
 let PaymentListener = PaymentListener_1 = class PaymentListener {
-    constructor(paymentsService) {
+    constructor(paymentsService, messagesService) {
         this.paymentsService = paymentsService;
+        this.messagesService = messagesService;
         this.logger = new common_1.Logger(PaymentListener_1.name);
     }
     async handleBookingDraftCompleted(event) {
@@ -26,6 +28,15 @@ let PaymentListener = PaymentListener_1 = class PaymentListener {
             let phone = event.recipientPhone;
             if (!phone.startsWith('254')) {
                 phone = `254${phone.replace(/^0+/, '')}`;
+            }
+            const prepaymentMsg = `⏱️ *Get Ready!*\n\nYou'll receive an M-Pesa payment prompt on your phone in the next 3 seconds for *KSH ${event.depositAmount}*.\n\nPlease have your M-Pesa PIN ready! 📲✨`;
+            try {
+                await this.messagesService.sendOutboundMessage(event.customerId, prepaymentMsg, 'whatsapp');
+                this.logger.log(`[Event] Pre-payment notification sent to ${event.customerId}`);
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+            catch (msgError) {
+                this.logger.warn(`[Event] Failed to send pre-payment notification, continuing with STK push:`, msgError);
             }
             await this.paymentsService.initiateSTKPush(event.draftId, phone, event.depositAmount);
             this.logger.log(`[Event] STK Push initiated for deposit of ${event.depositAmount} KSH for draft ${event.draftId}`);
@@ -44,6 +55,7 @@ __decorate([
 ], PaymentListener.prototype, "handleBookingDraftCompleted", null);
 exports.PaymentListener = PaymentListener = PaymentListener_1 = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [payments_service_1.PaymentsService])
+    __metadata("design:paramtypes", [payments_service_1.PaymentsService,
+        messages_service_1.MessagesService])
 ], PaymentListener);
 //# sourceMappingURL=payment.listener.js.map

@@ -11,12 +11,13 @@ const common_1 = require("@nestjs/common");
 const customers_controller_1 = require("./customers.controller");
 const customers_service_1 = require("./customers.service");
 const prisma_module_1 = require("../../prisma/prisma.module");
+const whatsapp_module_1 = require("../whatsapp/whatsapp.module");
 let CustomersModule = class CustomersModule {
 };
 exports.CustomersModule = CustomersModule;
 exports.CustomersModule = CustomersModule = __decorate([
     (0, common_1.Module)({
-        imports: [prisma_module_1.PrismaModule],
+        imports: [prisma_module_1.PrismaModule, (0, common_1.forwardRef)(() => whatsapp_module_1.WhatsappModule)],
         controllers: [customers_controller_1.CustomersController],
         providers: [customers_service_1.CustomersService],
         exports: [customers_service_1.CustomersService],

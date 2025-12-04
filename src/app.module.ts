@@ -22,6 +22,8 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { KnowledgeBaseModule } from './modules/knowledge-base/knowledge-base.module';
 import { ContentScraperModule } from './modules/content-scraper/content-scraper.module';
 import { PackagesModule } from './modules/packages/packages.module';
+import { RemindersModule } from './modules/reminders/reminders.module';
+import { FollowupsModule } from './modules/followups/followups.module';
 
 @Module({
   imports: [
@@ -52,6 +54,9 @@ import { PackagesModule } from './modules/packages/packages.module';
     KnowledgeBaseModule,
     ContentScraperModule,
     PackagesModule,
+    RemindersModule,
+    FollowupsModule,
   ],
 })
 export class AppModule { }
+

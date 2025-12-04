@@ -3,11 +3,13 @@ import { BullModule } from '@nestjs/bull';
 import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
 import { AiSettingsService } from './ai-settings.service';
+import { CircuitBreakerService } from './services/circuit-breaker.service';
 import { AdminAiController } from './admin-ai.controller';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { BookingsModule } from '../bookings/bookings.module';
 import { MessagesModule } from '../messages/messages.module';
 import { CustomersModule } from '../customers/customers.module';
+import { PaymentsModule } from '../payments/payments.module';
 
 @Module({
   imports: [
@@ -18,10 +20,10 @@ import { CustomersModule } from '../customers/customers.module';
     BullModule.registerQueue({
       name: 'aiQueue',
     }),
-    forwardRef(() => require('../payments/payments.module').PaymentsModule),
+    forwardRef(() => PaymentsModule),
   ],
   controllers: [AiController, AdminAiController],
-  providers: [AiService, AiSettingsService],
+  providers: [AiService, AiSettingsService, CircuitBreakerService],
   exports: [AiService, AiSettingsService],
 })
-export class AiModule {}
+export class AiModule { }

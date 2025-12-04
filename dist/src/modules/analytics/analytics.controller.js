@@ -76,6 +76,39 @@ let AnalyticsController = class AnalyticsController {
     aiPerformanceMetrics() {
         return this.analyticsService.aiPerformanceMetrics();
     }
+    async getBusinessKPIs() {
+        return this.analyticsService.getBusinessKPIs();
+    }
+    async getRevenue() {
+        return this.analyticsService.getTotalRevenue();
+    }
+    async getRevenueByPackage() {
+        return this.analyticsService.getRevenueByPackage();
+    }
+    async getMonthlyRevenue() {
+        return this.analyticsService.getMonthlyRevenue();
+    }
+    async getConversionRate() {
+        return this.analyticsService.getConversionRate();
+    }
+    async getPopularPackages() {
+        return this.analyticsService.getPopularPackages();
+    }
+    async getPopularTimeSlots() {
+        return this.analyticsService.getPopularTimeSlots();
+    }
+    async getSeasonalTrends() {
+        return this.analyticsService.getSeasonalTrends();
+    }
+    async getCustomerLifetimeValue() {
+        return this.analyticsService.getCustomerLifetimeValue();
+    }
+    async getCustomerMetrics() {
+        return this.analyticsService.getCustomerMetrics();
+    }
+    async getYearOverYearGrowth() {
+        return this.analyticsService.getYearOverYearGrowth();
+    }
 };
 exports.AnalyticsController = AnalyticsController;
 __decorate([
@@ -198,6 +231,72 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], AnalyticsController.prototype, "aiPerformanceMetrics", null);
+__decorate([
+    (0, common_1.Get)('business-kpis'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], AnalyticsController.prototype, "getBusinessKPIs", null);
+__decorate([
+    (0, common_1.Get)('revenue'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], AnalyticsController.prototype, "getRevenue", null);
+__decorate([
+    (0, common_1.Get)('revenue-by-package'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], AnalyticsController.prototype, "getRevenueByPackage", null);
+__decorate([
+    (0, common_1.Get)('monthly-revenue'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], AnalyticsController.prototype, "getMonthlyRevenue", null);
+__decorate([
+    (0, common_1.Get)('conversion-rate'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], AnalyticsController.prototype, "getConversionRate", null);
+__decorate([
+    (0, common_1.Get)('popular-packages'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], AnalyticsController.prototype, "getPopularPackages", null);
+__decorate([
+    (0, common_1.Get)('popular-timeslots'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], AnalyticsController.prototype, "getPopularTimeSlots", null);
+__decorate([
+    (0, common_1.Get)('seasonal-trends'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], AnalyticsController.prototype, "getSeasonalTrends", null);
+__decorate([
+    (0, common_1.Get)('customer-lifetime-value'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], AnalyticsController.prototype, "getCustomerLifetimeValue", null);
+__decorate([
+    (0, common_1.Get)('customer-metrics'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], AnalyticsController.prototype, "getCustomerMetrics", null);
+__decorate([
+    (0, common_1.Get)('year-over-year-growth'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], AnalyticsController.prototype, "getYearOverYearGrowth", null);
 exports.AnalyticsController = AnalyticsController = __decorate([
     (0, common_1.Controller)('analytics'),
     __metadata("design:paramtypes", [analytics_service_1.AnalyticsService])

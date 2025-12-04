@@ -1,0 +1,233 @@
+import { Queue } from 'bull';
+import { PrismaService } from '../../prisma/prisma.service';
+import { WhatsappService } from '../whatsapp/whatsapp.service';
+import { CreateFollowupDto, UpdateFollowupDto, FollowupFilterDto, RecordFollowupResponseDto } from './dto/followup.dto';
+export declare class FollowupsService {
+    private prisma;
+    private whatsappService;
+    private followupsQueue;
+    private readonly logger;
+    private readonly STUDIO_TZ;
+    constructor(prisma: PrismaService, whatsappService: WhatsappService, followupsQueue: Queue);
+    scheduleFollowupsForBooking(bookingId: string): Promise<any[]>;
+    private addWorkingDays;
+    createFollowup(data: CreateFollowupDto): Promise<{
+        id: string;
+        type: string;
+        scheduledFor: Date;
+        sentAt: Date | null;
+        status: string;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        messageContent: string | null;
+        createdAt: Date;
+        bookingId: string;
+    }>;
+    getFollowups(filters: FollowupFilterDto): Promise<{
+        followups: ({
+            booking: {
+                customer: {
+                    id: string;
+                    createdAt: Date;
+                    name: string;
+                    updatedAt: Date;
+                    email: string | null;
+                    phone: string | null;
+                    whatsappId: string | null;
+                    instagramId: string | null;
+                    messengerId: string | null;
+                    aiEnabled: boolean;
+                    isAiPaused: boolean;
+                    lastInstagramMessageAt: Date | null;
+                    dailyTokenUsage: number;
+                    tokenResetDate: Date | null;
+                    totalTokensUsed: number;
+                };
+            } & {
+                id: string;
+                status: string;
+                createdAt: Date;
+                customerId: string;
+                service: string;
+                dateTime: Date;
+                durationMinutes: number | null;
+                recipientName: string | null;
+                recipientPhone: string | null;
+                googleEventId: string | null;
+                updatedAt: Date;
+            };
+        } & {
+            id: string;
+            type: string;
+            scheduledFor: Date;
+            sentAt: Date | null;
+            status: string;
+            metadata: import("@prisma/client/runtime/library").JsonValue | null;
+            messageContent: string | null;
+            createdAt: Date;
+            bookingId: string;
+        })[];
+        total: number;
+    }>;
+    getFollowupById(id: string): Promise<{
+        booking: {
+            customer: {
+                id: string;
+                createdAt: Date;
+                name: string;
+                updatedAt: Date;
+                email: string | null;
+                phone: string | null;
+                whatsappId: string | null;
+                instagramId: string | null;
+                messengerId: string | null;
+                aiEnabled: boolean;
+                isAiPaused: boolean;
+                lastInstagramMessageAt: Date | null;
+                dailyTokenUsage: number;
+                tokenResetDate: Date | null;
+                totalTokensUsed: number;
+            };
+        } & {
+            id: string;
+            status: string;
+            createdAt: Date;
+            customerId: string;
+            service: string;
+            dateTime: Date;
+            durationMinutes: number | null;
+            recipientName: string | null;
+            recipientPhone: string | null;
+            googleEventId: string | null;
+            updatedAt: Date;
+        };
+    } & {
+        id: string;
+        type: string;
+        scheduledFor: Date;
+        sentAt: Date | null;
+        status: string;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        messageContent: string | null;
+        createdAt: Date;
+        bookingId: string;
+    }>;
+    updateFollowup(id: string, data: UpdateFollowupDto): Promise<{
+        id: string;
+        type: string;
+        scheduledFor: Date;
+        sentAt: Date | null;
+        status: string;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        messageContent: string | null;
+        createdAt: Date;
+        bookingId: string;
+    }>;
+    cancelFollowupsForBooking(bookingId: string): Promise<import(".prisma/client").Prisma.BatchPayload>;
+    sendFollowup(followupId: string): Promise<{
+        booking: {
+            customer: {
+                id: string;
+                createdAt: Date;
+                name: string;
+                updatedAt: Date;
+                email: string | null;
+                phone: string | null;
+                whatsappId: string | null;
+                instagramId: string | null;
+                messengerId: string | null;
+                aiEnabled: boolean;
+                isAiPaused: boolean;
+                lastInstagramMessageAt: Date | null;
+                dailyTokenUsage: number;
+                tokenResetDate: Date | null;
+                totalTokensUsed: number;
+            };
+        } & {
+            id: string;
+            status: string;
+            createdAt: Date;
+            customerId: string;
+            service: string;
+            dateTime: Date;
+            durationMinutes: number | null;
+            recipientName: string | null;
+            recipientPhone: string | null;
+            googleEventId: string | null;
+            updatedAt: Date;
+        };
+    } & {
+        id: string;
+        type: string;
+        scheduledFor: Date;
+        sentAt: Date | null;
+        status: string;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        messageContent: string | null;
+        createdAt: Date;
+        bookingId: string;
+    }>;
+    recordResponse(followupId: string, response: RecordFollowupResponseDto): Promise<{
+        id: string;
+        type: string;
+        scheduledFor: Date;
+        sentAt: Date | null;
+        status: string;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        messageContent: string | null;
+        createdAt: Date;
+        bookingId: string;
+    }>;
+    private generateFollowupMessage;
+    getFollowupAnalytics(): Promise<{
+        total: number;
+        sent: number;
+        pending: number;
+        responseRate: number;
+        averageRating: number;
+        totalReviews: number;
+        upsellConversionRate: number;
+    }>;
+    getUpcomingFollowups(limit?: number): Promise<({
+        booking: {
+            customer: {
+                id: string;
+                createdAt: Date;
+                name: string;
+                updatedAt: Date;
+                email: string | null;
+                phone: string | null;
+                whatsappId: string | null;
+                instagramId: string | null;
+                messengerId: string | null;
+                aiEnabled: boolean;
+                isAiPaused: boolean;
+                lastInstagramMessageAt: Date | null;
+                dailyTokenUsage: number;
+                tokenResetDate: Date | null;
+                totalTokensUsed: number;
+            };
+        } & {
+            id: string;
+            status: string;
+            createdAt: Date;
+            customerId: string;
+            service: string;
+            dateTime: Date;
+            durationMinutes: number | null;
+            recipientName: string | null;
+            recipientPhone: string | null;
+            googleEventId: string | null;
+            updatedAt: Date;
+        };
+    } & {
+        id: string;
+        type: string;
+        scheduledFor: Date;
+        sentAt: Date | null;
+        status: string;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        messageContent: string | null;
+        createdAt: Date;
+        bookingId: string;
+    })[]>;
+}

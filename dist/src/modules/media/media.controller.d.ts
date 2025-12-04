@@ -7,10 +7,10 @@ export declare class MediaController {
         id: string;
         createdAt: Date;
         updatedAt: Date;
-        category: string;
         title: string | null;
         url: string;
         description: string | null;
+        category: string;
         subcategory: string | null;
         mediaType: string;
         source: string;
@@ -19,10 +19,10 @@ export declare class MediaController {
         id: string;
         createdAt: Date;
         updatedAt: Date;
-        category: string;
         title: string | null;
         url: string;
         description: string | null;
+        category: string;
         subcategory: string | null;
         mediaType: string;
         source: string;
@@ -31,10 +31,10 @@ export declare class MediaController {
         id: string;
         createdAt: Date;
         updatedAt: Date;
-        category: string;
         title: string | null;
         url: string;
         description: string | null;
+        category: string;
         subcategory: string | null;
         mediaType: string;
         source: string;

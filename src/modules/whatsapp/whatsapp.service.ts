@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
@@ -14,7 +14,7 @@ export class WhatsappService {
   constructor(
     private configService: ConfigService,
     private messagesService: MessagesService,
-    private customersService: CustomersService,
+    @Inject(forwardRef(() => CustomersService)) private customersService: CustomersService,
     @InjectQueue('messageQueue') private messageQueue: Queue,
   ) {
     this.phoneNumberId = this.configService.get('WHATSAPP_PHONE_NUMBER_ID');

@@ -5,10 +5,10 @@ export declare class NotificationsController {
     constructor(notificationsService: NotificationsService);
     getNotifications(read?: string, type?: string, limit?: string, offset?: string): Promise<{
         notifications: {
-            message: string;
             id: string;
-            createdAt: Date;
             type: string;
+            createdAt: Date;
+            message: string;
             title: string;
             metadata: import("@prisma/client/runtime/library").JsonValue | null;
             read: boolean;
@@ -22,10 +22,10 @@ export declare class NotificationsController {
     markAsRead(id: string): Promise<{
         success: boolean;
         notification: {
-            message: string;
             id: string;
-            createdAt: Date;
             type: string;
+            createdAt: Date;
+            message: string;
             title: string;
             metadata: import("@prisma/client/runtime/library").JsonValue | null;
             read: boolean;

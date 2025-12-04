@@ -6,7 +6,6 @@ export declare class MessagesController {
     create(createMessageDto: CreateMessageDto): Promise<{
         id: string;
         createdAt: Date;
-        customerId: string;
         content: string;
         platform: string;
         direction: string;
@@ -14,18 +13,19 @@ export declare class MessagesController {
         handledBy: string | null;
         isResolved: boolean | null;
         isEscalated: boolean | null;
+        customerId: string;
     }>;
     findAll(): Promise<({
         customer: {
             id: string;
-            phone: string | null;
+            name: string;
             createdAt: Date;
             updatedAt: Date;
-            name: string;
             email: string | null;
             whatsappId: string | null;
             instagramId: string | null;
             messengerId: string | null;
+            phone: string | null;
             aiEnabled: boolean;
             isAiPaused: boolean;
             lastInstagramMessageAt: Date | null;
@@ -36,7 +36,6 @@ export declare class MessagesController {
     } & {
         id: string;
         createdAt: Date;
-        customerId: string;
         content: string;
         platform: string;
         direction: string;
@@ -44,18 +43,19 @@ export declare class MessagesController {
         handledBy: string | null;
         isResolved: boolean | null;
         isEscalated: boolean | null;
+        customerId: string;
     })[]>;
     findByCustomer(customerId: string): Promise<({
         customer: {
             id: string;
-            phone: string | null;
+            name: string;
             createdAt: Date;
             updatedAt: Date;
-            name: string;
             email: string | null;
             whatsappId: string | null;
             instagramId: string | null;
             messengerId: string | null;
+            phone: string | null;
             aiEnabled: boolean;
             isAiPaused: boolean;
             lastInstagramMessageAt: Date | null;
@@ -66,7 +66,6 @@ export declare class MessagesController {
     } & {
         id: string;
         createdAt: Date;
-        customerId: string;
         content: string;
         platform: string;
         direction: string;
@@ -74,5 +73,6 @@ export declare class MessagesController {
         handledBy: string | null;
         isResolved: boolean | null;
         isEscalated: boolean | null;
+        customerId: string;
     })[]>;
 }

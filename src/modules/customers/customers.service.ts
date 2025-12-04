@@ -1,12 +1,41 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { WhatsappService } from '../whatsapp/whatsapp.service';
 
 @Injectable()
 export class CustomersService {
-  constructor(private prisma: PrismaService) { }
+  constructor(
+    private prisma: PrismaService,
+    @Inject(forwardRef(() => WhatsappService)) private whatsappService: WhatsappService,
+  ) {}
 
   async create(data: any) {
     return this.prisma.customer.create({ data });
+  }
+
+  async sendPhotoLink(customerId: string, link: string) {
+    const customer = await this.findOne(customerId);
+    if (!customer) {
+      throw new NotFoundException(`Customer with ID ${customerId} not found`);
+    }
+
+    if (!customer.whatsappId) {
+      throw new NotFoundException(
+        `Customer with ID ${customerId} does not have a WhatsApp ID.`,
+      );
+    }
+
+    // Save the photo link
+    await this.prisma.photoLink.create({
+      data: {
+        link,
+        customerId,
+      },
+    });
+
+    const message = `Hello! Here are the photos from your recent photoshoot: ${link}. We hope you love them!`;
+
+    return this.whatsappService.sendMessage(customer.whatsappId, message);
   }
 
   async findByWhatsappId(whatsappId: string) {
@@ -95,6 +124,13 @@ export class CustomersService {
     return this.prisma.customer.update({
       where: { instagramId },
       data: { lastInstagramMessageAt: timestamp },
+    });
+  }
+
+  async getPhotoLinks(customerId: string) {
+    return this.prisma.photoLink.findMany({
+      where: { customerId },
+      orderBy: { sentAt: 'desc' },
     });
   }
 }

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.BookingCancelledEvent = exports.BookingRescheduledEvent = exports.BookingCreatedEvent = exports.BookingDraftCompletedEvent = void 0;
+exports.BookingCompletedEvent = exports.BookingCancelledEvent = exports.BookingRescheduledEvent = exports.BookingCreatedEvent = exports.BookingDraftCompletedEvent = void 0;
 class BookingDraftCompletedEvent {
     constructor(customerId, draftId, service, dateTime, recipientPhone, depositAmount) {
         this.customerId = customerId;
@@ -42,4 +42,13 @@ class BookingCancelledEvent {
     }
 }
 exports.BookingCancelledEvent = BookingCancelledEvent;
+class BookingCompletedEvent {
+    constructor(bookingId, customerId, service, completedAt) {
+        this.bookingId = bookingId;
+        this.customerId = customerId;
+        this.service = service;
+        this.completedAt = completedAt;
+    }
+}
+exports.BookingCompletedEvent = BookingCompletedEvent;
 //# sourceMappingURL=booking.events.js.map

@@ -38,3 +38,13 @@ export class BookingCancelledEvent {
         public readonly dateTime: Date,
     ) { }
 }
+
+export class BookingCompletedEvent {
+    constructor(
+        public readonly bookingId: string,
+        public readonly customerId: string,
+        public readonly service: string,
+        public readonly completedAt: Date,
+    ) { }
+}
+

@@ -411,5 +411,389 @@ export class AnalyticsService {
     };
   }
 
+  /* ========================================
+   * BUSINESS ANALYTICS & KPIs
+   * ======================================== */
+
+  /**
+   * Get all business KPIs in one call
+   */
+  async getBusinessKPIs(startDate?: Date, endDate?: Date) {
+    const start = startDate || new Date(new Date().setDate(new Date().getDate() - 30));
+    const end = endDate || new Date();
+
+    const [
+      revenue,
+      avgBookingValue,
+      conversionRate,
+      popularPackages,
+      customerMetrics,
+    ] = await Promise.all([
+      this.getTotalRevenue(start, end),
+      this.getAverageBookingValue(start, end),
+      this.getConversionRate(),
+      this.getPopularPackages(start, end),
+      this.getCustomerMetrics(),
+    ]);
+
+    return {
+      revenue,
+      avgBookingValue,
+      conversionRate,
+      popularPackages,
+      customerMetrics,
+      period: { start, end },
+    };
+  }
+
+  /**
+   * Calculate total revenue from successful payments
+   */
+  async getTotalRevenue(startDate?: Date, endDate?: Date) {
+    const where: any = { status: 'success' };
+
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) where.createdAt.gte = startDate;
+      if (endDate) where.createdAt.lte = endDate;
+    }
+
+    const result = await this.prisma.payment.aggregate({
+      where,
+      _sum: { amount: true },
+      _count: true,
+    });
+
+    return {
+      total: result._sum.amount ? Number(result._sum.amount) : 0,
+      count: result._count,
+    };
+  }
+
+  /**
+   * Calculate average booking value
+   */
+  async getAverageBookingValue(startDate?: Date, endDate?: Date) {
+    const revenue = await this.getTotalRevenue(startDate, endDate);
+
+    if (revenue.count === 0) return 0;
+
+    return Math.round(revenue.total / revenue.count);
+  }
+
+  /**
+   * Get revenue breakdown by package
+   */
+  async getRevenueByPackage(startDate?: Date, endDate?: Date) {
+    const where: any = { status: 'success' };
+
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) where.createdAt.gte = startDate;
+      if (endDate) where.createdAt.lte = endDate;
+    }
+
+    const payments = await this.prisma.payment.findMany({
+      where,
+      include: {
+        bookingDraft: {
+          select: { service: true },
+        },
+      },
+    });
+
+    const packageRevenue: Record<string, { revenue: number; count: number }> = {};
+
+    for (const payment of payments) {
+      const packageName = payment.bookingDraft?.service || 'Unknown';
+      if (!packageRevenue[packageName]) {
+        packageRevenue[packageName] = { revenue: 0, count: 0 };
+      }
+      packageRevenue[packageName].revenue += Number(payment.amount);
+      packageRevenue[packageName].count += 1;
+    }
+
+    return Object.entries(packageRevenue)
+      .map(([name, data]) => ({
+        package: name,
+        revenue: data.revenue,
+        bookings: data.count,
+        avgValue: Math.round(data.revenue / data.count),
+      }))
+      .sort((a, b) => b.revenue - a.revenue);
+  }
+
+  /**
+   * Get monthly revenue trends
+   */
+  async getMonthlyRevenue(months = 12) {
+    const result: any[] = await this.prisma.$queryRaw`
+      SELECT 
+        TO_CHAR("createdAt", 'YYYY-MM') as month,
+        SUM(amount) as revenue,
+        COUNT(*) as bookings
+      FROM payments
+      WHERE status = 'success'
+        AND "createdAt" >= NOW() - INTERVAL '${months} months'
+      GROUP BY month
+      ORDER BY month ASC
+    `;
+
+    return result.map(row => ({
+      month: row.month,
+      revenue: Number(row.revenue),
+      bookings: Number(row.bookings),
+    }));
+  }
+
+  /**
+   * Calculate conversion rate (customers → confirmed bookings)
+   */
+  async getConversionRate() {
+    const totalCustomers = await this.prisma.customer.count();
+    const customersWithConfirmedBooking = await this.prisma.customer.count({
+      where: {
+        bookings: {
+          some: {
+            status: { in: ['confirmed', 'completed'] },
+          },
+        },
+      },
+    });
+
+    const rate = totalCustomers > 0
+      ? (customersWithConfirmedBooking / totalCustomers) * 100
+      : 0;
+
+    return {
+      rate: Math.round(rate * 10) / 10,
+      totalCustomers,
+      convertedCustomers: customersWithConfirmedBooking,
+    };
+  }
+
+  /**
+   * Get popular packages (most booked)
+   */
+  async getPopularPackages(startDate?: Date, endDate?: Date) {
+    const where: any = { status: { in: ['confirmed', 'completed'] } };
+
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) where.createdAt.gte = startDate;
+      if (endDate) where.createdAt.lte = endDate;
+    }
+
+    const bookings = await this.prisma.booking.groupBy({
+      by: ['service'],
+      where,
+      _count: { service: true },
+      orderBy: { _count: { service: 'desc' } },
+      take: 10,
+    });
+
+    return bookings.map(b => ({
+      package: b.service,
+      bookings: b._count.service,
+    }));
+  }
+
+  /**
+   * Get popular time slots (heatmap data)
+   */
+  async getPopularTimeSlots() {
+    const result: any[] = await this.prisma.$queryRaw`
+      SELECT 
+        EXTRACT(HOUR FROM "dateTime") as hour,
+        EXTRACT(DOW FROM "dateTime") as day_of_week,
+        COUNT(*) as booking_count
+      FROM bookings
+      WHERE status IN ('confirmed', 'completed')
+      GROUP BY hour, day_of_week
+      ORDER BY booking_count DESC
+    `;
+
+    return result.map(row => ({
+      hour: Number(row.hour),
+      dayOfWeek: Number(row.day_of_week), // 0 = Sunday, 6 = Saturday
+      count: Number(row.booking_count),
+    }));
+  }
+
+  /**
+   * Get seasonal trends (bookings by month)
+   */
+  async getSeasonalTrends() {
+    const currentYear = new Date().getFullYear();
+    const lastYear = currentYear - 1;
+
+    const currentYearData: any[] = await this.prisma.$queryRaw`
+      SELECT 
+        EXTRACT(MONTH FROM "dateTime") as month,
+        COUNT(*) as bookings
+      FROM bookings
+      WHERE EXTRACT(YEAR FROM "dateTime") = ${currentYear}
+        AND status IN ('confirmed', 'completed')
+      GROUP BY month
+      ORDER BY month ASC
+    `;
+
+    const lastYearData: any[] = await this.prisma.$queryRaw`
+      SELECT 
+        EXTRACT(MONTH FROM "dateTime") as month,
+        COUNT(*) as bookings
+      FROM bookings
+      WHERE EXTRACT(YEAR FROM "dateTime") = ${lastYear}
+        AND status IN ('confirmed', 'completed')
+      GROUP BY month
+      ORDER BY month ASC
+    `;
+
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+
+    return months.map((name, index) => {
+      const monthNum = index + 1;
+      const current = currentYearData.find(d => Number(d.month) === monthNum);
+      const last = lastYearData.find(d => Number(d.month) === monthNum);
+
+      return {
+        month: name,
+        currentYear: current ? Number(current.bookings) : 0,
+        lastYear: last ? Number(last.bookings) : 0,
+      };
+    });
+  }
+
+  /**
+   * Calculate customer lifetime value (CLV)
+   */
+  async getCustomerLifetimeValue() {
+    // Get customers with multiple bookings
+    const customers = await this.prisma.customer.findMany({
+      include: {
+        bookings: {
+          where: { status: { in: ['confirmed', 'completed'] } },
+        },
+        _count: { select: { bookings: true } },
+      },
+    });
+
+    // Calculate average bookings per customer
+    const customersWithBookings = customers.filter(c => c._count.bookings > 0);
+    const avgBookingsPerCustomer = customersWithBookings.length > 0
+      ? customersWithBookings.reduce((sum, c) => sum + c._count.bookings, 0) / customersWithBookings.length
+      : 0;
+
+    // Get average booking value
+    const avgBookingValue = await this.getAverageBookingValue();
+
+    // Calculate repeat customer rate
+    const repeatCustomers = customers.filter(c => c._count.bookings > 1).length;
+    const repeatRate = customersWithBookings.length > 0
+      ? (repeatCustomers / customersWithBookings.length) * 100
+      : 0;
+
+    // CLV = Average Booking Value × Average Bookings per Customer
+    const clv = avgBookingValue * avgBookingsPerCustomer;
+
+    return {
+      clv: Math.round(clv),
+      avgBookingsPerCustomer: Math.round(avgBookingsPerCustomer * 10) / 10,
+      avgBookingValue,
+      repeatRate: Math.round(repeatRate * 10) / 10,
+      totalCustomers: customers.length,
+      customersWithBookings: customersWithBookings.length,
+      repeatCustomers,
+    };
+  }
+
+  /**
+   * Get customer metrics (retention, repeat rate, etc.)
+   */
+  async getCustomerMetrics() {
+    const totalCustomers = await this.prisma.customer.count();
+
+    const customersWithBookings = await this.prisma.customer.count({
+      where: { bookings: { some: {} } },
+    });
+
+    // Use raw SQL to count repeat customers (customers with more than 1 booking)
+    const repeatCustomersResult: any[] = await this.prisma.$queryRaw`
+      SELECT COUNT(DISTINCT "customerId") as count
+      FROM (
+        SELECT "customerId", COUNT(*) as booking_count
+        FROM bookings
+        GROUP BY "customerId"
+        HAVING COUNT(*) > 1
+      ) as repeat_customers
+    `;
+    const repeatCustomers = Number(repeatCustomersResult[0]?.count || 0);
+
+    // Get new customers this month
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const newCustomersThisMonth = await this.prisma.customer.count({
+      where: {
+        createdAt: { gte: startOfMonth },
+      },
+    });
+
+    const repeatRate = customersWithBookings > 0
+      ? (repeatCustomers / customersWithBookings) * 100
+      : 0;
+
+    return {
+      totalCustomers,
+      customersWithBookings,
+      repeatCustomers,
+      repeatRate: Math.round(repeatRate * 10) / 10,
+      newCustomersThisMonth,
+    };
+  }
+
+  /**
+   * Get year-over-year growth
+   */
+  async getYearOverYearGrowth() {
+    const currentYear = new Date().getFullYear();
+    const lastYear = currentYear - 1;
+
+    const currentYearBookings = await this.prisma.booking.count({
+      where: {
+        dateTime: {
+          gte: new Date(`${currentYear}-01-01`),
+          lt: new Date(`${currentYear + 1}-01-01`),
+        },
+        status: { in: ['confirmed', 'completed'] },
+      },
+    });
+
+    const lastYearBookings = await this.prisma.booking.count({
+      where: {
+        dateTime: {
+          gte: new Date(`${lastYear}-01-01`),
+          lt: new Date(`${currentYear}-01-01`),
+        },
+        status: { in: ['confirmed', 'completed'] },
+      },
+    });
+
+    const growth = lastYearBookings > 0
+      ? ((currentYearBookings - lastYearBookings) / lastYearBookings) * 100
+      : 0;
+
+    return {
+      currentYear: currentYearBookings,
+      lastYear: lastYearBookings,
+      growth: Math.round(growth * 10) / 10,
+      trend: growth > 0 ? 'up' : growth < 0 ? 'down' : 'stable',
+    };
+  }
+
 
 }

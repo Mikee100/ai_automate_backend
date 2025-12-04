@@ -260,6 +260,7 @@ let WhatsappService = class WhatsappService {
 exports.WhatsappService = WhatsappService;
 exports.WhatsappService = WhatsappService = __decorate([
     (0, common_1.Injectable)(),
+    __param(2, (0, common_1.Inject)((0, common_1.forwardRef)(() => customers_service_1.CustomersService))),
     __param(3, (0, bull_1.InjectQueue)('messageQueue')),
     __metadata("design:paramtypes", [config_1.ConfigService,
         messages_service_1.MessagesService,

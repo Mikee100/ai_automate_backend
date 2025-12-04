@@ -1,10 +1,12 @@
 import { PrismaService } from '../../prisma/prisma.service';
+import { WhatsappService } from '../whatsapp/whatsapp.service';
 export declare class CustomersService {
     private prisma;
-    constructor(prisma: PrismaService);
+    private whatsappService;
+    constructor(prisma: PrismaService, whatsappService: WhatsappService);
     create(data: any): Promise<{
-        name: string;
         id: string;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
         email: string | null;
@@ -19,9 +21,10 @@ export declare class CustomersService {
         tokenResetDate: Date | null;
         totalTokensUsed: number;
     }>;
+    sendPhotoLink(customerId: string, link: string): Promise<any>;
     findByWhatsappId(whatsappId: string): Promise<{
-        name: string;
         id: string;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
         email: string | null;
@@ -37,8 +40,8 @@ export declare class CustomersService {
         totalTokensUsed: number;
     }>;
     findByInstagramId(instagramId: string): Promise<{
-        name: string;
         id: string;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
         email: string | null;
@@ -54,8 +57,8 @@ export declare class CustomersService {
         totalTokensUsed: number;
     }>;
     findByMessengerId(messengerId: string): Promise<{
-        name: string;
         id: string;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
         email: string | null;
@@ -71,8 +74,8 @@ export declare class CustomersService {
         totalTokensUsed: number;
     }>;
     findByEmail(email: string): Promise<{
-        name: string;
         id: string;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
         email: string | null;
@@ -90,7 +93,6 @@ export declare class CustomersService {
     findOne(id: string): Promise<{
         messages: {
             id: string;
-            customerId: string;
             createdAt: Date;
             content: string;
             platform: string;
@@ -99,23 +101,24 @@ export declare class CustomersService {
             handledBy: string | null;
             isResolved: boolean | null;
             isEscalated: boolean | null;
+            customerId: string;
         }[];
         bookings: {
             id: string;
+            createdAt: Date;
+            updatedAt: Date;
             customerId: string;
+            status: string;
             service: string;
             recipientName: string | null;
             recipientPhone: string | null;
-            createdAt: Date;
-            updatedAt: Date;
-            status: string;
             dateTime: Date;
             durationMinutes: number | null;
             googleEventId: string | null;
         }[];
     } & {
-        name: string;
         id: string;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
         email: string | null;
@@ -133,7 +136,6 @@ export declare class CustomersService {
     findById(id: string): Promise<{
         messages: {
             id: string;
-            customerId: string;
             createdAt: Date;
             content: string;
             platform: string;
@@ -142,23 +144,24 @@ export declare class CustomersService {
             handledBy: string | null;
             isResolved: boolean | null;
             isEscalated: boolean | null;
+            customerId: string;
         }[];
         bookings: {
             id: string;
+            createdAt: Date;
+            updatedAt: Date;
             customerId: string;
+            status: string;
             service: string;
             recipientName: string | null;
             recipientPhone: string | null;
-            createdAt: Date;
-            updatedAt: Date;
-            status: string;
             dateTime: Date;
             durationMinutes: number | null;
             googleEventId: string | null;
         }[];
     } & {
-        name: string;
         id: string;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
         email: string | null;
@@ -174,8 +177,8 @@ export declare class CustomersService {
         totalTokensUsed: number;
     }>;
     updatePhone(whatsappId: string, phone: string): Promise<{
-        name: string;
         id: string;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
         email: string | null;
@@ -191,8 +194,8 @@ export declare class CustomersService {
         totalTokensUsed: number;
     }>;
     toggleAiEnabled(customerId: string, enabled: boolean): Promise<{
-        name: string;
         id: string;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
         email: string | null;
@@ -210,7 +213,6 @@ export declare class CustomersService {
     getAll(): Promise<({
         messages: {
             id: string;
-            customerId: string;
             createdAt: Date;
             content: string;
             platform: string;
@@ -219,23 +221,24 @@ export declare class CustomersService {
             handledBy: string | null;
             isResolved: boolean | null;
             isEscalated: boolean | null;
+            customerId: string;
         }[];
         bookings: {
             id: string;
+            createdAt: Date;
+            updatedAt: Date;
             customerId: string;
+            status: string;
             service: string;
             recipientName: string | null;
             recipientPhone: string | null;
-            createdAt: Date;
-            updatedAt: Date;
-            status: string;
             dateTime: Date;
             durationMinutes: number | null;
             googleEventId: string | null;
         }[];
     } & {
-        name: string;
         id: string;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
         email: string | null;
@@ -253,7 +256,6 @@ export declare class CustomersService {
     findAll(): Promise<({
         messages: {
             id: string;
-            customerId: string;
             createdAt: Date;
             content: string;
             platform: string;
@@ -262,23 +264,24 @@ export declare class CustomersService {
             handledBy: string | null;
             isResolved: boolean | null;
             isEscalated: boolean | null;
+            customerId: string;
         }[];
         bookings: {
             id: string;
+            createdAt: Date;
+            updatedAt: Date;
             customerId: string;
+            status: string;
             service: string;
             recipientName: string | null;
             recipientPhone: string | null;
-            createdAt: Date;
-            updatedAt: Date;
-            status: string;
             dateTime: Date;
             durationMinutes: number | null;
             googleEventId: string | null;
         }[];
     } & {
-        name: string;
         id: string;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
         email: string | null;
@@ -294,8 +297,8 @@ export declare class CustomersService {
         totalTokensUsed: number;
     })[]>;
     update(id: string, updateCustomerDto: Partial<any>): Promise<{
-        name: string;
         id: string;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
         email: string | null;
@@ -311,8 +314,8 @@ export declare class CustomersService {
         totalTokensUsed: number;
     }>;
     remove(id: string): Promise<{
-        name: string;
         id: string;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
         email: string | null;
@@ -328,8 +331,8 @@ export declare class CustomersService {
         totalTokensUsed: number;
     }>;
     createWithMessengerId(messengerId: string): Promise<{
-        name: string;
         id: string;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
         email: string | null;
@@ -345,8 +348,8 @@ export declare class CustomersService {
         totalTokensUsed: number;
     }>;
     updateLastInstagramMessageAt(instagramId: string, timestamp: Date): Promise<{
-        name: string;
         id: string;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
         email: string | null;
@@ -361,4 +364,10 @@ export declare class CustomersService {
         tokenResetDate: Date | null;
         totalTokensUsed: number;
     }>;
+    getPhotoLinks(customerId: string): Promise<{
+        id: string;
+        customerId: string;
+        link: string;
+        sentAt: Date;
+    }[]>;
 }

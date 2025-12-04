@@ -4,7 +4,7 @@ import { AnalyticsService } from './analytics.service';
 
 @Controller('analytics')
 export class AnalyticsController {
-  constructor(private readonly analyticsService: AnalyticsService) {}
+  constructor(private readonly analyticsService: AnalyticsService) { }
 
   @Get('whatsapp-sentiment-trend')
   whatsappSentimentTrend() {
@@ -95,12 +95,71 @@ export class AnalyticsController {
   whatsappKeywordTrends() {
     return this.analyticsService.whatsappKeywordTrends();
   }
-    @Get('whatsapp-agent-ai-performance')
+  @Get('whatsapp-agent-ai-performance')
   whatsappAgentAIPerformance() {
     return this.analyticsService.whatsappAgentAIPerformance();
   }
-   @Get('ai-performance-metrics')
+  @Get('ai-performance-metrics')
   aiPerformanceMetrics() {
     return this.analyticsService.aiPerformanceMetrics();
+  }
+
+  /* ========================================
+   * BUSINESS ANALYTICS ENDPOINTS
+   * ======================================== */
+
+  @Get('business-kpis')
+  async getBusinessKPIs() {
+    return this.analyticsService.getBusinessKPIs();
+  }
+
+  @Get('revenue')
+  async getRevenue() {
+    return this.analyticsService.getTotalRevenue();
+  }
+
+  @Get('revenue-by-package')
+  async getRevenueByPackage() {
+    return this.analyticsService.getRevenueByPackage();
+  }
+
+  @Get('monthly-revenue')
+  async getMonthlyRevenue() {
+    return this.analyticsService.getMonthlyRevenue();
+  }
+
+  @Get('conversion-rate')
+  async getConversionRate() {
+    return this.analyticsService.getConversionRate();
+  }
+
+  @Get('popular-packages')
+  async getPopularPackages() {
+    return this.analyticsService.getPopularPackages();
+  }
+
+  @Get('popular-timeslots')
+  async getPopularTimeSlots() {
+    return this.analyticsService.getPopularTimeSlots();
+  }
+
+  @Get('seasonal-trends')
+  async getSeasonalTrends() {
+    return this.analyticsService.getSeasonalTrends();
+  }
+
+  @Get('customer-lifetime-value')
+  async getCustomerLifetimeValue() {
+    return this.analyticsService.getCustomerLifetimeValue();
+  }
+
+  @Get('customer-metrics')
+  async getCustomerMetrics() {
+    return this.analyticsService.getCustomerMetrics();
+  }
+
+  @Get('year-over-year-growth')
+  async getYearOverYearGrowth() {
+    return this.analyticsService.getYearOverYearGrowth();
   }
 }

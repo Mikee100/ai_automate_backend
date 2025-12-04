@@ -8,16 +8,38 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CustomersService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../prisma/prisma.service");
+const whatsapp_service_1 = require("../whatsapp/whatsapp.service");
 let CustomersService = class CustomersService {
-    constructor(prisma) {
+    constructor(prisma, whatsappService) {
         this.prisma = prisma;
+        this.whatsappService = whatsappService;
     }
     async create(data) {
         return this.prisma.customer.create({ data });
+    }
+    async sendPhotoLink(customerId, link) {
+        const customer = await this.findOne(customerId);
+        if (!customer) {
+            throw new common_1.NotFoundException(`Customer with ID ${customerId} not found`);
+        }
+        if (!customer.whatsappId) {
+            throw new common_1.NotFoundException(`Customer with ID ${customerId} does not have a WhatsApp ID.`);
+        }
+        await this.prisma.photoLink.create({
+            data: {
+                link,
+                customerId,
+            },
+        });
+        const message = `Hello! Here are the photos from your recent photoshoot: ${link}. We hope you love them!`;
+        return this.whatsappService.sendMessage(customer.whatsappId, message);
     }
     async findByWhatsappId(whatsappId) {
         return this.prisma.customer.findUnique({
@@ -94,10 +116,18 @@ let CustomersService = class CustomersService {
             data: { lastInstagramMessageAt: timestamp },
         });
     }
+    async getPhotoLinks(customerId) {
+        return this.prisma.photoLink.findMany({
+            where: { customerId },
+            orderBy: { sentAt: 'desc' },
+        });
+    }
 };
 exports.CustomersService = CustomersService;
 exports.CustomersService = CustomersService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __param(1, (0, common_1.Inject)((0, common_1.forwardRef)(() => whatsapp_service_1.WhatsappService))),
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        whatsapp_service_1.WhatsappService])
 ], CustomersService);
 //# sourceMappingURL=customers.service.js.map

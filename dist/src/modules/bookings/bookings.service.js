@@ -72,6 +72,10 @@ let BookingsService = BookingsService_1 = class BookingsService {
             });
             return {
                 message: "I've sent a request to your phone for the deposit. 📲 Once you complete that, your magical session will be officially booked! ✨",
+                depositAmount,
+                packageName: pkg.name,
+                checkoutRequestId: 'simulated_checkout_id',
+                paymentId: 'simulated_payment_id'
             };
         }
         catch (error) {

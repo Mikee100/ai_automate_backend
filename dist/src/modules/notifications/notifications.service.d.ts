@@ -9,10 +9,10 @@ export declare class NotificationsService {
         message: string;
         metadata?: any;
     }): Promise<{
-        message: string;
         id: string;
-        createdAt: Date;
         type: string;
+        createdAt: Date;
+        message: string;
         title: string;
         metadata: import("@prisma/client/runtime/library").JsonValue | null;
         read: boolean;
@@ -24,10 +24,10 @@ export declare class NotificationsService {
         offset?: number;
     }): Promise<{
         notifications: {
-            message: string;
             id: string;
-            createdAt: Date;
             type: string;
+            createdAt: Date;
+            message: string;
             title: string;
             metadata: import("@prisma/client/runtime/library").JsonValue | null;
             read: boolean;
@@ -37,10 +37,10 @@ export declare class NotificationsService {
     }>;
     getUnreadCount(): Promise<number>;
     markAsRead(id: string): Promise<{
-        message: string;
         id: string;
-        createdAt: Date;
         type: string;
+        createdAt: Date;
+        message: string;
         title: string;
         metadata: import("@prisma/client/runtime/library").JsonValue | null;
         read: boolean;

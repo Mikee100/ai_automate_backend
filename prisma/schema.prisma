@@ -32,6 +32,7 @@ model Customer {
   bookingDrafts BookingDraft[]
   escalations Escalation[]
   conversationMetrics ConversationMetrics[]
+  photoLinks PhotoLink[]
 
   @@map("customers")
 }
@@ -58,13 +59,16 @@ model Booking {
   customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   service     String
   dateTime    DateTime
-  status      String   // provisional, confirmed, cancelled
+  status      String   // provisional, confirmed, cancelled, completed
   durationMinutes Int? // duration in minutes for the service
   recipientName String?
   recipientPhone String?
   googleEventId String? @unique // Google Calendar event ID
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  reminders   BookingReminder[]
+  followups   PostShootFollowup[]
 
   @@map("bookings")
 }
@@ -112,6 +116,7 @@ model BookingDraft {
   recipientPhone String?
   isForSomeoneElse Boolean?
   step        String   // current step: service, date, time, name, confirm
+  conflictResolution String? // Tracks user's choice when conflict: 'cancel_existing', 'modify_existing', 'different_time'
   version     Int      @default(1) // For optimistic locking
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -198,6 +203,7 @@ model Escalation {
   customerId String
   customer  Customer @relation(fields: [customerId], references: [id])
   reason    String?
+  description String?
   status    String   @default("OPEN") // OPEN, RESOLVED
   escalationType String @default("manual") // manual, frustration, quota, error
   metadata  Json?    // Store sentiment analysis results and conversation context
@@ -235,4 +241,47 @@ model ConversationMetrics {
   @@index([customerId])
   @@index([timestamp])
   @@index([intent])
+}
+
+model PhotoLink {
+  id         String   @id @default(cuid())
+  link       String
+  sentAt     DateTime @default(now())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@map("photo_links")
+}
+
+model BookingReminder {
+  id           String   @id @default(cuid())
+  bookingId    String
+  booking      Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  type         String   // '48hr', '24hr', 'confirmation'
+  scheduledFor DateTime
+  sentAt       DateTime?
+  status       String   @default("pending") // pending, sent, failed, cancelled
+  messageContent String? // Store the actual message sent
+  createdAt    DateTime @default(now())
+  
+  @@map("booking_reminders")
+  @@index([bookingId])
+  @@index([scheduledFor, status])
+}
+
+model PostShootFollowup {
+  id           String   @id @default(cuid())
+  bookingId    String
+  booking      Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  type         String   // 'delivery', 'review_request', 'upsell'
+  scheduledFor DateTime
+  sentAt       DateTime?
+  status       String   @default("pending") // pending, sent, failed, cancelled
+  metadata     Json?    // Store additional data like review rating, upsell package
+  messageContent String? // Store the actual message sent
+  createdAt    DateTime @default(now())
+  
+  @@map("post_shoot_followups")
+  @@index([bookingId])
+  @@index([scheduledFor, status])
 }

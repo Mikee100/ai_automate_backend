@@ -20,9 +20,43 @@ export class PackageInquiryStrategy implements ResponseStrategy {
             const allPackages = await aiService.getCachedPackages();
             logger.log(`[PACKAGE QUERY] Found ${allPackages?.length || 0} packages in DB`);
 
+            // Helper function to match package names with variations
+            const matchPackage = (msg: string, packageName: string): boolean => {
+                const lowerMsg = msg.toLowerCase();
+                const lowerPkg = packageName.toLowerCase();
+
+                // Exact match or contains
+                if (lowerMsg.includes(lowerPkg)) return true;
+
+                // Handle common variations
+                const variations: { [key: string]: string[] } = {
+                    'standard package': ['standard one', 'standard', 'basic package', 'basic one'],
+                    'executive package': ['executive one', 'executive'],
+                    'gold package': ['gold one', 'gold'],
+                    'platinum package': ['platinum one', 'platinum'],
+                    'vip package': ['vip one', 'vip'],
+                    'vvip package': ['vvip one', 'vvip', 'v vip', 'v-vip'],
+                };
+
+                // Check if any variation matches
+                for (const [canonical, vars] of Object.entries(variations)) {
+                    if (lowerPkg === canonical) {
+                        if (vars.some(v => lowerMsg.includes(v))) return true;
+                    }
+                }
+
+                // Check reverse: if message contains a variation, match to canonical
+                for (const [canonical, vars] of Object.entries(variations)) {
+                    if (vars.some(v => lowerMsg.includes(v))) {
+                        if (lowerPkg === canonical) return true;
+                    }
+                }
+
+                return false;
+            };
+
             // Try to match a package selection in the message
-            const lowerMsg = message.toLowerCase();
-            const matchedPackage = allPackages.find((p: any) => lowerMsg.includes(p.name.toLowerCase()));
+            const matchedPackage = allPackages.find((p: any) => matchPackage(message, p.name));
 
             if (matchedPackage) {
                 // Set the selected package in the booking draft and move to next step
@@ -63,7 +97,7 @@ export class PackageInquiryStrategy implements ResponseStrategy {
                 if (packages.length > 0) {
                     // Check if asking about a specific package (detailed)
                     const specificPackage = packages.find((p: any) =>
-                        lowerMsg.includes(p.name.toLowerCase()) &&
+                        matchPackage(message, p.name) &&
                         /(tell me about|what is|what's|details|include|come with|feature)/i.test(message)
                     );
 

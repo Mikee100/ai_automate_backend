@@ -26,14 +26,14 @@ export declare class PaymentsService {
     constructor(prisma: PrismaService, httpService: HttpService, messagesService: MessagesService, notificationsService: NotificationsService, aiService: AiService, bookingsService: BookingsService, aiQueue: Queue, paymentsQueue: Queue, packagesService: PackagesService);
     getPaymentByCheckoutRequestId(checkoutRequestId: string): Promise<{
         id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        phone: string;
         bookingDraftId: string | null;
         amount: number;
-        phone: string;
         status: string;
         mpesaReceipt: string | null;
         checkoutRequestId: string | null;
-        createdAt: Date;
-        updatedAt: Date;
     }>;
     getAccessToken(): Promise<string>;
     initiateSTKPush(bookingDraftId: string, phone: string, amount: number): Promise<{

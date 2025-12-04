@@ -31,3 +31,10 @@ export declare class BookingCancelledEvent {
     readonly dateTime: Date;
     constructor(bookingId: string, customerId: string, service: string, dateTime: Date);
 }
+export declare class BookingCompletedEvent {
+    readonly bookingId: string;
+    readonly customerId: string;
+    readonly service: string;
+    readonly completedAt: Date;
+    constructor(bookingId: string, customerId: string, service: string, completedAt: Date);
+}

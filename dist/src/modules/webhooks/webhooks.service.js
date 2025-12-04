@@ -106,6 +106,7 @@ let WebhooksService = class WebhooksService {
             const newPhone = phoneMatch[0];
             console.log(`User provided new phone number: ${newPhone}`);
             await this.customersService.updatePhone(from, newPhone);
+            await new Promise(resolve => setTimeout(resolve, 3000));
             const draft = await this.bookingsService.getBookingDraft(customer.id);
             if (draft) {
                 const amount = await this.bookingsService.getDepositForDraft(customer.id) || 2000;

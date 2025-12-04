@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { BookingsService } from '../bookings/bookings.service';
 import { MessagesService } from '../messages/messages.service';
 import { EscalationService } from '../escalation/escalation.service';
+import { CircuitBreakerService } from './services/circuit-breaker.service';
 type HistoryMsg = {
     role: 'user' | 'assistant';
     content: string;
@@ -11,6 +12,7 @@ type HistoryMsg = {
 export declare class AiService {
     private configService;
     private prisma;
+    private circuitBreaker;
     private bookingsService?;
     private messagesService?;
     private escalationService?;
@@ -35,7 +37,7 @@ export declare class AiService {
     private readonly customerCarePhone;
     private readonly customerCareEmail;
     private readonly businessHours;
-    constructor(configService: ConfigService, prisma: PrismaService, bookingsService?: BookingsService, messagesService?: MessagesService, escalationService?: EscalationService, aiQueue?: Queue);
+    constructor(configService: ConfigService, prisma: PrismaService, circuitBreaker: CircuitBreakerService, bookingsService?: BookingsService, messagesService?: MessagesService, escalationService?: EscalationService, aiQueue?: Queue);
     private initPineconeSafely;
     private checkRateLimit;
     private trackTokenUsage;
@@ -53,7 +55,11 @@ export declare class AiService {
         messagesCount: number;
         resolved: boolean;
     }): Promise<void>;
-    private normalizeDateTime;
+    normalizeDateTime(rawDate?: string | null, rawTime?: string | null): {
+        isoUtc: string;
+        dateOnly: string;
+        timeOnly: string;
+    };
     generateEmbedding(text: string): Promise<number[]>;
     retrieveRelevantDocs(query: string, topK?: number): Promise<any>;
     private formatPackageDetails;
@@ -74,9 +80,9 @@ export declare class AiService {
     private generateBookingReply;
     getOrCreateDraft(customerId: string): Promise<{
         id: string;
+        name: string | null;
         createdAt: Date;
         updatedAt: Date;
-        name: string | null;
         customerId: string;
         service: string | null;
         date: string | null;
@@ -86,13 +92,14 @@ export declare class AiService {
         recipientPhone: string | null;
         isForSomeoneElse: boolean | null;
         step: string;
+        conflictResolution: string | null;
         version: number;
     }>;
     mergeIntoDraft(customerId: string, extraction: any): Promise<{
         id: string;
+        name: string | null;
         createdAt: Date;
         updatedAt: Date;
-        name: string | null;
         customerId: string;
         service: string | null;
         date: string | null;
@@ -102,6 +109,7 @@ export declare class AiService {
         recipientPhone: string | null;
         isForSomeoneElse: boolean | null;
         step: string;
+        conflictResolution: string | null;
         version: number;
     }>;
     checkAndCompleteIfConfirmed(draft: any, extraction: any, customerId: string, bookingsService: any): Promise<{
@@ -109,14 +117,18 @@ export declare class AiService {
         error: string;
         message?: undefined;
         suggestions?: undefined;
+        amount?: undefined;
+        packageName?: undefined;
         checkoutRequestId?: undefined;
         paymentId?: undefined;
         missing?: undefined;
     } | {
         action: string;
         message: string;
+        suggestions: string[];
         error?: undefined;
-        suggestions?: undefined;
+        amount?: undefined;
+        packageName?: undefined;
         checkoutRequestId?: undefined;
         paymentId?: undefined;
         missing?: undefined;
@@ -125,12 +137,16 @@ export declare class AiService {
         suggestions: any;
         error?: undefined;
         message?: undefined;
+        amount?: undefined;
+        packageName?: undefined;
         checkoutRequestId?: undefined;
         paymentId?: undefined;
         missing?: undefined;
     } | {
         action: string;
         message: any;
+        amount: any;
+        packageName: any;
         checkoutRequestId: any;
         paymentId: any;
         error?: undefined;
@@ -142,9 +158,12 @@ export declare class AiService {
         error?: undefined;
         message?: undefined;
         suggestions?: undefined;
+        amount?: undefined;
+        packageName?: undefined;
         checkoutRequestId?: undefined;
         paymentId?: undefined;
     }>;
+    confirmCustomerPhone(customerId: string): Promise<boolean>;
     handleConversation(message: string, customerId: string, history?: HistoryMsg[], bookingsService?: any, retryCount?: number): Promise<any>;
     private attemptRecovery;
     private processConversationLogic;

@@ -117,7 +117,9 @@ export class WebhooksService {
       // Update customer's phone
       await this.customersService.updatePhone(from, newPhone);
 
-      // Trigger MPESA deposit prompt
+      // Wait 3 seconds before triggering MPESA deposit prompt
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
       const draft = await this.bookingsService.getBookingDraft(customer.id);
       if (draft) {
         const amount = await this.bookingsService.getDepositForDraft(customer.id) || 2000; // fallback deposit

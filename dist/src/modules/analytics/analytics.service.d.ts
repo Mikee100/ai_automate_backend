@@ -71,16 +71,16 @@ export declare class AnalyticsService {
             score: any;
             comparative: any;
             id: string;
-            createdAt: Date;
             content: string;
+            createdAt: Date;
         }[];
         mostNegative: {
             mood: "positive" | "negative" | "neutral";
             score: any;
             comparative: any;
             id: string;
-            createdAt: Date;
             content: string;
+            createdAt: Date;
         }[];
     }>;
     whatsappKeywordTrends(): Promise<{
@@ -114,5 +114,89 @@ export declare class AnalyticsService {
         negativeSentiment: number;
         periodDays: number;
         lastUpdated: string;
+    }>;
+    getBusinessKPIs(startDate?: Date, endDate?: Date): Promise<{
+        revenue: {
+            total: number;
+            count: number;
+        };
+        avgBookingValue: number;
+        conversionRate: {
+            rate: number;
+            totalCustomers: number;
+            convertedCustomers: number;
+        };
+        popularPackages: {
+            package: string;
+            bookings: number;
+        }[];
+        customerMetrics: {
+            totalCustomers: number;
+            customersWithBookings: number;
+            repeatCustomers: number;
+            repeatRate: number;
+            newCustomersThisMonth: number;
+        };
+        period: {
+            start: Date;
+            end: Date;
+        };
+    }>;
+    getTotalRevenue(startDate?: Date, endDate?: Date): Promise<{
+        total: number;
+        count: number;
+    }>;
+    getAverageBookingValue(startDate?: Date, endDate?: Date): Promise<number>;
+    getRevenueByPackage(startDate?: Date, endDate?: Date): Promise<{
+        package: string;
+        revenue: number;
+        bookings: number;
+        avgValue: number;
+    }[]>;
+    getMonthlyRevenue(months?: number): Promise<{
+        month: any;
+        revenue: number;
+        bookings: number;
+    }[]>;
+    getConversionRate(): Promise<{
+        rate: number;
+        totalCustomers: number;
+        convertedCustomers: number;
+    }>;
+    getPopularPackages(startDate?: Date, endDate?: Date): Promise<{
+        package: string;
+        bookings: number;
+    }[]>;
+    getPopularTimeSlots(): Promise<{
+        hour: number;
+        dayOfWeek: number;
+        count: number;
+    }[]>;
+    getSeasonalTrends(): Promise<{
+        month: string;
+        currentYear: number;
+        lastYear: number;
+    }[]>;
+    getCustomerLifetimeValue(): Promise<{
+        clv: number;
+        avgBookingsPerCustomer: number;
+        avgBookingValue: number;
+        repeatRate: number;
+        totalCustomers: number;
+        customersWithBookings: number;
+        repeatCustomers: number;
+    }>;
+    getCustomerMetrics(): Promise<{
+        totalCustomers: number;
+        customersWithBookings: number;
+        repeatCustomers: number;
+        repeatRate: number;
+        newCustomersThisMonth: number;
+    }>;
+    getYearOverYearGrowth(): Promise<{
+        currentYear: number;
+        lastYear: number;
+        growth: number;
+        trend: string;
     }>;
 }

@@ -26,6 +26,11 @@ export class CustomersController {
     return this.customersService.update(id, updateCustomerDto);
   }
 
+  @Post(':id/send-photo-link')
+  sendPhotoLink(@Param('id') id: string, @Body('link') link: string) {
+    return this.customersService.sendPhotoLink(id, link);
+  }
+
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.customersService.remove(id);
@@ -34,5 +39,10 @@ export class CustomersController {
   @Patch(':id/toggle-ai')
   toggleAi(@Param('id') id: string, @Body('enabled') enabled: boolean) {
     return this.customersService.toggleAiEnabled(id, enabled);
+  }
+
+  @Get(':id/photo-links')
+  getPhotoLinks(@Param('id') id: string) {
+    return this.customersService.getPhotoLinks(id);
   }
 }

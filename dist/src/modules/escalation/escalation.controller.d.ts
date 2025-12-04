@@ -4,8 +4,8 @@ export declare class EscalationController {
     constructor(escalationService: EscalationService);
     getOpenEscalations(): Promise<({
         customer: {
-            name: string;
             id: string;
+            name: string;
             createdAt: Date;
             updatedAt: Date;
             email: string | null;
@@ -22,23 +22,25 @@ export declare class EscalationController {
         };
     } & {
         id: string;
-        customerId: string;
         createdAt: Date;
         updatedAt: Date;
-        status: string;
+        customerId: string;
         metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        status: string;
         reason: string | null;
+        description: string | null;
         escalationType: string;
         sentimentScore: number | null;
     })[]>;
     resolveEscalation(id: string): Promise<{
         id: string;
-        customerId: string;
         createdAt: Date;
         updatedAt: Date;
-        status: string;
+        customerId: string;
         metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        status: string;
         reason: string | null;
+        description: string | null;
         escalationType: string;
         sentimentScore: number | null;
     }>;

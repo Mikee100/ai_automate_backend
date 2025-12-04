@@ -5,31 +5,33 @@ export declare class EscalationService {
     constructor(prisma: PrismaService);
     createEscalation(customerId: string, reason?: string, escalationType?: string, metadata?: any, sentimentScore?: number): Promise<{
         id: string;
-        customerId: string;
         createdAt: Date;
         updatedAt: Date;
-        status: string;
+        customerId: string;
         metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        status: string;
         reason: string | null;
+        description: string | null;
         escalationType: string;
         sentimentScore: number | null;
     }>;
     resolveEscalation(escalationId: string): Promise<{
         id: string;
-        customerId: string;
         createdAt: Date;
         updatedAt: Date;
-        status: string;
+        customerId: string;
         metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        status: string;
         reason: string | null;
+        description: string | null;
         escalationType: string;
         sentimentScore: number | null;
     }>;
     isCustomerEscalated(customerId: string): Promise<boolean>;
     getOpenEscalations(): Promise<({
         customer: {
-            name: string;
             id: string;
+            name: string;
             createdAt: Date;
             updatedAt: Date;
             email: string | null;
@@ -46,12 +48,13 @@ export declare class EscalationService {
         };
     } & {
         id: string;
-        customerId: string;
         createdAt: Date;
         updatedAt: Date;
-        status: string;
+        customerId: string;
         metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        status: string;
         reason: string | null;
+        description: string | null;
         escalationType: string;
         sentimentScore: number | null;
     })[]>;

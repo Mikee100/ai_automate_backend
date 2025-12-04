@@ -87,6 +87,10 @@ export class BookingsService {
 
       return {
         message: "I've sent a request to your phone for the deposit. 📲 Once you complete that, your magical session will be officially booked! ✨",
+        depositAmount,
+        packageName: pkg.name,
+        checkoutRequestId: 'simulated_checkout_id', // In a real app this comes from the payment provider
+        paymentId: 'simulated_payment_id' // In a real app this comes from the payment provider
       };
     } catch (error) {
       this.logger.error(`completeBookingDraft failed for customerId=${customerId}`, error);
