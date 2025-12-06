@@ -33,5 +33,6 @@ async function bootstrap() {
 
   await app.listen(3000);
   console.log('Application started successfully');
+  console.log(JSON.stringify({ message: 'Fiesta House APIs is running 🚀' }));
 }
 bootstrap();

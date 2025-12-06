@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { BullModule } from '@nestjs/bull';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { AppController } from './app.controller';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BookingsModule } from './modules/bookings/bookings.module';
@@ -61,6 +62,7 @@ import { ConversationsModule } from './modules/conversations/conversations.modul
     InvoicesModule,
     ConversationsModule,
   ],
+  controllers: [AppController],
 })
 export class AppModule { }
 
