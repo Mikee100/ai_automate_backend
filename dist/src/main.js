@@ -6,6 +6,8 @@ async function bootstrap() {
     const app = await core_1.NestFactory.create(app_module_1.AppModule);
     app.setGlobalPrefix('api', {
         exclude: [
+            '',
+            '/',
             'webhooks/whatsapp',
             'webhooks/whatsapp/*',
             'webhooks/instagram',
@@ -15,7 +17,16 @@ async function bootstrap() {
         ]
     });
     app.enableCors({
-        origin: ['http://localhost:5173', 'http://localhost:5000', 'http://localhost:8080', 'http://localhost:3001', 'http://localhost:3000'],
+        origin: [
+            'http://localhost:5173',
+            'http://localhost:5000',
+            'http://localhost:8080',
+            'http://localhost:3001',
+            'http://localhost:3000',
+            'https://fiestahouse.vercel.app',
+            'https://fiesta-house-maternity.vercel.app',
+            'https://saas-business.duckdns.org',
+        ],
         credentials: true,
     });
     try {
@@ -28,6 +39,7 @@ async function bootstrap() {
     }
     await app.listen(3000);
     console.log('Application started successfully');
+    console.log(JSON.stringify({ message: 'Fiesta House APIs is running 🚀' }));
 }
 bootstrap();
 //# sourceMappingURL=main.js.map

@@ -7,6 +7,8 @@ async function bootstrap() {
   // Set global prefix for API routes, excluding webhook routes
   app.setGlobalPrefix('api', {
     exclude: [
+      '',
+      '/',
       'webhooks/whatsapp',
       'webhooks/whatsapp/*',
       'webhooks/instagram',
@@ -18,7 +20,16 @@ async function bootstrap() {
 
   // Enable CORS for frontend
   app.enableCors({
-    origin: ['http://localhost:5173','http://localhost:5000', 'http://localhost:8080', 'http://localhost:3001', 'http://localhost:3000'], // Vite dev server and omniconnect-suite
+    origin: [
+      'http://localhost:5173',
+      'http://localhost:5000',
+      'http://localhost:8080',
+      'http://localhost:3001',
+      'http://localhost:3000',
+      'https://fiestahouse.vercel.app',
+      'https://fiesta-house-maternity.vercel.app',
+      'https://fiesta-house.duckdns.org',
+    ], // Vite dev server and omniconnect-suite
     credentials: true,
   });
 

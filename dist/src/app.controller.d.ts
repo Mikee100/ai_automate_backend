@@ -1,3 +1,5 @@
 export declare class AppController {
-    getHello(): string;
+    getHello(): {
+        message: string;
+    };
 }
