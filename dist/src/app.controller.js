@@ -13,7 +13,7 @@ exports.AppController = void 0;
 const common_1 = require("@nestjs/common");
 let AppController = class AppController {
     getHello() {
-        return { message: 'SaaS API is running 🚀' };
+        return { message: 'Fiesta House APIs is running 🚀' };
     }
 };
 exports.AppController = AppController;
