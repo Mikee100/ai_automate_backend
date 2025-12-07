@@ -33,17 +33,17 @@ export declare class ConversationsService {
     getConversationMessages(customerId: string, platform?: string): Promise<{
         id: string;
         createdAt: Date;
-        platform: string;
         content: string;
+        platform: string;
         direction: string;
     }[]>;
     sendReply(customerId: string, message: string, platform: string): Promise<{
         id: string;
         createdAt: Date;
-        platform: string;
-        content: string;
-        direction: string;
         customerId: string;
+        content: string;
+        platform: string;
+        direction: string;
         externalId: string | null;
         handledBy: string | null;
         isResolved: boolean | null;

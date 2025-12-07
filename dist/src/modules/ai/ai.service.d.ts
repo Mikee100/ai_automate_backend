@@ -94,16 +94,16 @@ export declare class AiService {
     private generateBookingReply;
     getOrCreateDraft(customerId: string): Promise<{
         id: string;
-        name: string | null;
         createdAt: Date;
         updatedAt: Date;
+        name: string | null;
         customerId: string;
         service: string | null;
-        recipientName: string | null;
-        recipientPhone: string | null;
         date: string | null;
         time: string | null;
         dateTimeIso: string | null;
+        recipientName: string | null;
+        recipientPhone: string | null;
         isForSomeoneElse: boolean | null;
         step: string;
         conflictResolution: string | null;
@@ -111,16 +111,16 @@ export declare class AiService {
     }>;
     mergeIntoDraft(customerId: string, extraction: any): Promise<{
         id: string;
-        name: string | null;
         createdAt: Date;
         updatedAt: Date;
+        name: string | null;
         customerId: string;
         service: string | null;
-        recipientName: string | null;
-        recipientPhone: string | null;
         date: string | null;
         time: string | null;
         dateTimeIso: string | null;
+        recipientName: string | null;
+        recipientPhone: string | null;
         isForSomeoneElse: boolean | null;
         step: string;
         conflictResolution: string | null;
@@ -181,7 +181,7 @@ export declare class AiService {
     handleConversation(message: string, customerId: string, history?: HistoryMsg[], bookingsService?: any, retryCount?: number, enrichedContext?: any): Promise<any>;
     private attemptRecovery;
     private processConversationLogic;
-    addKnowledge(question: string, answer: string): Promise<void>;
+    addKnowledge(question: string, answer: string, category?: string): Promise<void>;
     processAiRequest(data: {
         question: string;
     }): Promise<{

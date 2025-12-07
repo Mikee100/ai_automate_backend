@@ -1685,15 +1685,36 @@ DO NOT repeat your previous question. Instead:
         });
         return { response: faqResponse, draft: hasDraft ? draft : null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: faqResponse }] };
     }
-    async addKnowledge(question, answer) {
-        await this.prisma.knowledgeBase.create({
-            data: {
-                question,
-                answer,
-                category: 'general',
-                embedding: await this.generateEmbedding(question + ' ' + answer),
-            },
-        });
+    async addKnowledge(question, answer, category = 'general') {
+        try {
+            const existing = await this.prisma.knowledgeBase.findFirst({
+                where: { question },
+            });
+            if (existing) {
+                await this.prisma.knowledgeBase.update({
+                    where: { id: existing.id },
+                    data: {
+                        answer,
+                        category,
+                        embedding: await this.generateEmbedding(question + ' ' + answer),
+                    },
+                });
+            }
+            else {
+                await this.prisma.knowledgeBase.create({
+                    data: {
+                        question,
+                        answer,
+                        category,
+                        embedding: await this.generateEmbedding(question + ' ' + answer),
+                    },
+                });
+            }
+        }
+        catch (err) {
+            this.logger.error(`addKnowledge: Failed to save to DB: ${err.message}`, err);
+            return;
+        }
         if (!this.index) {
             this.logger.debug('addKnowledge: Pinecone index not available, saved to DB only.');
             return;
@@ -1702,7 +1723,7 @@ DO NOT repeat your previous question. Instead:
             await this.index.upsert([{
                     id: `kb-${Date.now()}`,
                     values: await this.generateEmbedding(question + ' ' + answer),
-                    metadata: { question, answer },
+                    metadata: { question, answer, category },
                 }]);
             this.logger.log(`addKnowledge: added to Pinecone: ${question}`);
         }

@@ -20,9 +20,12 @@ let WebhooksController = class WebhooksController {
         this.webhooksService = webhooksService;
     }
     verifyWhatsApp(mode, challenge, token) {
+        console.log('[Webhook] Verifying WhatsApp:', { mode, token, expected: process.env.WHATSAPP_VERIFY_TOKEN });
         if (mode === 'subscribe' && token === process.env.WHATSAPP_VERIFY_TOKEN) {
+            console.log('[Webhook] Verification successful!');
             return challenge;
         }
+        console.log('[Webhook] Verification failed!');
         return 'ERROR';
     }
     handleWhatsApp(body) {

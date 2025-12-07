@@ -1,13 +1,17 @@
 import { Process, Processor } from '@nestjs/bull';
-import { Logger } from '@nestjs/common';
+import { Logger, Inject, forwardRef } from '@nestjs/common';
 import { Job } from 'bull';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PaymentsService } from './payments.service';
 
 @Processor('paymentsQueue')
 export class PaymentsProcessor {
     private readonly logger = new Logger(PaymentsProcessor.name);
 
-    constructor(private readonly prisma: PrismaService) { }
+    constructor(
+        private readonly prisma: PrismaService,
+        @Inject(forwardRef(() => PaymentsService)) private paymentsService: PaymentsService,
+    ) { }
 
     @Process('timeoutPayment')
     async handleTimeoutPayment(job: Job<{ paymentId: string }>) {
@@ -16,6 +20,7 @@ export class PaymentsProcessor {
 
         const payment = await this.prisma.payment.findUnique({
             where: { id: paymentId },
+            include: { bookingDraft: { include: { customer: true } } },
         });
 
         if (!payment) {
@@ -24,11 +29,8 @@ export class PaymentsProcessor {
         }
 
         if (payment.status === 'pending') {
-            await this.prisma.payment.update({
-                where: { id: paymentId },
-                data: { status: 'failed' },
-            });
-            this.logger.log(`Payment ${paymentId} timed out and marked as failed`);
+            this.logger.warn(`Payment ${paymentId} timed out. Marking as failed and notifying user.`);
+            await this.paymentsService.handlePaymentFailure(payment, 'Payment confirmation timed out (no callback received)');
         } else {
             this.logger.debug(`Payment ${paymentId} status is ${payment.status}, skipping timeout`);
         }

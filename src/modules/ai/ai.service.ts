@@ -2155,16 +2155,40 @@ DO NOT repeat your previous question. Instead:
   }
 
   // Legacy / helper methods
-  async addKnowledge(question: string, answer: string) {
+  async addKnowledge(question: string, answer: string, category: string = 'general') {
     // Always write to your DB first (so seeding still persists even if Pinecone fails)
-    await this.prisma.knowledgeBase.create({
-      data: {
-        question,
-        answer,
-        category: 'general',
-        embedding: await this.generateEmbedding(question + ' ' + answer),
-      },
-    });
+    try {
+      // Manual upsert because schema update might fail on hot reload
+      const existing = await this.prisma.knowledgeBase.findFirst({
+        where: { question },
+      });
+
+      if (existing) {
+        // Update existing
+        await this.prisma.knowledgeBase.update({
+          where: { id: existing.id },
+          data: {
+            answer,
+            category,
+            // Re-generate embedding if needed
+            embedding: await this.generateEmbedding(question + ' ' + answer),
+          },
+        });
+      } else {
+        // Create new
+        await this.prisma.knowledgeBase.create({
+          data: {
+            question,
+            answer,
+            category,
+            embedding: await this.generateEmbedding(question + ' ' + answer),
+          },
+        });
+      }
+    } catch (err) {
+      this.logger.error(`addKnowledge: Failed to save to DB: ${err.message}`, err);
+      return;
+    }
 
     // If we have a valid Pinecone index, try to upsert as well.
     if (!this.index) {
@@ -2176,7 +2200,7 @@ DO NOT repeat your previous question. Instead:
       await this.index.upsert([{
         id: `kb-${Date.now()}`,
         values: await this.generateEmbedding(question + ' ' + answer),
-        metadata: { question, answer },
+        metadata: { question, answer, category },
       }]);
       this.logger.log(`addKnowledge: added to Pinecone: ${question}`);
     } catch (err) {

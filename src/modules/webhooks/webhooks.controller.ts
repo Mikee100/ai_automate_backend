@@ -4,19 +4,22 @@ import { WebhooksService } from './webhooks.service';
 
 @Controller('webhooks')
 export class WebhooksController {
-  constructor(private readonly webhooksService: WebhooksService) {}
+  constructor(private readonly webhooksService: WebhooksService) { }
 
   @Get('whatsapp')
   verifyWhatsApp(@Query('hub.mode') mode: string, @Query('hub.challenge') challenge: string, @Query('hub.verify_token') token: string) {
+    console.log('[Webhook] Verifying WhatsApp:', { mode, token, expected: process.env.WHATSAPP_VERIFY_TOKEN });
     if (mode === 'subscribe' && token === process.env.WHATSAPP_VERIFY_TOKEN) {
+      console.log('[Webhook] Verification successful!');
       return challenge;
     }
+    console.log('[Webhook] Verification failed!');
     return 'ERROR';
   }
 
   @Post('whatsapp')
   handleWhatsApp(@Body() body: any) {
-    
+
     return this.webhooksService.handleWhatsAppWebhook(body);
   }
 
@@ -42,11 +45,11 @@ export class WebhooksController {
     return this.webhooksService.handleTelegramWebhook(body);
   }
 
-    @Get('facebook')
-verifyFacebook(@Query('hub.mode') mode: string, @Query('hub.challenge') challenge: string, @Query('hub.verify_token') token: string) {
-  if (mode === 'subscribe' && token === process.env.FB_VERIFY_TOKEN) {
-    return challenge; // Facebook expects plain text of the challenge
+  @Get('facebook')
+  verifyFacebook(@Query('hub.mode') mode: string, @Query('hub.challenge') challenge: string, @Query('hub.verify_token') token: string) {
+    if (mode === 'subscribe' && token === process.env.FB_VERIFY_TOKEN) {
+      return challenge; // Facebook expects plain text of the challenge
+    }
+    throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
   }
-  throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
-}
 }

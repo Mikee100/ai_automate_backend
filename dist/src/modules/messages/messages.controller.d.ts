@@ -6,10 +6,10 @@ export declare class MessagesController {
     create(createMessageDto: CreateMessageDto): Promise<{
         id: string;
         createdAt: Date;
+        customerId: string;
         content: string;
         platform: string;
         direction: string;
-        customerId: string;
         externalId: string | null;
         handledBy: string | null;
         isResolved: boolean | null;
@@ -18,9 +18,11 @@ export declare class MessagesController {
     findAll(): Promise<({
         customer: {
             id: string;
+            phone: string | null;
+            createdAt: Date;
+            updatedAt: Date;
             name: string;
             email: string | null;
-            phone: string | null;
             whatsappId: string | null;
             instagramId: string | null;
             messengerId: string | null;
@@ -31,16 +33,14 @@ export declare class MessagesController {
             dailyTokenUsage: number;
             tokenResetDate: Date | null;
             totalTokensUsed: number;
-            createdAt: Date;
-            updatedAt: Date;
         };
     } & {
         id: string;
         createdAt: Date;
+        customerId: string;
         content: string;
         platform: string;
         direction: string;
-        customerId: string;
         externalId: string | null;
         handledBy: string | null;
         isResolved: boolean | null;
@@ -49,9 +49,11 @@ export declare class MessagesController {
     findByCustomer(customerId: string): Promise<({
         customer: {
             id: string;
+            phone: string | null;
+            createdAt: Date;
+            updatedAt: Date;
             name: string;
             email: string | null;
-            phone: string | null;
             whatsappId: string | null;
             instagramId: string | null;
             messengerId: string | null;
@@ -62,16 +64,14 @@ export declare class MessagesController {
             dailyTokenUsage: number;
             tokenResetDate: Date | null;
             totalTokensUsed: number;
-            createdAt: Date;
-            updatedAt: Date;
         };
     } & {
         id: string;
         createdAt: Date;
+        customerId: string;
         content: string;
         platform: string;
         direction: string;
-        customerId: string;
         externalId: string | null;
         handledBy: string | null;
         isResolved: boolean | null;

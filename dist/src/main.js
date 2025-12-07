@@ -25,7 +25,7 @@ async function bootstrap() {
             'http://localhost:3000',
             'https://fiestahouse.vercel.app',
             'https://fiesta-house-maternity.vercel.app',
-            'https://saas-business.duckdns.org',
+            'https://fiesta-house.duckdns.org',
         ],
         credentials: true,
     });

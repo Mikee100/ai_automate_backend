@@ -27,6 +27,7 @@ import { RemindersModule } from './modules/reminders/reminders.module';
 import { FollowupsModule } from './modules/followups/followups.module';
 import { InvoicesModule } from './modules/invoices/invoices.module';
 import { ConversationsModule } from './modules/conversations/conversations.module';
+import { SeedingModule } from './modules/seeding/seeding.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { ConversationsModule } from './modules/conversations/conversations.modul
     FollowupsModule,
     InvoicesModule,
     ConversationsModule,
+    SeedingModule,
   ],
   controllers: [AppController],
 })

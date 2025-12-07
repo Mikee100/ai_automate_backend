@@ -91,7 +91,7 @@ model Booking {
 
 model KnowledgeBase {
   id        String   @id @default(cuid())
-  question  String
+  question  String   @unique
   answer    String
   category  String
   embedding Float[]  // vector for Pinecone

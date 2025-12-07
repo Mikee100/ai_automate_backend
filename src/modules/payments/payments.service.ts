@@ -398,7 +398,7 @@ export class PaymentsService {
     this.logger.log(`Payment ${payment.id} confirmed: ${receipt}`);
   }
 
-  private async handlePaymentFailure(payment: any, reason: string, resultCode?: number | string) {
+  async handlePaymentFailure(payment: any, reason: string, resultCode?: number | string) {
     await this.prisma.payment.update({
       where: { id: payment.id },
       data: { status: 'failed' },

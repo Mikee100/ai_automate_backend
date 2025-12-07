@@ -13,24 +13,26 @@ export declare class FollowupsService {
     private addWorkingDays;
     createFollowup(data: CreateFollowupDto): Promise<{
         id: string;
+        bookingId: string;
+        status: string;
         createdAt: Date;
         updatedAt: Date;
-        status: string;
-        sentAt: Date | null;
-        metadata: import("@prisma/client/runtime/library").JsonValue | null;
         type: string;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        sentAt: Date | null;
         scheduledFor: Date;
         messageContent: string | null;
-        bookingId: string;
     }>;
     getFollowups(filters: FollowupFilterDto): Promise<{
         followups: ({
             booking: {
                 customer: {
                     id: string;
+                    phone: string | null;
+                    createdAt: Date;
+                    updatedAt: Date;
                     name: string;
                     email: string | null;
-                    phone: string | null;
                     whatsappId: string | null;
                     instagramId: string | null;
                     messengerId: string | null;
@@ -41,33 +43,31 @@ export declare class FollowupsService {
                     dailyTokenUsage: number;
                     tokenResetDate: Date | null;
                     totalTokensUsed: number;
-                    createdAt: Date;
-                    updatedAt: Date;
                 };
             } & {
                 id: string;
+                status: string;
                 createdAt: Date;
                 updatedAt: Date;
                 customerId: string;
                 service: string;
-                dateTime: Date;
-                status: string;
-                durationMinutes: number | null;
                 recipientName: string | null;
                 recipientPhone: string | null;
+                dateTime: Date;
+                durationMinutes: number | null;
                 googleEventId: string | null;
             };
         } & {
             id: string;
+            bookingId: string;
+            status: string;
             createdAt: Date;
             updatedAt: Date;
-            status: string;
-            sentAt: Date | null;
-            metadata: import("@prisma/client/runtime/library").JsonValue | null;
             type: string;
+            metadata: import("@prisma/client/runtime/library").JsonValue | null;
+            sentAt: Date | null;
             scheduledFor: Date;
             messageContent: string | null;
-            bookingId: string;
         })[];
         total: number;
     }>;
@@ -75,9 +75,11 @@ export declare class FollowupsService {
         booking: {
             customer: {
                 id: string;
+                phone: string | null;
+                createdAt: Date;
+                updatedAt: Date;
                 name: string;
                 email: string | null;
-                phone: string | null;
                 whatsappId: string | null;
                 instagramId: string | null;
                 messengerId: string | null;
@@ -88,54 +90,54 @@ export declare class FollowupsService {
                 dailyTokenUsage: number;
                 tokenResetDate: Date | null;
                 totalTokensUsed: number;
-                createdAt: Date;
-                updatedAt: Date;
             };
         } & {
             id: string;
+            status: string;
             createdAt: Date;
             updatedAt: Date;
             customerId: string;
             service: string;
-            dateTime: Date;
-            status: string;
-            durationMinutes: number | null;
             recipientName: string | null;
             recipientPhone: string | null;
+            dateTime: Date;
+            durationMinutes: number | null;
             googleEventId: string | null;
         };
     } & {
         id: string;
+        bookingId: string;
+        status: string;
         createdAt: Date;
         updatedAt: Date;
-        status: string;
-        sentAt: Date | null;
-        metadata: import("@prisma/client/runtime/library").JsonValue | null;
         type: string;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        sentAt: Date | null;
         scheduledFor: Date;
         messageContent: string | null;
-        bookingId: string;
     }>;
     updateFollowup(id: string, data: UpdateFollowupDto): Promise<{
         id: string;
+        bookingId: string;
+        status: string;
         createdAt: Date;
         updatedAt: Date;
-        status: string;
-        sentAt: Date | null;
-        metadata: import("@prisma/client/runtime/library").JsonValue | null;
         type: string;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        sentAt: Date | null;
         scheduledFor: Date;
         messageContent: string | null;
-        bookingId: string;
     }>;
     cancelFollowupsForBooking(bookingId: string): Promise<import(".prisma/client").Prisma.BatchPayload>;
     sendFollowup(followupId: string): Promise<{
         booking: {
             customer: {
                 id: string;
+                phone: string | null;
+                createdAt: Date;
+                updatedAt: Date;
                 name: string;
                 email: string | null;
-                phone: string | null;
                 whatsappId: string | null;
                 instagramId: string | null;
                 messengerId: string | null;
@@ -146,45 +148,43 @@ export declare class FollowupsService {
                 dailyTokenUsage: number;
                 tokenResetDate: Date | null;
                 totalTokensUsed: number;
-                createdAt: Date;
-                updatedAt: Date;
             };
         } & {
             id: string;
+            status: string;
             createdAt: Date;
             updatedAt: Date;
             customerId: string;
             service: string;
-            dateTime: Date;
-            status: string;
-            durationMinutes: number | null;
             recipientName: string | null;
             recipientPhone: string | null;
+            dateTime: Date;
+            durationMinutes: number | null;
             googleEventId: string | null;
         };
     } & {
         id: string;
+        bookingId: string;
+        status: string;
         createdAt: Date;
         updatedAt: Date;
-        status: string;
-        sentAt: Date | null;
-        metadata: import("@prisma/client/runtime/library").JsonValue | null;
         type: string;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        sentAt: Date | null;
         scheduledFor: Date;
         messageContent: string | null;
-        bookingId: string;
     }>;
     recordResponse(followupId: string, response: RecordFollowupResponseDto): Promise<{
         id: string;
+        bookingId: string;
+        status: string;
         createdAt: Date;
         updatedAt: Date;
-        status: string;
-        sentAt: Date | null;
-        metadata: import("@prisma/client/runtime/library").JsonValue | null;
         type: string;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        sentAt: Date | null;
         scheduledFor: Date;
         messageContent: string | null;
-        bookingId: string;
     }>;
     private generateFollowupMessage;
     getFollowupAnalytics(): Promise<{
@@ -200,9 +200,11 @@ export declare class FollowupsService {
         booking: {
             customer: {
                 id: string;
+                phone: string | null;
+                createdAt: Date;
+                updatedAt: Date;
                 name: string;
                 email: string | null;
-                phone: string | null;
                 whatsappId: string | null;
                 instagramId: string | null;
                 messengerId: string | null;
@@ -213,32 +215,30 @@ export declare class FollowupsService {
                 dailyTokenUsage: number;
                 tokenResetDate: Date | null;
                 totalTokensUsed: number;
-                createdAt: Date;
-                updatedAt: Date;
             };
         } & {
             id: string;
+            status: string;
             createdAt: Date;
             updatedAt: Date;
             customerId: string;
             service: string;
-            dateTime: Date;
-            status: string;
-            durationMinutes: number | null;
             recipientName: string | null;
             recipientPhone: string | null;
+            dateTime: Date;
+            durationMinutes: number | null;
             googleEventId: string | null;
         };
     } & {
         id: string;
+        bookingId: string;
+        status: string;
         createdAt: Date;
         updatedAt: Date;
-        status: string;
-        sentAt: Date | null;
-        metadata: import("@prisma/client/runtime/library").JsonValue | null;
         type: string;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        sentAt: Date | null;
         scheduledFor: Date;
         messageContent: string | null;
-        bookingId: string;
     })[]>;
 }
