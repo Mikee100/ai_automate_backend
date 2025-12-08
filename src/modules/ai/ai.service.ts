@@ -371,6 +371,36 @@ export class AiService {
       .slice(0, 2000); // Max message length
   }
 
+  /* --------------------------
+   * Retry Logic for Database Operations
+   * -------------------------- */
+  private async retryOperation<T>(
+    operation: () => Promise<T>,
+    operationName: string,
+    maxRetries: number = 3,
+    baseDelay: number = 1000
+  ): Promise<T> {
+    let lastError: any;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error) {
+        lastError = error;
+        this.logger.warn(`${operationName} failed on attempt ${attempt}/${maxRetries}:`, error);
+
+        if (attempt < maxRetries) {
+          const delay = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff
+          this.logger.debug(`Retrying ${operationName} in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+
+    this.logger.error(`${operationName} failed after ${maxRetries} attempts:`, lastError);
+    throw lastError;
+  }
+
   private validatePhoneNumber(phone: string): boolean {
     // Kenyan format: 07XX XXX XXX or +2547XX XXX XXX
     const kenyanPattern = /^(\+254|0)[17]\d{8}$/;
@@ -680,7 +710,8 @@ CRITICAL INSTRUCTIONS:
 - Do NOT invent, hallucinate, or add any information not in the contexts
 - **Business Policies (Always Enforce):**
   * Remaining balance is due after the shoot
-  * Edited photos are delivered in 10 working days
+  * Edited photos are delivered in 10 working days (never say 'two weeks' or any other time frame)
+  * You must always say '10 working days' for photo delivery, and NEVER say 'two weeks', '14 days', or any other duration
   * Reschedules must be made at least 72 hours before the shoot time to avoid forfeiting the session fee
   * Cancellations or changes made within 72 hours of the shoot are non-refundable, and the session fee will be forfeited
 - When asked about packages:
@@ -689,7 +720,9 @@ CRITICAL INSTRUCTIONS:
   * If asked about a feature, check which actual packages in the context have it
   * If no packages match, say "Let me check our current packages for you" rather than inventing
 - When describing packages, include ALL features from context: images, outfits, makeup, styling, balloon backdrop, wigs, photobooks, mounts
-- If no relevant context provided, be helpful: "That's a great question! Let me find out for you" or "I can connect you with our team for that specific detail"`,
+- If no relevant context provided, be helpful: "That's a great question! Let me find out for you" or "I can connect you with our team for that specific detail"
+
+IMPORTANT: If you ever mention the delivery time for edited photos, you MUST say '10 working days' and NEVER say 'two weeks', '14 days', or any other time frame. If you are unsure, say '10 working days'.`,
           },
         ];
 
@@ -755,6 +788,11 @@ CRITICAL INSTRUCTIONS:
         prediction += `\n\nHere are some examples from our portfolio:`;
         // Only show up to 6 images
         mediaUrls = mediaUrls.slice(0, 6);
+      }
+
+      // Post-process: replace 'two weeks' or '14 days' with '10 working days'
+      if (typeof prediction === 'string') {
+        prediction = prediction.replace(/two weeks|14 days/gi, '10 working days');
       }
 
       // Return both text and mediaUrls for integration
@@ -1222,11 +1260,14 @@ DO NOT repeat your previous question. Instead:
       }
 
       try {
-        this.logger.debug('Attempting to initiate deposit for booking draft for customerId:', customerId);
-        const result = await bookingsService.completeBookingDraft(customerId, dateObj);
-        this.logger.debug('Deposit initiated successfully:', JSON.stringify(result, null, 2));
+        const result = await this.retryOperation(
+          () => bookingsService.completeBookingDraft(customerId, dateObj),
+          'completeBookingDraft',
+          2, // maxRetries: initial attempt + 1 retry
+          1000 // baseDelay
+        ) as any; // Type assertion since we know the structure
         return {
-          action: 'payment_initiated', // Changed from deposit_initiated to match Strategy
+          action: 'payment_initiated',
           message: result.message,
           amount: result.depositAmount,
           packageName: result.packageName,
@@ -1234,8 +1275,13 @@ DO NOT repeat your previous question. Instead:
           paymentId: result.paymentId
         };
       } catch (err) {
-        this.logger.error('Deposit initiation failed in checkAndCompleteIfConfirmed', err);
-        return { action: 'failed', error: 'There was an issue initiating payment. Please try again or contact support.' };
+        this.logger.error('All retries for completeBookingDraft failed, cancelling booking draft', err);
+        // Delete the booking draft
+        await this.prisma.bookingDraft.delete({ where: { customerId } });
+        return {
+          action: 'cancelled',
+          message: 'We encountered repeated issues processing your booking. Your draft has been cancelled to avoid further problems. Please try booking again later or contact support if the issue persists.'
+        };
       }
     } else {
       this.logger.warn('Booking draft incomplete; missing fields:', missing);
@@ -1370,7 +1416,7 @@ DO NOT repeat your previous question. Instead:
     }
 
     let draft = await this.prisma.bookingDraft.findUnique({ where: { customerId } });
-    const hasDraft = !!draft;
+    let hasDraft = !!draft;
 
 
     // ------------------------------------
@@ -1609,6 +1655,8 @@ DO NOT repeat your previous question. Instead:
       /(delete|clear).*(everything|all|booking|draft)/i,
       /(start|begin).*(over|fresh|again|new)/i,
       /^(forget it|never ?mind|cancel)$/i,
+      /(stop|quit|end).*(booking|appointment|session|it)/i,
+      /(i changed my mind|never mind|forget about it|on second thought)/i,
     ];
     const isCancelIntent = cancelPatterns.some(pattern => pattern.test(message));
 
@@ -2173,6 +2221,14 @@ DO NOT repeat your previous question. Instead:
           this.logger.warn('intent classifier fallback failed', e);
         }
       }
+    }
+
+    // Cancel existing unpaid drafts when starting new booking
+    if (intent === 'booking' && hasDraft) {
+      await this.prisma.bookingDraft.delete({ where: { customerId } });
+      draft = null;
+      hasDraft = false;
+      this.logger.log(`[NEW BOOKING] Cancelled existing unpaid draft for customer ${customerId} when starting new booking`);
     }
 
     // Route flows for non-package queries (packages already handled above)

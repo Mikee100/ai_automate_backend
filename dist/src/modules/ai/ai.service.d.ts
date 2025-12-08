@@ -61,6 +61,7 @@ export declare class AiService {
     private detectFrustration;
     getCachedPackages(): Promise<any[]>;
     private sanitizeInput;
+    private retryOperation;
     private validatePhoneNumber;
     private checkBookingConflicts;
     trackConversationMetrics(customerId: string, metrics: {
@@ -94,39 +95,39 @@ export declare class AiService {
     private generateBookingReply;
     getOrCreateDraft(customerId: string): Promise<{
         id: string;
-        name: string | null;
-        createdAt: Date;
-        updatedAt: Date;
         customerId: string;
         service: string | null;
-        recipientName: string | null;
-        recipientPhone: string | null;
         date: string | null;
         time: string | null;
         dateTimeIso: string | null;
+        name: string | null;
+        recipientName: string | null;
+        recipientPhone: string | null;
         isForSomeoneElse: boolean | null;
         step: string;
         conflictResolution: string | null;
         bookingId: string | null;
         version: number;
+        createdAt: Date;
+        updatedAt: Date;
     }>;
     mergeIntoDraft(customerId: string, extraction: any): Promise<{
         id: string;
-        name: string | null;
-        createdAt: Date;
-        updatedAt: Date;
         customerId: string;
         service: string | null;
-        recipientName: string | null;
-        recipientPhone: string | null;
         date: string | null;
         time: string | null;
         dateTimeIso: string | null;
+        name: string | null;
+        recipientName: string | null;
+        recipientPhone: string | null;
         isForSomeoneElse: boolean | null;
         step: string;
         conflictResolution: string | null;
         bookingId: string | null;
         version: number;
+        createdAt: Date;
+        updatedAt: Date;
     }>;
     checkAndCompleteIfConfirmed(draft: any, extraction: any, customerId: string, bookingsService: any): Promise<{
         action: string;
@@ -167,6 +168,16 @@ export declare class AiService {
         paymentId: any;
         error?: undefined;
         suggestions?: undefined;
+        missing?: undefined;
+    } | {
+        action: string;
+        message: string;
+        error?: undefined;
+        suggestions?: undefined;
+        amount?: undefined;
+        packageName?: undefined;
+        checkoutRequestId?: undefined;
+        paymentId?: undefined;
         missing?: undefined;
     } | {
         action: string;

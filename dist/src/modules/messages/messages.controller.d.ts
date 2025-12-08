@@ -5,6 +5,7 @@ export declare class MessagesController {
     constructor(messagesService: MessagesService);
     create(createMessageDto: CreateMessageDto): Promise<{
         id: string;
+        customerId: string;
         createdAt: Date;
         content: string;
         platform: string;
@@ -13,7 +14,6 @@ export declare class MessagesController {
         handledBy: string | null;
         isResolved: boolean | null;
         isEscalated: boolean | null;
-        customerId: string;
     }>;
     findAll(): Promise<({
         customer: {
@@ -21,11 +21,11 @@ export declare class MessagesController {
             name: string;
             createdAt: Date;
             updatedAt: Date;
+            phone: string | null;
             email: string | null;
             whatsappId: string | null;
             instagramId: string | null;
             messengerId: string | null;
-            phone: string | null;
             aiEnabled: boolean;
             isAiPaused: boolean;
             lastInstagramMessageAt: Date | null;
@@ -36,6 +36,7 @@ export declare class MessagesController {
         };
     } & {
         id: string;
+        customerId: string;
         createdAt: Date;
         content: string;
         platform: string;
@@ -44,7 +45,6 @@ export declare class MessagesController {
         handledBy: string | null;
         isResolved: boolean | null;
         isEscalated: boolean | null;
-        customerId: string;
     })[]>;
     findByCustomer(customerId: string): Promise<({
         customer: {
@@ -52,11 +52,11 @@ export declare class MessagesController {
             name: string;
             createdAt: Date;
             updatedAt: Date;
+            phone: string | null;
             email: string | null;
             whatsappId: string | null;
             instagramId: string | null;
             messengerId: string | null;
-            phone: string | null;
             aiEnabled: boolean;
             isAiPaused: boolean;
             lastInstagramMessageAt: Date | null;
@@ -67,6 +67,7 @@ export declare class MessagesController {
         };
     } & {
         id: string;
+        customerId: string;
         createdAt: Date;
         content: string;
         platform: string;
@@ -75,6 +76,5 @@ export declare class MessagesController {
         handledBy: string | null;
         isResolved: boolean | null;
         isEscalated: boolean | null;
-        customerId: string;
     })[]>;
 }

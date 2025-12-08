@@ -239,6 +239,25 @@ let AiService = AiService_1 = class AiService {
             .trim()
             .slice(0, 2000);
     }
+    async retryOperation(operation, operationName, maxRetries = 3, baseDelay = 1000) {
+        let lastError;
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                return await operation();
+            }
+            catch (error) {
+                lastError = error;
+                this.logger.warn(`${operationName} failed on attempt ${attempt}/${maxRetries}:`, error);
+                if (attempt < maxRetries) {
+                    const delay = baseDelay * Math.pow(2, attempt - 1);
+                    this.logger.debug(`Retrying ${operationName} in ${delay}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+        this.logger.error(`${operationName} failed after ${maxRetries} attempts:`, lastError);
+        throw lastError;
+    }
     validatePhoneNumber(phone) {
         const kenyanPattern = /^(\+254|0)[17]\d{8}$/;
         return kenyanPattern.test(phone.replace(/\s/g, ''));
@@ -489,7 +508,8 @@ CRITICAL INSTRUCTIONS:
 - Do NOT invent, hallucinate, or add any information not in the contexts
 - **Business Policies (Always Enforce):**
   * Remaining balance is due after the shoot
-  * Edited photos are delivered in 10 working days
+  * Edited photos are delivered in 10 working days (never say 'two weeks' or any other time frame)
+  * You must always say '10 working days' for photo delivery, and NEVER say 'two weeks', '14 days', or any other duration
   * Reschedules must be made at least 72 hours before the shoot time to avoid forfeiting the session fee
   * Cancellations or changes made within 72 hours of the shoot are non-refundable, and the session fee will be forfeited
 - When asked about packages:
@@ -498,7 +518,9 @@ CRITICAL INSTRUCTIONS:
   * If asked about a feature, check which actual packages in the context have it
   * If no packages match, say "Let me check our current packages for you" rather than inventing
 - When describing packages, include ALL features from context: images, outfits, makeup, styling, balloon backdrop, wigs, photobooks, mounts
-- If no relevant context provided, be helpful: "That's a great question! Let me find out for you" or "I can connect you with our team for that specific detail"`,
+- If no relevant context provided, be helpful: "That's a great question! Let me find out for you" or "I can connect you with our team for that specific detail"
+
+IMPORTANT: If you ever mention the delivery time for edited photos, you MUST say '10 working days' and NEVER say 'two weeks', '14 days', or any other time frame. If you are unsure, say '10 working days'.`,
                     },
                 ];
                 if (/(package|photobook|makeup|styling|balloon|wig|outfit|image|photo|shoot|session|include|feature|come with|have)/i.test(question)) {
@@ -550,6 +572,9 @@ CRITICAL INSTRUCTIONS:
                 mediaUrls = [...new Set(mediaUrls)];
                 prediction += `\n\nHere are some examples from our portfolio:`;
                 mediaUrls = mediaUrls.slice(0, 6);
+            }
+            if (typeof prediction === 'string') {
+                prediction = prediction.replace(/two weeks|14 days/gi, '10 working days');
             }
             return { text: prediction, mediaUrls };
         }
@@ -971,9 +996,7 @@ DO NOT repeat your previous question. Instead:
                 return { action: 'unavailable', suggestions: avail.suggestions || [] };
             }
             try {
-                this.logger.debug('Attempting to initiate deposit for booking draft for customerId:', customerId);
-                const result = await bookingsService.completeBookingDraft(customerId, dateObj);
-                this.logger.debug('Deposit initiated successfully:', JSON.stringify(result, null, 2));
+                const result = await this.retryOperation(() => bookingsService.completeBookingDraft(customerId, dateObj), 'completeBookingDraft', 2, 1000);
                 return {
                     action: 'payment_initiated',
                     message: result.message,
@@ -984,8 +1007,12 @@ DO NOT repeat your previous question. Instead:
                 };
             }
             catch (err) {
-                this.logger.error('Deposit initiation failed in checkAndCompleteIfConfirmed', err);
-                return { action: 'failed', error: 'There was an issue initiating payment. Please try again or contact support.' };
+                this.logger.error('All retries for completeBookingDraft failed, cancelling booking draft', err);
+                await this.prisma.bookingDraft.delete({ where: { customerId } });
+                return {
+                    action: 'cancelled',
+                    message: 'We encountered repeated issues processing your booking. Your draft has been cancelled to avoid further problems. Please try booking again later or contact support if the issue persists.'
+                };
             }
         }
         else {
@@ -1077,7 +1104,7 @@ DO NOT repeat your previous question. Instead:
             return { response: escalationMsg, draft: null, updatedHistory: [...history, { role: 'user', content: message }, { role: 'assistant', content: escalationMsg }] };
         }
         let draft = await this.prisma.bookingDraft.findUnique({ where: { customerId } });
-        const hasDraft = !!draft;
+        let hasDraft = !!draft;
         const lower = (message || '').toLowerCase();
         const greetingKeywords = ['hi', 'hello', 'hey', 'greetings', 'hallo', 'habari', 'good morning', 'good afternoon', 'good evening'];
         const cleanMsg = lower.replace(/[^\w\s]/g, '').trim();
@@ -1269,6 +1296,8 @@ DO NOT repeat your previous question. Instead:
             /(delete|clear).*(everything|all|booking|draft)/i,
             /(start|begin).*(over|fresh|again|new)/i,
             /^(forget it|never ?mind|cancel)$/i,
+            /(stop|quit|end).*(booking|appointment|session|it)/i,
+            /(i changed my mind|never mind|forget about it|on second thought)/i,
         ];
         const isCancelIntent = cancelPatterns.some(pattern => pattern.test(message));
         if (isCancelIntent) {
@@ -1713,6 +1742,12 @@ DO NOT repeat your previous question. Instead:
                     this.logger.warn('intent classifier fallback failed', e);
                 }
             }
+        }
+        if (intent === 'booking' && hasDraft) {
+            await this.prisma.bookingDraft.delete({ where: { customerId } });
+            draft = null;
+            hasDraft = false;
+            this.logger.log(`[NEW BOOKING] Cancelled existing unpaid draft for customer ${customerId} when starting new booking`);
         }
         if (intent === 'faq' || intent === 'other') {
             const reply = await this.answerFaq(message, history, undefined, customerId, enrichedContext);

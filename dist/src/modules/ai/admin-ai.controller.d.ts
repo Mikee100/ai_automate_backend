@@ -167,6 +167,7 @@ export declare class AdminAiController {
         feedback: {
             id: string;
             createdAt: Date;
+            predictionId: number;
             thumbsUp: boolean | null;
             rating: number | null;
             comment: string | null;
@@ -174,7 +175,6 @@ export declare class AdminAiController {
             wasAccurate: boolean | null;
             wasEmpathetic: boolean | null;
             improvementSuggestion: string | null;
-            predictionId: number;
         };
         error?: undefined;
     }>;
@@ -243,11 +243,11 @@ export declare class AdminAiController {
         success: boolean;
         outreach: {
             id: string;
-            type: string;
+            customerId: string;
             createdAt: Date;
             updatedAt: Date;
-            customerId: string;
             status: string;
+            type: string;
             metadata: import("@prisma/client/runtime/library").JsonValue | null;
             sentAt: Date | null;
             scheduledFor: Date;

@@ -13,11 +13,11 @@ export declare class FollowupsService {
     private addWorkingDays;
     createFollowup(data: CreateFollowupDto): Promise<{
         id: string;
-        type: string;
+        bookingId: string;
         createdAt: Date;
         updatedAt: Date;
         status: string;
-        bookingId: string;
+        type: string;
         metadata: import("@prisma/client/runtime/library").JsonValue | null;
         sentAt: Date | null;
         scheduledFor: Date;
@@ -31,11 +31,11 @@ export declare class FollowupsService {
                     name: string;
                     createdAt: Date;
                     updatedAt: Date;
+                    phone: string | null;
                     email: string | null;
                     whatsappId: string | null;
                     instagramId: string | null;
                     messengerId: string | null;
-                    phone: string | null;
                     aiEnabled: boolean;
                     isAiPaused: boolean;
                     lastInstagramMessageAt: Date | null;
@@ -46,24 +46,24 @@ export declare class FollowupsService {
                 };
             } & {
                 id: string;
-                createdAt: Date;
-                updatedAt: Date;
                 customerId: string;
                 service: string;
-                dateTime: Date;
-                status: string;
-                durationMinutes: number | null;
                 recipientName: string | null;
                 recipientPhone: string | null;
+                createdAt: Date;
+                updatedAt: Date;
+                status: string;
+                dateTime: Date;
+                durationMinutes: number | null;
                 googleEventId: string | null;
             };
         } & {
             id: string;
-            type: string;
+            bookingId: string;
             createdAt: Date;
             updatedAt: Date;
             status: string;
-            bookingId: string;
+            type: string;
             metadata: import("@prisma/client/runtime/library").JsonValue | null;
             sentAt: Date | null;
             scheduledFor: Date;
@@ -78,11 +78,11 @@ export declare class FollowupsService {
                 name: string;
                 createdAt: Date;
                 updatedAt: Date;
+                phone: string | null;
                 email: string | null;
                 whatsappId: string | null;
                 instagramId: string | null;
                 messengerId: string | null;
-                phone: string | null;
                 aiEnabled: boolean;
                 isAiPaused: boolean;
                 lastInstagramMessageAt: Date | null;
@@ -93,24 +93,24 @@ export declare class FollowupsService {
             };
         } & {
             id: string;
-            createdAt: Date;
-            updatedAt: Date;
             customerId: string;
             service: string;
-            dateTime: Date;
-            status: string;
-            durationMinutes: number | null;
             recipientName: string | null;
             recipientPhone: string | null;
+            createdAt: Date;
+            updatedAt: Date;
+            status: string;
+            dateTime: Date;
+            durationMinutes: number | null;
             googleEventId: string | null;
         };
     } & {
         id: string;
-        type: string;
+        bookingId: string;
         createdAt: Date;
         updatedAt: Date;
         status: string;
-        bookingId: string;
+        type: string;
         metadata: import("@prisma/client/runtime/library").JsonValue | null;
         sentAt: Date | null;
         scheduledFor: Date;
@@ -118,11 +118,11 @@ export declare class FollowupsService {
     }>;
     updateFollowup(id: string, data: UpdateFollowupDto): Promise<{
         id: string;
-        type: string;
+        bookingId: string;
         createdAt: Date;
         updatedAt: Date;
         status: string;
-        bookingId: string;
+        type: string;
         metadata: import("@prisma/client/runtime/library").JsonValue | null;
         sentAt: Date | null;
         scheduledFor: Date;
@@ -136,11 +136,11 @@ export declare class FollowupsService {
                 name: string;
                 createdAt: Date;
                 updatedAt: Date;
+                phone: string | null;
                 email: string | null;
                 whatsappId: string | null;
                 instagramId: string | null;
                 messengerId: string | null;
-                phone: string | null;
                 aiEnabled: boolean;
                 isAiPaused: boolean;
                 lastInstagramMessageAt: Date | null;
@@ -151,24 +151,24 @@ export declare class FollowupsService {
             };
         } & {
             id: string;
-            createdAt: Date;
-            updatedAt: Date;
             customerId: string;
             service: string;
-            dateTime: Date;
-            status: string;
-            durationMinutes: number | null;
             recipientName: string | null;
             recipientPhone: string | null;
+            createdAt: Date;
+            updatedAt: Date;
+            status: string;
+            dateTime: Date;
+            durationMinutes: number | null;
             googleEventId: string | null;
         };
     } & {
         id: string;
-        type: string;
+        bookingId: string;
         createdAt: Date;
         updatedAt: Date;
         status: string;
-        bookingId: string;
+        type: string;
         metadata: import("@prisma/client/runtime/library").JsonValue | null;
         sentAt: Date | null;
         scheduledFor: Date;
@@ -176,11 +176,11 @@ export declare class FollowupsService {
     }>;
     recordResponse(followupId: string, response: RecordFollowupResponseDto): Promise<{
         id: string;
-        type: string;
+        bookingId: string;
         createdAt: Date;
         updatedAt: Date;
         status: string;
-        bookingId: string;
+        type: string;
         metadata: import("@prisma/client/runtime/library").JsonValue | null;
         sentAt: Date | null;
         scheduledFor: Date;
@@ -203,11 +203,11 @@ export declare class FollowupsService {
                 name: string;
                 createdAt: Date;
                 updatedAt: Date;
+                phone: string | null;
                 email: string | null;
                 whatsappId: string | null;
                 instagramId: string | null;
                 messengerId: string | null;
-                phone: string | null;
                 aiEnabled: boolean;
                 isAiPaused: boolean;
                 lastInstagramMessageAt: Date | null;
@@ -218,24 +218,24 @@ export declare class FollowupsService {
             };
         } & {
             id: string;
-            createdAt: Date;
-            updatedAt: Date;
             customerId: string;
             service: string;
-            dateTime: Date;
-            status: string;
-            durationMinutes: number | null;
             recipientName: string | null;
             recipientPhone: string | null;
+            createdAt: Date;
+            updatedAt: Date;
+            status: string;
+            dateTime: Date;
+            durationMinutes: number | null;
             googleEventId: string | null;
         };
     } & {
         id: string;
-        type: string;
+        bookingId: string;
         createdAt: Date;
         updatedAt: Date;
         status: string;
-        bookingId: string;
+        type: string;
         metadata: import("@prisma/client/runtime/library").JsonValue | null;
         sentAt: Date | null;
         scheduledFor: Date;
