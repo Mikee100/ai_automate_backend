@@ -1334,6 +1334,22 @@ DO NOT repeat your previous question. Instead:
 
     const lower = (message || '').toLowerCase();
 
+    // --- GREETING DETECTION ---
+    const greetingKeywords = ['hi', 'hello', 'hey', 'greetings', 'hallo', 'habari', 'good morning', 'good afternoon', 'good evening'];
+    // Check if message is essentially just a greeting (allow some punctuation/emojis)
+    const cleanMsg = lower.replace(/[^\w\s]/g, '').trim();
+    const isGreeting = greetingKeywords.some(kw => cleanMsg === kw || cleanMsg.startsWith(kw + ' '));
+
+    // Only send the special greeting if it's a start of conversation or explicit greeting, and NOT in the middle of a booking flow
+    if (isGreeting && !hasDraft) {
+      const greetingResponse = `Thank you for contacting Fiesta House Maternity, Kenya’s leading luxury photo studio specializing in maternity photography. We provide an all-inclusive experience in a world-class luxury studio, featuring world-class sets, professional makeup, and a curated selection of luxury gowns. We’re here to ensure your maternity shoot is an elegant, memorable, and stress-free experience.`;
+      return {
+        response: greetingResponse,
+        draft: null,
+        updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: greetingResponse }]
+      };
+    }
+
     // --- SMART: Detect available hours/times/slots queries ---
     const slotKeywords = [
       'available hours', 'available times', 'available slots', 'what times', 'what hours', 'when can i book',

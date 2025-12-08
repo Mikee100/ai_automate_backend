@@ -69,6 +69,170 @@ async function main() {
             answer: 'Here are our complete contact details:\n\n📍 Location: 4th Avenue Parklands, Diamond Plaza Annex, 2nd Floor, Nairobi, Kenya\n📞 Phone: 0720 111928\n📧 Email: info@fiestahouseattire.com\n🌐 Website: https://fiestahouseattire.com/\n🕐 Hours: Monday-Saturday: 9:00 AM - 6:00 PM\n\nWe look forward to welcoming you! 💖',
             category: 'Contact',
         },
+        {
+            question: 'Will you post my photos on your social media?',
+            answer: 'No.\nWe never post any photos without the client’s consent.\nYour privacy and comfort are very important to us. You decide if and what you would like us to share.',
+            category: 'Policies',
+        },
+        // Services
+        {
+            question: 'Do you provide makeup?',
+            answer: 'Yes, professional makeup is included in all packages. Our makeup artists are experienced in working with pregnant women.',
+            category: 'Services',
+        },
+        {
+            question: 'Does makeup include lashes?',
+            answer: 'No. Lashes are offered at KSH 500 extra, or you may bring your own.',
+            category: 'Services',
+        },
+        {
+            question: 'Do you provide hair styling?',
+            answer: 'Basic hair styling is provided. Wig styling and installation is available at KSH 3,000. Please inform us in advance.',
+            category: 'Services',
+        },
+        {
+            question: 'Do you provide accessories?',
+            answer: 'Yes, we provide accessories for the shoot. You only need to bring personal accessories such as earrings.',
+            category: 'Services',
+        },
+        {
+            question: 'Do you provide gowns and outfits?',
+            answer: 'Yes. We have over 300 luxury gowns designed for maternity shoots.',
+            category: 'Services',
+        },
+        {
+            question: 'Do you provide gowns for sale or rental?',
+            answer: 'No. Our gowns are exclusively for studio use during shoots. They are not available for sale or rental.',
+            category: 'Services',
+        },
+        {
+            question: 'Do the packages include video or reels?',
+            answer: 'No, professional reels are offered at a fee. We can take behind-the-scenes for free using our studio phone.',
+            category: 'Services',
+        },
+        {
+            question: 'Do the packages include printing?',
+            answer: 'Some packages include photobooks or A3 mounts. Additional prints can be ordered at a fee.',
+            category: 'Services',
+        },
+        {
+            question: 'Do you offer newborn shoots?',
+            answer: 'Yes, newborn sessions are available on request, pricing depends on concept.',
+            category: 'Services',
+        },
+        // Preparation & Process
+        {
+            question: 'Do I get to choose the outfits?',
+            answer: 'Yes. You choose the outfits of your choice from our Instagram gallery. Everything is adjustable to any size.',
+            category: 'Preparation',
+        },
+        {
+            question: 'What if I’m not able to choose outfits prior?',
+            answer: 'No worries. We have an in-house stylist who will help you select gowns and advise you during your session.',
+            category: 'Preparation',
+        },
+        {
+            question: 'Can I bring extra outfits of my own?',
+            answer: 'Yes. We allow one extra outfit of your own, or you may substitute one of our outfits with yours.',
+            category: 'Preparation',
+        },
+        {
+            question: 'Do you provide props?',
+            answer: 'Our studio is specifically designed for pregnant moms, so we have sets, props, and concepts created for maternity shoots.',
+            category: 'Preparation',
+        },
+        {
+            question: 'Can I include my partner and children?',
+            answer: 'Yes, you can include your family in the shoot. We recommend choosing outfits from our Instagram gallery prior to color coordinate.',
+            category: 'Preparation',
+        },
+        {
+            question: 'Do you help with poses?',
+            answer: 'Yes. Our photographer will guide you with all poses and help you feel comfortable and confident.',
+            category: 'Preparation',
+        },
+        {
+            question: 'What do I need to bring?',
+            answer: 'Wear black bra and panties. Bring personal accessories like earrings and props such as baby sonograms, baby shoes, and outfits.',
+            category: 'Preparation',
+        },
+        {
+            question: 'How long is the shoot?',
+            answer: 'Depending on your package, studio sessions run between 1.5 – 3.5 hours.',
+            category: 'Preparation',
+        },
+        {
+            question: 'How long do edits take?',
+            answer: 'Edited photos will be ready within 10 working days after your shoot. Express delivery available at extra fee.',
+            category: 'Preparation',
+        },
+        {
+            question: 'Can I request a specific photographer?',
+            answer: 'Yes, depending on availability.',
+            category: 'Preparation',
+        },
+        {
+            question: 'Can I do nude or semi-nude maternity?',
+            answer: 'Yes, based on your comfort. This is handled professionally and privately',
+            category: 'Preparation',
+        },
+        // Policies & Booking
+        {
+            question: 'What if I’m late for my session?',
+            answer: 'Arrive 30 minutes earlier for makeup and 1 hour earlier for wig styling. If you are late, the session continues within booked time.',
+            category: 'Policies',
+        },
+        {
+            question: 'Do you offer outdoor shoots?',
+            answer: 'We are currently only offering studio shoots.',
+            category: 'Policies',
+        },
+        {
+            question: 'Can I come without a booking?',
+            answer: 'We work strictly by appointment. A deposit is required to secure your slot.',
+            category: 'Policies',
+        },
+        {
+            question: 'How do I book?',
+            answer: 'Choose your package and date, then pay deposit to Till number 670241. Share Mpesa confirmation to confirm booking.',
+            category: 'Booking',
+        },
+        {
+            question: 'When is the balance paid?',
+            answer: 'Remaining balance is paid after the shoot at the studio. We accept Mpesa or cash.',
+            category: 'Booking',
+        },
+        {
+            question: 'What is the rescheduling policy?',
+            answer: 'Reschedules must be made at least 72 hours before your shoot. Changes within 72 hours forfeit the deposit.',
+            category: 'Policies',
+        },
+        {
+            question: 'What is the cancellation policy?',
+            answer: 'Cancellations within 72 hours result in forfeiture of deposit. A new booking requires a new deposit.',
+            category: 'Policies',
+        },
+        {
+            question: 'Can I get raw files?',
+            answer: 'Yes, raw files are available at an extra fee.',
+            category: 'Policies',
+        },
+        {
+            question: 'Do you offer weekend shoots?',
+            answer: 'Yes, weekend slots are available. Book early as they fill fast.',
+            category: 'Booking',
+        },
+        // Facility
+        {
+            question: 'Is parking available?',
+            answer: 'Yes, secure parking is available at Diamond Plaza Annex.',
+            category: 'Facility',
+        },
+        {
+            question: 'Is the studio safe for pregnant moms?',
+            answer: 'Yes, our space is designed for pregnant women, and we are an all-women team trained to handle maternity clients.',
+            category: 'Facility',
+        },
     ];
 
     faqs.push(...newFaqs);
