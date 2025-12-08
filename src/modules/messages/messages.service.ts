@@ -95,7 +95,15 @@ Respond with only the intent (e.g., booking_details).`;
       console.log('Classified as greeting');
       return 'greeting';
     }
-    if (lower.includes('book') || lower.includes('appointment') || lower.includes('schedule') || lower.includes('free') || lower.includes('opening') || lower.includes('tomorrow') || lower.includes('reschedule') || lower.includes('cancel') || lower.includes('change')) {
+    // Reschedule intent
+    if (/(reschedul\w*|change|move|shift|postpone|adjust|modify|update).*(date|time|booking|appointment|slot)/i.test(lower) ||
+        /can i reschedul\w*/i.test(lower) ||
+        /i want to (change|move|shift|postpone|adjust|modify|update) (my|the)? (date|time|booking|appointment|slot)/i.test(lower)) {
+      console.log('Classified as reschedule');
+      return 'reschedule';
+    }
+    // Booking inquiry intent
+    if (lower.includes('book') || lower.includes('appointment') || lower.includes('schedule') || lower.includes('free') || lower.includes('opening') || lower.includes('tomorrow')) {
       console.log('Classified as booking_inquiry');
       return 'booking_inquiry';
     }

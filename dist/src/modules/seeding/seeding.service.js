@@ -24,13 +24,6 @@ let SeedingService = SeedingService_1 = class SeedingService {
         this.scraperService = scraperService;
         this.logger = new common_1.Logger(SeedingService_1.name);
     }
-    async onApplicationBootstrap() {
-        this.logger.log('Checking if seeding is required...');
-        await this.seedPackages();
-        await this.seedKnowledgeBase();
-        await this.seedScrapedContent();
-        this.logger.log('Seeding check completed.');
-    }
     async seedPackages() {
         this.logger.log('Seeding packages...');
         const packages = [

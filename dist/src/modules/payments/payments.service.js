@@ -57,14 +57,11 @@ let PaymentsService = PaymentsService_1 = class PaymentsService {
         }
         const auth = Buffer.from(`${this.consumerKey}:${this.consumerSecret}`).toString('base64');
         const url = `${this.mpesaBaseUrl}/oauth/v1/generate?grant_type=client_credentials`;
-        this.logger.log(`Getting access token from: ${url}`);
-        this.logger.log(`Authorization header: Basic ${auth.substring(0, 10)}...`);
         const response = await (0, rxjs_1.firstValueFrom)(this.httpService.get(url, {
             headers: {
                 Authorization: `Basic ${auth}`,
             },
         }));
-        this.logger.log(`Access token response data: ${JSON.stringify(response.data)}`);
         if (!response.data || !response.data.access_token) {
             throw new Error(`Invalid access token response: ${JSON.stringify(response.data)}`);
         }
@@ -82,57 +79,15 @@ let PaymentsService = PaymentsService_1 = class PaymentsService {
         if (!packageInfo) {
             throw new Error('Package not found');
         }
-        const existingPayment = await this.prisma.payment.findFirst({
-            where: { bookingDraftId },
+        await this.prisma.payment.deleteMany({ where: { bookingDraftId } });
+        const payment = await this.prisma.payment.create({
+            data: {
+                bookingDraftId,
+                amount,
+                phone: phone.startsWith('254') ? phone : `254${phone.substring(1)}`,
+                status: 'pending',
+            },
         });
-        let payment;
-        if (existingPayment) {
-            if (existingPayment.status === 'success') {
-                throw new Error('Payment already completed for this booking draft');
-            }
-            if (existingPayment.status === 'pending' && existingPayment.checkoutRequestId) {
-                const now = new Date();
-                const paymentTime = new Date(existingPayment.updatedAt);
-                const diffMs = now.getTime() - paymentTime.getTime();
-                if (diffMs > 60000) {
-                    this.logger.warn(`Found stale pending payment ${existingPayment.id} (> 1 min), marking as failed`);
-                    await this.prisma.payment.update({
-                        where: { id: existingPayment.id },
-                        data: { status: 'failed' },
-                    });
-                    existingPayment.status = 'failed';
-                }
-                else {
-                    this.logger.log(`Reusing existing pending payment ${existingPayment.id}, CheckoutRequestID: ${existingPayment.checkoutRequestId}`);
-                    return { checkoutRequestId: existingPayment.checkoutRequestId, paymentId: existingPayment.id };
-                }
-            }
-            if (existingPayment.status === 'failed' || (existingPayment.status === 'pending' && !existingPayment.checkoutRequestId)) {
-                payment = await this.prisma.payment.update({
-                    where: { id: existingPayment.id },
-                    data: {
-                        status: 'pending',
-                        checkoutRequestId: null,
-                        amount,
-                        phone: phone.startsWith('254') ? phone : `254${phone.substring(1)}`,
-                    },
-                });
-                this.logger.log(`Reset old payment ${existingPayment.id} for draft ${bookingDraftId}`);
-            }
-            else {
-                payment = existingPayment;
-            }
-        }
-        else {
-            payment = await this.prisma.payment.create({
-                data: {
-                    bookingDraftId,
-                    amount,
-                    phone: phone.startsWith('254') ? phone : `254${phone.substring(1)}`,
-                    status: 'pending',
-                },
-            });
-        }
         const timestamp = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, -3);
         const password = Buffer.from(`${this.shortcode}${this.passkey}${timestamp}`).toString('base64');
         const accessToken = await this.getAccessToken();
@@ -150,9 +105,6 @@ let PaymentsService = PaymentsService_1 = class PaymentsService {
             TransactionDesc: `Deposit for ${draft.service} booking`,
         };
         const stkUrl = `${this.mpesaBaseUrl}/mpesa/stkpush/v1/processrequest`;
-        this.logger.log(`Initiating STK Push to URL: ${stkUrl}`);
-        this.logger.log(`STK Push request body: ${JSON.stringify(stkRequestBody)}`);
-        this.logger.log(`Authorization header: Bearer ${accessToken.substring(0, 10)}...`);
         try {
             const stkResponse = await (0, rxjs_1.firstValueFrom)(this.httpService.post(stkUrl, stkRequestBody, {
                 headers: {
@@ -172,13 +124,11 @@ let PaymentsService = PaymentsService_1 = class PaymentsService {
                 where: { id: payment.id },
                 data: { checkoutRequestId: data.CheckoutRequestID },
             });
-            this.logger.log(`STK Push initiated for payment ${payment.id}, CheckoutRequestID: ${data.CheckoutRequestID}`);
             await this.paymentsQueue.add('timeoutPayment', { paymentId: payment.id }, {
                 delay: 60000,
                 removeOnComplete: true,
                 removeOnFail: true,
             });
-            this.logger.log(`Scheduled timeout for payment ${payment.id} in 60s`);
             return { checkoutRequestId: data.CheckoutRequestID, paymentId: payment.id };
         }
         catch (error) {
@@ -241,7 +191,6 @@ let PaymentsService = PaymentsService_1 = class PaymentsService {
             },
         });
         if (payment.bookingDraft) {
-            this.logger.log(`Payment successful for booking draft ${payment.bookingDraft.id}, confirming booking`);
             const draft = payment.bookingDraft;
             const booking = await this.prisma.booking.create({
                 data: {
@@ -273,7 +222,6 @@ let PaymentsService = PaymentsService_1 = class PaymentsService {
             const confirmationMessage = await this.bookingsService.formatBookingConfirmationMessage(booking, receipt, scheduledReminders);
             if (draft.customer?.whatsappId) {
                 await this.whatsappService.sendMessage(draft.customer.whatsappId, confirmationMessage);
-                this.logger.log(`Booking confirmation sent to WhatsApp: ${draft.customer.whatsappId}`);
             }
             else {
                 this.logger.warn(`No WhatsApp ID found for customer ${draft.customerId}, confirmation not sent`);
@@ -292,7 +240,6 @@ let PaymentsService = PaymentsService_1 = class PaymentsService {
                     removeOnComplete: true,
                     removeOnFail: true,
                 });
-                this.logger.log(`Reminder scheduled for: ${dateTime.toISO()} (${days} days before)`);
             }
             try {
                 await this.notificationsService.createNotification({
@@ -326,9 +273,7 @@ let PaymentsService = PaymentsService_1 = class PaymentsService {
             catch (notifError) {
                 this.logger.error(`Failed to create notifications for booking ${booking.id}`, notifError);
             }
-            this.logger.log(`Booking ${booking.id} confirmed from draft ${draft.id}`);
         }
-        this.logger.log(`Payment ${payment.id} confirmed: ${receipt}`);
     }
     async handlePaymentFailure(payment, reason, resultCode) {
         await this.prisma.payment.update({
@@ -376,9 +321,6 @@ let PaymentsService = PaymentsService_1 = class PaymentsService {
             TransactionDesc: `Test STK Push`,
         };
         const stkUrl = `${this.mpesaBaseUrl}/mpesa/stkpush/v1/processrequest`;
-        this.logger.log(`[TEST] Initiating STK Push to URL: ${stkUrl}`);
-        this.logger.log(`[TEST] STK Push request body: ${JSON.stringify(stkRequestBody)}`);
-        this.logger.log(`[TEST] Authorization header: Bearer ${accessToken.substring(0, 10)}...`);
         try {
             const stkResponse = await (0, rxjs_1.firstValueFrom)(this.httpService.post(stkUrl, stkRequestBody, {
                 headers: {
@@ -390,7 +332,6 @@ let PaymentsService = PaymentsService_1 = class PaymentsService {
             if (data.ResponseCode !== '0') {
                 throw new Error(`STK Push failed: ${data.errorMessage}`);
             }
-            this.logger.log(`[TEST] STK Push initiated, CheckoutRequestID: ${data.CheckoutRequestID}`);
             return { checkoutRequestId: data.CheckoutRequestID, merchantRequestId: data.MerchantRequestID };
         }
         catch (error) {

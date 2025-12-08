@@ -23,8 +23,9 @@ const websocket_gateway_1 = require("../../websockets/websocket.gateway");
 const bookings_service_1 = require("../bookings/bookings.service");
 const payments_service_1 = require("../payments/payments.service");
 const whatsapp_service_1 = require("../whatsapp/whatsapp.service");
+const instagram_service_1 = require("../instagram/instagram.service");
 let WebhooksService = class WebhooksService {
-    constructor(messagesService, customersService, aiService, aiSettingsService, bookingsService, paymentsService, whatsappService, messageQueue, websocketGateway) {
+    constructor(messagesService, customersService, aiService, aiSettingsService, bookingsService, paymentsService, whatsappService, instagramService, messageQueue, websocketGateway) {
         this.messagesService = messagesService;
         this.customersService = customersService;
         this.aiService = aiService;
@@ -32,6 +33,7 @@ let WebhooksService = class WebhooksService {
         this.bookingsService = bookingsService;
         this.paymentsService = paymentsService;
         this.whatsappService = whatsappService;
+        this.instagramService = instagramService;
         this.messageQueue = messageQueue;
         this.websocketGateway = websocketGateway;
     }
@@ -101,7 +103,6 @@ let WebhooksService = class WebhooksService {
             timestamp: created.createdAt.toISOString(),
             direction: 'inbound',
             customerId: customer.id,
-            customerName: customer.name,
         });
         const phoneMatch = text.match(/0\d{9}/);
         if (phoneMatch) {
@@ -234,6 +235,53 @@ Just let me know! 💖`);
                 customerId: customer.id,
                 customerName: customer.name,
             });
+            const intent = await this.messagesService.classifyIntent(text);
+            if (intent === 'reschedule') {
+                const bookings = await this.bookingsService.getActiveBookings(customer.id);
+                if (!bookings || bookings.length === 0) {
+                    await this.instagramService.sendMessage(from, `I couldn’t find an active booking for you. Would you like to start a new booking?`);
+                    return;
+                }
+                let booking = bookings[0];
+                if (bookings.length > 1) {
+                    await this.instagramService.sendMessage(from, `You have multiple active bookings. Please reply with the date or service of the booking you want to reschedule.`);
+                    await this.bookingsService.setAwaitingRescheduleSelection(customer.id, true);
+                    return;
+                }
+                const now = new Date();
+                const bookingTime = new Date(booking.dateTime);
+                const hoursDiff = (bookingTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+                if (booking.status === 'completed' || booking.status === 'cancelled') {
+                    await this.instagramService.sendMessage(from, `Your booking cannot be rescheduled as it is already completed or cancelled.`);
+                    return;
+                }
+                if (hoursDiff < 72) {
+                    await this.instagramService.sendMessage(from, `Rescheduling is only allowed at least 72 hours before your booking. Please contact support for urgent changes.`);
+                    return;
+                }
+                const isAwaitingRescheduleTime = await this.bookingsService.isAwaitingRescheduleTime(booking.id);
+                if (!isAwaitingRescheduleTime) {
+                    await this.instagramService.sendMessage(from, `Sure! Please reply with your new preferred date and time for your booking (e.g. '12th Dec, 3pm').`);
+                    await this.bookingsService.setAwaitingRescheduleTime(booking.id, true);
+                    return;
+                }
+                else {
+                    const newTime = await this.aiService.extractDateTime(text);
+                    if (!newTime) {
+                        await this.instagramService.sendMessage(from, `Sorry, I couldn’t understand the new date/time. Please reply with your preferred date and time (e.g. '12th Dec, 3pm').`);
+                        return;
+                    }
+                    const conflict = await this.bookingsService.checkTimeConflict(newTime);
+                    if (conflict) {
+                        await this.instagramService.sendMessage(from, `That time is not available. Please choose another date and time.`);
+                        return;
+                    }
+                    await this.bookingsService.updateBookingTime(booking.id, newTime);
+                    await this.bookingsService.setAwaitingRescheduleTime(booking.id, false);
+                    await this.instagramService.sendMessage(from, `Your booking has been rescheduled to ${newTime}. If you need further changes, let us know!`);
+                    return;
+                }
+            }
             const globalAiEnabled = await this.aiSettingsService.isAiEnabled();
             const customerAiEnabled = customer.aiEnabled;
             console.log(`[AI DEBUG] Instagram: customerId=${customer.id}, aiEnabled=${customer.aiEnabled}`);
@@ -305,13 +353,14 @@ Just let me know! 💖`);
 exports.WebhooksService = WebhooksService;
 exports.WebhooksService = WebhooksService = __decorate([
     (0, common_1.Injectable)(),
-    __param(7, (0, bull_1.InjectQueue)('messageQueue')),
+    __param(8, (0, bull_1.InjectQueue)('messageQueue')),
     __metadata("design:paramtypes", [messages_service_1.MessagesService,
         customers_service_1.CustomersService,
         ai_service_1.AiService,
         ai_settings_service_1.AiSettingsService,
         bookings_service_1.BookingsService,
         payments_service_1.PaymentsService,
-        whatsapp_service_1.WhatsappService, Object, websocket_gateway_1.WebsocketGateway])
+        whatsapp_service_1.WhatsappService,
+        instagram_service_1.InstagramService, Object, websocket_gateway_1.WebsocketGateway])
 ], WebhooksService);
 //# sourceMappingURL=webhooks.service.js.map

@@ -10,6 +10,7 @@ import { BullModule } from '@nestjs/bull';
 import { WebsocketModule } from '../../websockets/websocket.module';
 import { WhatsappModule } from '../whatsapp/whatsapp.module';
 import { MessengerModule } from './messenger.module';
+import { InstagramModule } from '../instagram/instagram.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { MessengerModule } from './messenger.module';
     }),
     WebsocketModule,
     MessengerModule,
+    InstagramModule,
   ],
   controllers: [WebhooksController],
   providers: [WebhooksService],

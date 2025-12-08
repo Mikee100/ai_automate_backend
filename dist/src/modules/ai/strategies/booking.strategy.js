@@ -9,11 +9,8 @@ class BookingStrategy {
     async generateResponse(message, context) {
         const { aiService, logger, history, historyLimit, customerId, bookingsService, hasDraft } = context;
         const { DateTime } = require('luxon');
-        logger.log(`[STRATEGY] Executing BookingStrategy for: "${message}"`);
-        let draft = context.draft;
-        if (!hasDraft) {
-            draft = await aiService.getOrCreateDraft(customerId);
-        }
+        await bookingsService.deleteBookingDraft(customerId);
+        let draft = await aiService.getOrCreateDraft(customerId);
         const extraction = await aiService.extractBookingDetails(message, history);
         logger.debug(`[STRATEGY] Extraction result:`, extraction);
         draft = await aiService.mergeIntoDraft(customerId, extraction);

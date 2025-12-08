@@ -17,6 +17,38 @@ type ServiceInfo = { name: string; durationMinutes: number; price: number };
 
 @Injectable()
 export class BookingsService {
+      // Checks if booking is awaiting reschedule time (stub)
+      async isAwaitingRescheduleTime(bookingId: string): Promise<boolean> {
+        // Implement actual logic as needed
+        return false;
+      }
+    // Returns active bookings for a customer (stub)
+    async getActiveBookings(customerId: string) {
+      return this.prisma.booking.findMany({ where: { customerId, status: 'confirmed' } });
+    }
+
+    // Sets whether the customer is awaiting reschedule selection (stub)
+    async setAwaitingRescheduleSelection(customerId: string, awaiting: boolean) {
+      // Implement flag logic as needed
+      return Promise.resolve();
+    }
+
+    // Sets whether the booking is awaiting reschedule time (stub)
+    async setAwaitingRescheduleTime(bookingId: string, awaiting: boolean) {
+      // Implement flag logic as needed
+      return Promise.resolve();
+    }
+
+    // Checks for time conflict (stub)
+    async checkTimeConflict(dateTime: Date) {
+      // Implement actual conflict logic as needed
+      return false;
+    }
+
+    // Updates booking time (calls updateBooking)
+    async updateBookingTime(bookingId: string, dateTime: Date) {
+      return this.updateBooking(bookingId, { dateTime });
+    }
   private readonly logger = new Logger(BookingsService.name);
   private readonly STUDIO_TZ = 'Africa/Nairobi';
 
@@ -465,7 +497,7 @@ export class BookingsService {
       if (updated.googleEventId) {
         try {
           await this.calendarService.updateEvent(updated.googleEventId, updated);
-          this.logger.log(`Updated Google Calendar event for booking ${bookingId}: ${updated.googleEventId}`);
+          // this.logger.log(`Updated Google Calendar event for booking ${bookingId}: ${updated.googleEventId}`);
         } catch (error) {
           this.logger.error(`Failed to update Google Calendar event for booking ${bookingId}`, error);
         }
@@ -503,7 +535,7 @@ export class BookingsService {
         where: { id: bookingId },
         data: { googleEventId: eventId },
       });
-      this.logger.log(`Created Google Calendar event for booking ${bookingId}: ${eventId}`);
+      // this.logger.log(`Created Google Calendar event for booking ${bookingId}: ${eventId}`);
     } catch (error) {
       this.logger.error(`Failed to create Google Calendar event for booking ${bookingId}`, error);
     }
@@ -535,7 +567,7 @@ export class BookingsService {
     if (booking.googleEventId) {
       try {
         await this.calendarService.deleteEvent(booking.googleEventId);
-        this.logger.log(`Deleted Google Calendar event for booking ${bookingId}: ${booking.googleEventId}`);
+        // this.logger.log(`Deleted Google Calendar event for booking ${bookingId}: ${booking.googleEventId}`);
       } catch (error) {
         this.logger.error(`Failed to delete Google Calendar event for booking ${bookingId}`, error);
       }

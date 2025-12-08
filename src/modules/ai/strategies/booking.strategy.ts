@@ -10,13 +10,12 @@ export class BookingStrategy implements ResponseStrategy {
         const { aiService, logger, history, historyLimit, customerId, bookingsService, hasDraft } = context;
         const { DateTime } = require('luxon');
 
-        logger.log(`[STRATEGY] Executing BookingStrategy for: "${message}"`);
+        // logger.log(`[STRATEGY] Executing BookingStrategy for: "${message}"`);
 
-        // If no draft but intent is booking, create one
-        let draft = context.draft;
-        if (!hasDraft) {
-            draft = await aiService.getOrCreateDraft(customerId);
-        }
+        // Always start a fresh booking draft for every new booking intent
+        // Remove any previous draft/payment state
+        await bookingsService.deleteBookingDraft(customerId);
+        let draft = await aiService.getOrCreateDraft(customerId);
 
         // Extract details
         const extraction = await aiService.extractBookingDetails(message, history);

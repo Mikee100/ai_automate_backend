@@ -30,7 +30,6 @@ let BookingFollowupsListener = BookingFollowupsListener_1 = class BookingFollowu
         this.logger = new common_1.Logger(BookingFollowupsListener_1.name);
     }
     async handleBookingCompleted(event) {
-        this.logger.log(`Scheduling follow-ups for completed booking ${event.bookingId}`);
         try {
             await this.followupsService.scheduleFollowupsForBooking(event.bookingId);
         }
@@ -39,7 +38,6 @@ let BookingFollowupsListener = BookingFollowupsListener_1 = class BookingFollowu
         }
     }
     async handleBookingCancelled(event) {
-        this.logger.log(`Cancelling follow-ups for booking ${event.bookingId}`);
         try {
             await this.followupsService.cancelFollowupsForBooking(event.bookingId);
         }

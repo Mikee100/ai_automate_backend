@@ -5,7 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { ContentScraperService } from '../content-scraper/content-scraper.service';
 
 @Injectable()
-export class SeedingService implements OnApplicationBootstrap {
+export class SeedingService {
     private readonly logger = new Logger(SeedingService.name);
 
     constructor(
@@ -15,13 +15,7 @@ export class SeedingService implements OnApplicationBootstrap {
         private readonly scraperService: ContentScraperService,
     ) { }
 
-    async onApplicationBootstrap() {
-        this.logger.log('Checking if seeding is required...');
-        await this.seedPackages();
-        await this.seedKnowledgeBase();
-        await this.seedScrapedContent();
-        this.logger.log('Seeding check completed.');
-    }
+    // Automatic seeding on startup removed. To seed manually, call the methods as needed.
 
     async seedPackages() {
         this.logger.log('Seeding packages...');

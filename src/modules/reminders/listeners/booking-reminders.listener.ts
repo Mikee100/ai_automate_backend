@@ -15,7 +15,7 @@ export class BookingRemindersListener {
 
     @OnEvent('booking.created')
     async handleBookingCreated(event: BookingCreatedEvent) {
-        this.logger.log(`Scheduling reminders for new booking ${event.bookingId}`);
+        // this.logger.log(`Scheduling reminders for new booking ${event.bookingId}`);
         try {
             await this.remindersService.scheduleRemindersForBooking(event.bookingId);
         } catch (error) {
@@ -25,7 +25,7 @@ export class BookingRemindersListener {
 
     @OnEvent('booking.rescheduled')
     async handleBookingRescheduled(event: BookingRescheduledEvent) {
-        this.logger.log(`Rescheduling reminders for booking ${event.bookingId}`);
+        // this.logger.log(`Rescheduling reminders for booking ${event.bookingId}`);
         try {
             await this.remindersService.rescheduleRemindersForBooking(
                 event.bookingId,
@@ -38,7 +38,7 @@ export class BookingRemindersListener {
 
     @OnEvent('booking.cancelled')
     async handleBookingCancelled(event: BookingCancelledEvent) {
-        this.logger.log(`Cancelling reminders for booking ${event.bookingId}`);
+        // this.logger.log(`Cancelling reminders for booking ${event.bookingId}`);
         try {
             await this.remindersService.cancelRemindersForBooking(event.bookingId);
         } catch (error) {

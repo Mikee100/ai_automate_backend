@@ -42,6 +42,26 @@ const personalization_service_1 = require("./services/personalization.service");
 const feedback_loop_service_1 = require("./services/feedback-loop.service");
 const predictive_analytics_service_1 = require("./services/predictive-analytics.service");
 let AiService = AiService_1 = class AiService {
+    async extractDateTime(text) {
+        const results = chrono.parse(text);
+        if (results.length > 0 && results[0].start) {
+            return results[0].start.date();
+        }
+        return null;
+    }
+    formatPackageDetails(pkg, includeFeatures = true) {
+        let details = `📦 *${pkg.name}* - KES ${pkg.price}`;
+        if (pkg.description) {
+            details += `\n${pkg.description}`;
+        }
+        if (includeFeatures && pkg.features && Array.isArray(pkg.features)) {
+            details += `\nFeatures: ${pkg.features.join(', ')}`;
+        }
+        if (pkg.images && Array.isArray(pkg.images) && pkg.images.length > 0) {
+            details += `\nImages: ${pkg.images.join(', ')}`;
+        }
+        return details;
+    }
     constructor(configService, prisma, circuitBreaker, bookingsService, messagesService, escalationService, aiQueue, customerMemory, conversationLearning, domainExpertise, advancedIntent, personalization, feedbackLoop, predictiveAnalytics) {
         this.configService = configService;
         this.prisma = prisma;
@@ -377,73 +397,50 @@ let AiService = AiService_1 = class AiService {
                 this.logger.warn('retrieveRelevantDocs: Pinecone query failed', err);
             }
         }
-        else {
-            if (docs.length === 0) {
-                this.logger.debug('retrieveRelevantDocs: Pinecone index not available & no text match - falling back to recent items.');
-                try {
-                    const faqs = await this.prisma.knowledgeBase.findMany({
-                        take: 5,
-                        orderBy: { createdAt: 'desc' },
-                    });
-                    docs.push(...faqs.map(f => ({
-                        id: f.id, score: 0.5, metadata: { answer: f.answer, text: f.question, category: f.category }
-                    })));
+        if (docs.length === 0) {
+            this.logger.debug('retrieveRelevantDocs: No DB or Pinecone match - trying fuzzy FAQ match.');
+            try {
+                const cleanQuery = query.replace(/[\p{P}$+<=>^`|~]/gu, '').toLowerCase().trim();
+                if (cleanQuery.length > 3) {
+                    const allFaqs = await this.prisma.knowledgeBase.findMany();
+                    function similarity(a, b) {
+                        a = a.replace(/[\p{P}$+<=>^`|~]/gu, '').toLowerCase();
+                        b = b.replace(/[\p{P}$+<=>^`|~]/gu, '').toLowerCase();
+                        if (a === b)
+                            return 1;
+                        const aWords = new Set(a.split(' '));
+                        const bWords = new Set(b.split(' '));
+                        const intersection = new Set([...aWords].filter(x => bWords.has(x)));
+                        return intersection.size / Math.max(aWords.size, bWords.size);
+                    }
+                    const scored = allFaqs.map(f => ({
+                        ...f,
+                        sim: similarity(cleanQuery, f.question)
+                    })).sort((a, b) => b.sim - a.sim);
+                    const best = scored[0];
+                    if (best && best.sim > 0.5) {
+                        docs.push({
+                            id: best.id,
+                            score: best.sim,
+                            metadata: {
+                                answer: best.answer,
+                                text: best.question,
+                                category: best.category,
+                                mediaUrls: []
+                            }
+                        });
+                        this.logger.debug(`retrieveRelevantDocs: Fuzzy FAQ match found (sim=${best.sim.toFixed(2)}): "${best.question}"`);
+                    }
+                    else {
+                        this.logger.warn(`retrieveRelevantDocs: No FAQ match found for: "${query}". Closest: "${best?.question}" (sim=${best?.sim?.toFixed(2)})`);
+                    }
                 }
-                catch (err) { }
+            }
+            catch (err) {
+                this.logger.warn('retrieveRelevantDocs: Fuzzy FAQ match failed', err);
             }
         }
         return docs.sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, topK);
-    }
-    formatPackageDetails(pkg, detailed = false) {
-        if (!pkg)
-            return '';
-        const name = pkg.name ?? 'Unnamed Package';
-        const type = pkg.type === 'outdoor' ? 'Outdoor' : 'Studio';
-        const duration = pkg.duration ?? 'Duration not specified';
-        const price = pkg.price !== undefined && pkg.price !== null ? `${pkg.price.toLocaleString()} KSH` : 'Price not available';
-        const deposit = pkg.deposit !== undefined && pkg.deposit !== null ? `${pkg.deposit.toLocaleString()} KSH` : 'Contact us';
-        const features = [];
-        if (pkg.images)
-            features.push(`${pkg.images} soft copy image${pkg.images > 1 ? 's' : ''} `);
-        if (pkg.outfits)
-            features.push(`${pkg.outfits} outfit change${pkg.outfits > 1 ? 's' : ''} `);
-        if (pkg.makeup)
-            features.push('Professional makeup');
-        if (pkg.styling)
-            features.push('Professional styling');
-        if (pkg.balloonBackdrop)
-            features.push('Customized balloon backdrop');
-        if (pkg.wig)
-            features.push('Styled wig');
-        if (pkg.photobook) {
-            const size = pkg.photobookSize ? ` (${pkg.photobookSize})` : '';
-            features.push(`Photobook${size} `);
-        }
-        if (pkg.mount)
-            features.push('A3 mount');
-        if (detailed) {
-            let message = `📦 * ${name}* (${type}) \n\n`;
-            message += `⏱️ Duration: ${duration} \n`;
-            message += `💰 Price: ${price} | Deposit: ${deposit} \n\n`;
-            if (features.length > 0) {
-                message += `✨ What's Included:\n`;
-                features.forEach(f => message += `• ${f}\n`);
-            }
-            if (pkg.notes) {
-                message += `\n📝 ${pkg.notes}`;
-            }
-            return message;
-        }
-        else {
-            let brief = `*${name}*: ${duration}, ${price}`;
-            if (features.length > 0) {
-                const keyFeatures = features.slice(0, 3).join(', ');
-                brief += ` — Includes: ${keyFeatures}`;
-                if (features.length > 3)
-                    brief += `, and more`;
-            }
-            return brief;
-        }
     }
     async answerFaq(question, history = [], actual, customerId, enrichedContext) {
         let prediction = '';

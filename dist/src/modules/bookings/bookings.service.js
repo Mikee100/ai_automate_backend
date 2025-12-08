@@ -27,6 +27,24 @@ const whatsapp_service_1 = require("../whatsapp/whatsapp.service");
 const chrono = require("chrono-node");
 const luxon_1 = require("luxon");
 let BookingsService = BookingsService_1 = class BookingsService {
+    async isAwaitingRescheduleTime(bookingId) {
+        return false;
+    }
+    async getActiveBookings(customerId) {
+        return this.prisma.booking.findMany({ where: { customerId, status: 'confirmed' } });
+    }
+    async setAwaitingRescheduleSelection(customerId, awaiting) {
+        return Promise.resolve();
+    }
+    async setAwaitingRescheduleTime(bookingId, awaiting) {
+        return Promise.resolve();
+    }
+    async checkTimeConflict(dateTime) {
+        return false;
+    }
+    async updateBookingTime(bookingId, dateTime) {
+        return this.updateBooking(bookingId, { dateTime });
+    }
     async getPackages(type) {
         return this.packagesService.getPackages(type);
     }
@@ -362,7 +380,6 @@ let BookingsService = BookingsService_1 = class BookingsService {
             if (updated.googleEventId) {
                 try {
                     await this.calendarService.updateEvent(updated.googleEventId, updated);
-                    this.logger.log(`Updated Google Calendar event for booking ${bookingId}: ${updated.googleEventId}`);
                 }
                 catch (error) {
                     this.logger.error(`Failed to update Google Calendar event for booking ${bookingId}`, error);
@@ -395,7 +412,6 @@ let BookingsService = BookingsService_1 = class BookingsService {
                 where: { id: bookingId },
                 data: { googleEventId: eventId },
             });
-            this.logger.log(`Created Google Calendar event for booking ${bookingId}: ${eventId}`);
         }
         catch (error) {
             this.logger.error(`Failed to create Google Calendar event for booking ${bookingId}`, error);
@@ -421,7 +437,6 @@ let BookingsService = BookingsService_1 = class BookingsService {
         if (booking.googleEventId) {
             try {
                 await this.calendarService.deleteEvent(booking.googleEventId);
-                this.logger.log(`Deleted Google Calendar event for booking ${bookingId}: ${booking.googleEventId}`);
             }
             catch (error) {
                 this.logger.error(`Failed to delete Google Calendar event for booking ${bookingId}`, error);

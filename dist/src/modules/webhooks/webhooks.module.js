@@ -19,6 +19,7 @@ const bull_1 = require("@nestjs/bull");
 const websocket_module_1 = require("../../websockets/websocket.module");
 const whatsapp_module_1 = require("../whatsapp/whatsapp.module");
 const messenger_module_1 = require("./messenger.module");
+const instagram_module_1 = require("../instagram/instagram.module");
 let WebhooksModule = class WebhooksModule {
 };
 exports.WebhooksModule = WebhooksModule;
@@ -36,6 +37,7 @@ exports.WebhooksModule = WebhooksModule = __decorate([
             }),
             websocket_module_1.WebsocketModule,
             messenger_module_1.MessengerModule,
+            instagram_module_1.InstagramModule,
         ],
         controllers: [webhooks_controller_1.WebhooksController],
         providers: [webhooks_service_1.WebhooksService],

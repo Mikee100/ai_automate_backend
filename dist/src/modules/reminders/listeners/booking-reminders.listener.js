@@ -21,7 +21,6 @@ let BookingRemindersListener = BookingRemindersListener_1 = class BookingReminde
         this.logger = new common_1.Logger(BookingRemindersListener_1.name);
     }
     async handleBookingCreated(event) {
-        this.logger.log(`Scheduling reminders for new booking ${event.bookingId}`);
         try {
             await this.remindersService.scheduleRemindersForBooking(event.bookingId);
         }
@@ -30,7 +29,6 @@ let BookingRemindersListener = BookingRemindersListener_1 = class BookingReminde
         }
     }
     async handleBookingRescheduled(event) {
-        this.logger.log(`Rescheduling reminders for booking ${event.bookingId}`);
         try {
             await this.remindersService.rescheduleRemindersForBooking(event.bookingId, event.newDateTime);
         }
@@ -39,7 +37,6 @@ let BookingRemindersListener = BookingRemindersListener_1 = class BookingReminde
         }
     }
     async handleBookingCancelled(event) {
-        this.logger.log(`Cancelling reminders for booking ${event.bookingId}`);
         try {
             await this.remindersService.cancelRemindersForBooking(event.bookingId);
         }

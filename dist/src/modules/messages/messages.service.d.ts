@@ -22,11 +22,11 @@ export declare class MessagesService {
     findAll(): Promise<({
         customer: {
             id: string;
-            name: string;
             createdAt: Date;
             updatedAt: Date;
-            phone: string | null;
+            name: string;
             email: string | null;
+            phone: string | null;
             whatsappId: string | null;
             instagramId: string | null;
             messengerId: string | null;
@@ -54,11 +54,11 @@ export declare class MessagesService {
     findByCustomer(customerId: string): Promise<({
         customer: {
             id: string;
-            name: string;
             createdAt: Date;
             updatedAt: Date;
-            phone: string | null;
+            name: string;
             email: string | null;
+            phone: string | null;
             whatsappId: string | null;
             instagramId: string | null;
             messengerId: string | null;
@@ -85,11 +85,11 @@ export declare class MessagesService {
     findOne(id: string): Promise<{
         customer: {
             id: string;
-            name: string;
             createdAt: Date;
             updatedAt: Date;
-            phone: string | null;
+            name: string;
             email: string | null;
+            phone: string | null;
             whatsappId: string | null;
             instagramId: string | null;
             messengerId: string | null;
@@ -116,11 +116,11 @@ export declare class MessagesService {
     findByExternalId(externalId: string): Promise<{
         customer: {
             id: string;
-            name: string;
             createdAt: Date;
             updatedAt: Date;
-            phone: string | null;
+            name: string;
             email: string | null;
+            phone: string | null;
             whatsappId: string | null;
             instagramId: string | null;
             messengerId: string | null;
@@ -173,14 +173,14 @@ export declare class MessagesService {
                 id: string;
                 customerId: string;
                 service: string;
+                dateTime: Date;
+                status: string;
+                durationMinutes: number | null;
                 recipientName: string | null;
                 recipientPhone: string | null;
+                googleEventId: string | null;
                 createdAt: Date;
                 updatedAt: Date;
-                status: string;
-                dateTime: Date;
-                durationMinutes: number | null;
-                googleEventId: string | null;
             }[];
             isReturning: boolean;
         };
@@ -188,19 +188,19 @@ export declare class MessagesService {
             id: string;
             customerId: string;
             service: string | null;
+            recipientName: string | null;
+            recipientPhone: string | null;
+            createdAt: Date;
+            updatedAt: Date;
+            name: string | null;
             date: string | null;
             time: string | null;
             dateTimeIso: string | null;
-            name: string | null;
-            recipientName: string | null;
-            recipientPhone: string | null;
             isForSomeoneElse: boolean | null;
             step: string;
             conflictResolution: string | null;
             bookingId: string | null;
             version: number;
-            createdAt: Date;
-            updatedAt: Date;
         };
     }>;
 }

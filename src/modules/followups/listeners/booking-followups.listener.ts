@@ -21,7 +21,7 @@ export class BookingFollowupsListener {
 
     @OnEvent('booking.completed')
     async handleBookingCompleted(event: BookingCompletedEvent) {
-        this.logger.log(`Scheduling follow-ups for completed booking ${event.bookingId}`);
+        // this.logger.log(`Scheduling follow-ups for completed booking ${event.bookingId}`);
         try {
             await this.followupsService.scheduleFollowupsForBooking(event.bookingId);
         } catch (error) {
@@ -31,7 +31,7 @@ export class BookingFollowupsListener {
 
     @OnEvent('booking.cancelled')
     async handleBookingCancelled(event: BookingCancelledEvent) {
-        this.logger.log(`Cancelling follow-ups for booking ${event.bookingId}`);
+        // this.logger.log(`Cancelling follow-ups for booking ${event.bookingId}`);
         try {
             await this.followupsService.cancelFollowupsForBooking(event.bookingId);
         } catch (error) {
