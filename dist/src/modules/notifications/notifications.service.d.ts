@@ -10,11 +10,11 @@ export declare class NotificationsService {
         metadata?: any;
     }): Promise<{
         id: string;
-        createdAt: Date;
-        metadata: import("@prisma/client/runtime/library").JsonValue | null;
-        message: string;
         type: string;
+        createdAt: Date;
+        message: string;
         title: string;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
         read: boolean;
     }>;
     getNotifications(options?: {
@@ -25,11 +25,11 @@ export declare class NotificationsService {
     }): Promise<{
         notifications: {
             id: string;
-            createdAt: Date;
-            metadata: import("@prisma/client/runtime/library").JsonValue | null;
-            message: string;
             type: string;
+            createdAt: Date;
+            message: string;
             title: string;
+            metadata: import("@prisma/client/runtime/library").JsonValue | null;
             read: boolean;
         }[];
         total: number;
@@ -38,11 +38,11 @@ export declare class NotificationsService {
     getUnreadCount(): Promise<number>;
     markAsRead(id: string): Promise<{
         id: string;
-        createdAt: Date;
-        metadata: import("@prisma/client/runtime/library").JsonValue | null;
-        message: string;
         type: string;
+        createdAt: Date;
+        message: string;
         title: string;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
         read: boolean;
     }>;
     markAllAsRead(): Promise<import(".prisma/client").Prisma.BatchPayload>;

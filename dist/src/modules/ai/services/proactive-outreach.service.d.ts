@@ -21,11 +21,11 @@ export declare class ProactiveOutreachService {
         metadata?: any;
     }): Promise<{
         id: string;
-        status: string;
+        type: string;
         createdAt: Date;
         updatedAt: Date;
-        type: string;
         customerId: string;
+        status: string;
         metadata: import("@prisma/client/runtime/library").JsonValue | null;
         sentAt: Date | null;
         scheduledFor: Date;

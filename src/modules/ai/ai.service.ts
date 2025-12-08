@@ -59,6 +59,7 @@ import { CustomerMemoryService } from './services/customer-memory.service';
 import { ConversationLearningService } from './services/conversation-learning.service';
 import { DomainExpertiseService } from './services/domain-expertise.service';
 import { AdvancedIntentService } from './services/advanced-intent.service';
+
 import { PersonalizationService } from './services/personalization.service';
 import { FeedbackLoopService } from './services/feedback-loop.service';
 import { PredictiveAnalyticsService } from './services/predictive-analytics.service';
@@ -470,40 +471,83 @@ export class AiService {
 
   // Defensive wrapper for Pinecone query
   async retrieveRelevantDocs(query: string, topK = 3) {
-    if (!this.index) {
-      this.logger.debug('retrieveRelevantDocs: Pinecone index not available - falling back to DB keyword search.');
-      try {
-        // Simple fallback: fetch all (or top 20) and maybe filter by keyword if needed.
-        // For now, just fetching recent ones to populate context.
-        // In a real scenario, we'd do a full text search if supported by DB.
-        const faqs = await this.prisma.knowledgeBase.findMany({
-          take: 10,
-          orderBy: { createdAt: 'desc' },
+    let docs: any[] = [];
+
+    // 1. Try simple keyword/text search in DB first (Specific, high confidence)
+    try {
+      // Clean query for better matching
+      const cleanQuery = query.replace(/[^\w\s]/gi, '').trim();
+      if (cleanQuery.length > 3) {
+      // Try exact match or highly similar match
+        const dbMatches = await this.prisma.knowledgeBase.findMany({
+          where: {
+            AND: [
+              {
+                OR: [
+                  { question: { equals: query, mode: 'insensitive' } },
+                  { question: { contains: cleanQuery, mode: 'insensitive' } },
+                ]
+              },
+              // Split query for basic keyword matching if long enough
+              ...(cleanQuery.split(' ').length > 3 ? cleanQuery.split(' ').filter(w => w.length > 3).map(w => ({
+                question: { contains: w, mode: 'insensitive' as any }
+              })) : [])
+            ]
+          },
+          take: 2 // Only take top direct matches
         });
 
-        // Map to Pinecone-like structure
-        return faqs.map(f => ({
-          id: f.id,
-          score: 0.8, // dummy confidence
-          metadata: {
-            answer: f.answer,
-            text: f.question, // use question as text for context
-            category: f.category
-          }
-        }));
+        if (dbMatches.length > 0) {
+          docs.push(...dbMatches.map(f => ({
+            id: f.id,
+            score: 0.95, // High scores for DB text matches
+            metadata: {
+              answer: f.answer,
+              text: f.question,
+              category: f.category,
+              mediaUrls: [] // Add if your schema has it
+            }
+          })));
+          this.logger.debug(`retrieveRelevantDocs: Found ${dbMatches.length} DB text matches`);
+        }
+      }
+    } catch (err) {
+      this.logger.warn('retrieveRelevantDocs: DB text search failed', err);
+    }
+
+    // 2. Try Pinecone Vector Search (Semantic, broader coverage)
+    if (this.index) {
+      try {
+        const vec = await this.generateEmbedding(query);
+        const resp = await this.index.query({ vector: vec, topK, includeMetadata: true });
+
+        if (resp.matches) {
+          // Add unique Pinecone matches (avoid duplicates if same ID found in DB)
+          const existingIds = new Set(docs.map(d => d.id));
+          const newMatches = resp.matches.filter(m => !existingIds.has(m.id));
+          docs.push(...newMatches);
+        }
       } catch (err) {
-        this.logger.warn('retrieveRelevantDocs: DB fallback failed', err);
-        return [];
+        this.logger.warn('retrieveRelevantDocs: Pinecone query failed', err);
+      }
+    } else {
+      // Pinecone invalid/missing - if no DB docs found yet, use fallback of recent items
+      if (docs.length === 0) {
+        this.logger.debug('retrieveRelevantDocs: Pinecone index not available & no text match - falling back to recent items.');
+        try {
+          const faqs = await this.prisma.knowledgeBase.findMany({
+            take: 5,
+            orderBy: { createdAt: 'desc' },
+          });
+          docs.push(...faqs.map(f => ({
+            id: f.id, score: 0.5, metadata: { answer: f.answer, text: f.question, category: f.category }
+          })));
+        } catch (err) { }
       }
     }
-    try {
-      const vec = await this.generateEmbedding(query);
-      const resp = await this.index.query({ vector: vec, topK, includeMetadata: true });
-      return resp.matches ?? [];
-    } catch (err) {
-      this.logger.warn('retrieveRelevantDocs: Pinecone query failed', err);
-      return [];
-    }
+
+    // Sort by score/confidence
+    return docs.sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, topK);
   }
 
   /**
@@ -1340,8 +1384,9 @@ DO NOT repeat your previous question. Instead:
     const cleanMsg = lower.replace(/[^\w\s]/g, '').trim();
     const isGreeting = greetingKeywords.some(kw => cleanMsg === kw || cleanMsg.startsWith(kw + ' '));
 
-    // Only send the special greeting if it's a start of conversation or explicit greeting, and NOT in the middle of a booking flow
-    if (isGreeting && !hasDraft) {
+    // Only send the special greeting if it's a start of conversation or explicit greeting
+    // We allow this even if a draft exists, so a user saying "Hello" gets the proper welcome.
+    if (isGreeting) {
       const greetingResponse = `Thank you for contacting Fiesta House Maternity, Kenya’s leading luxury photo studio specializing in maternity photography. We provide an all-inclusive experience in a world-class luxury studio, featuring world-class sets, professional makeup, and a curated selection of luxury gowns. We’re here to ensure your maternity shoot is an elegant, memorable, and stress-free experience.`;
       return {
         response: greetingResponse,
@@ -1604,7 +1649,7 @@ DO NOT repeat your previous question. Instead:
       this.logger.log(`[RESCHEDULE] In confirmation state for customer ${customerId}`);
 
       if (/(yes|confirm|do it|sure|okay|fine|go ahead|please|yep|yeah)/i.test(message)) {
-        const bookingId = draft.recipientPhone; // Booking ID stored here
+        const bookingId = draft.bookingId; // Booking ID stored here
         const newDateObj = new Date(draft.dateTimeIso);
 
         if (bookingId && draft.dateTimeIso) {
@@ -1715,15 +1760,14 @@ DO NOT repeat your previous question. Instead:
             date: null,
             time: null,
             dateTimeIso: null,
-            // Store which booking we're rescheduling (using recipientName field temporarily as we don't have a bookingId field)
-            recipientPhone: targetBooking.id, // HACK: Store booking ID in recipientPhone for now
+            bookingId: targetBooking.id,
           },
           create: {
             customerId,
             step: 'reschedule',
             service: targetBooking.service,
             name: targetBooking.recipientName || '',
-            recipientPhone: targetBooking.id, // HACK: Store booking ID here
+            bookingId: targetBooking.id,
           },
         });
 

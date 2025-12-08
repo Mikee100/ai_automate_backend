@@ -6,11 +6,11 @@ export declare class NotificationsController {
     getNotifications(read?: string, type?: string, limit?: string, offset?: string): Promise<{
         notifications: {
             id: string;
-            createdAt: Date;
-            metadata: import("@prisma/client/runtime/library").JsonValue | null;
-            message: string;
             type: string;
+            createdAt: Date;
+            message: string;
             title: string;
+            metadata: import("@prisma/client/runtime/library").JsonValue | null;
             read: boolean;
         }[];
         total: number;
@@ -23,11 +23,11 @@ export declare class NotificationsController {
         success: boolean;
         notification: {
             id: string;
-            createdAt: Date;
-            metadata: import("@prisma/client/runtime/library").JsonValue | null;
-            message: string;
             type: string;
+            createdAt: Date;
+            message: string;
             title: string;
+            metadata: import("@prisma/client/runtime/library").JsonValue | null;
             read: boolean;
         };
     }>;

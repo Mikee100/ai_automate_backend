@@ -10,15 +10,15 @@ export declare class PaymentsController {
         status: string;
         payment: {
             id: string;
-            bookingDraftId: string | null;
-            bookingId: string | null;
-            amount: number;
-            phone: string;
-            status: string;
-            mpesaReceipt: string | null;
-            checkoutRequestId: string | null;
             createdAt: Date;
             updatedAt: Date;
+            phone: string;
+            status: string;
+            bookingId: string | null;
+            bookingDraftId: string | null;
+            amount: number;
+            mpesaReceipt: string | null;
+            checkoutRequestId: string | null;
         };
     }>;
     handleCallback(body: any): Promise<{

@@ -40,7 +40,6 @@ export declare class ConversationsService {
     sendReply(customerId: string, message: string, platform: string): Promise<{
         id: string;
         createdAt: Date;
-        customerId: string;
         content: string;
         platform: string;
         direction: string;
@@ -48,6 +47,7 @@ export declare class ConversationsService {
         handledBy: string | null;
         isResolved: boolean | null;
         isEscalated: boolean | null;
+        customerId: string;
     }>;
     private isActive;
 }

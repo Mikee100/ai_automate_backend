@@ -75,7 +75,7 @@ export declare class AiService {
         timeOnly: string;
     };
     generateEmbedding(text: string): Promise<number[]>;
-    retrieveRelevantDocs(query: string, topK?: number): Promise<any>;
+    retrieveRelevantDocs(query: string, topK?: number): Promise<any[]>;
     private formatPackageDetails;
     answerFaq(question: string, history?: HistoryMsg[], actual?: string, customerId?: string, enrichedContext?: any): Promise<{
         text: string;
@@ -94,36 +94,38 @@ export declare class AiService {
     private generateBookingReply;
     getOrCreateDraft(customerId: string): Promise<{
         id: string;
+        name: string | null;
         createdAt: Date;
         updatedAt: Date;
-        name: string | null;
         customerId: string;
         service: string | null;
+        recipientName: string | null;
+        recipientPhone: string | null;
         date: string | null;
         time: string | null;
         dateTimeIso: string | null;
-        recipientName: string | null;
-        recipientPhone: string | null;
         isForSomeoneElse: boolean | null;
         step: string;
         conflictResolution: string | null;
+        bookingId: string | null;
         version: number;
     }>;
     mergeIntoDraft(customerId: string, extraction: any): Promise<{
         id: string;
+        name: string | null;
         createdAt: Date;
         updatedAt: Date;
-        name: string | null;
         customerId: string;
         service: string | null;
+        recipientName: string | null;
+        recipientPhone: string | null;
         date: string | null;
         time: string | null;
         dateTimeIso: string | null;
-        recipientName: string | null;
-        recipientPhone: string | null;
         isForSomeoneElse: boolean | null;
         step: string;
         conflictResolution: string | null;
+        bookingId: string | null;
         version: number;
     }>;
     checkAndCompleteIfConfirmed(draft: any, extraction: any, customerId: string, bookingsService: any): Promise<{

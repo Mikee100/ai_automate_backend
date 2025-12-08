@@ -306,37 +306,74 @@ let AiService = AiService_1 = class AiService {
         return r.data[0].embedding;
     }
     async retrieveRelevantDocs(query, topK = 3) {
-        if (!this.index) {
-            this.logger.debug('retrieveRelevantDocs: Pinecone index not available - falling back to DB keyword search.');
-            try {
-                const faqs = await this.prisma.knowledgeBase.findMany({
-                    take: 10,
-                    orderBy: { createdAt: 'desc' },
-                });
-                return faqs.map(f => ({
-                    id: f.id,
-                    score: 0.8,
-                    metadata: {
-                        answer: f.answer,
-                        text: f.question,
-                        category: f.category
-                    }
-                }));
-            }
-            catch (err) {
-                this.logger.warn('retrieveRelevantDocs: DB fallback failed', err);
-                return [];
-            }
-        }
+        let docs = [];
         try {
-            const vec = await this.generateEmbedding(query);
-            const resp = await this.index.query({ vector: vec, topK, includeMetadata: true });
-            return resp.matches ?? [];
+            const cleanQuery = query.replace(/[^\w\s]/gi, '').trim();
+            if (cleanQuery.length > 3) {
+                const dbMatches = await this.prisma.knowledgeBase.findMany({
+                    where: {
+                        AND: [
+                            {
+                                OR: [
+                                    { question: { equals: query, mode: 'insensitive' } },
+                                    { question: { contains: cleanQuery, mode: 'insensitive' } },
+                                ]
+                            },
+                            ...(cleanQuery.split(' ').length > 3 ? cleanQuery.split(' ').filter(w => w.length > 3).map(w => ({
+                                question: { contains: w, mode: 'insensitive' }
+                            })) : [])
+                        ]
+                    },
+                    take: 2
+                });
+                if (dbMatches.length > 0) {
+                    docs.push(...dbMatches.map(f => ({
+                        id: f.id,
+                        score: 0.95,
+                        metadata: {
+                            answer: f.answer,
+                            text: f.question,
+                            category: f.category,
+                            mediaUrls: []
+                        }
+                    })));
+                    this.logger.debug(`retrieveRelevantDocs: Found ${dbMatches.length} DB text matches`);
+                }
+            }
         }
         catch (err) {
-            this.logger.warn('retrieveRelevantDocs: Pinecone query failed', err);
-            return [];
+            this.logger.warn('retrieveRelevantDocs: DB text search failed', err);
         }
+        if (this.index) {
+            try {
+                const vec = await this.generateEmbedding(query);
+                const resp = await this.index.query({ vector: vec, topK, includeMetadata: true });
+                if (resp.matches) {
+                    const existingIds = new Set(docs.map(d => d.id));
+                    const newMatches = resp.matches.filter(m => !existingIds.has(m.id));
+                    docs.push(...newMatches);
+                }
+            }
+            catch (err) {
+                this.logger.warn('retrieveRelevantDocs: Pinecone query failed', err);
+            }
+        }
+        else {
+            if (docs.length === 0) {
+                this.logger.debug('retrieveRelevantDocs: Pinecone index not available & no text match - falling back to recent items.');
+                try {
+                    const faqs = await this.prisma.knowledgeBase.findMany({
+                        take: 5,
+                        orderBy: { createdAt: 'desc' },
+                    });
+                    docs.push(...faqs.map(f => ({
+                        id: f.id, score: 0.5, metadata: { answer: f.answer, text: f.question, category: f.category }
+                    })));
+                }
+                catch (err) { }
+            }
+        }
+        return docs.sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, topK);
     }
     formatPackageDetails(pkg, detailed = false) {
         if (!pkg)
@@ -1045,7 +1082,7 @@ DO NOT repeat your previous question. Instead:
         const greetingKeywords = ['hi', 'hello', 'hey', 'greetings', 'hallo', 'habari', 'good morning', 'good afternoon', 'good evening'];
         const cleanMsg = lower.replace(/[^\w\s]/g, '').trim();
         const isGreeting = greetingKeywords.some(kw => cleanMsg === kw || cleanMsg.startsWith(kw + ' '));
-        if (isGreeting && !hasDraft) {
+        if (isGreeting) {
             const greetingResponse = `Thank you for contacting Fiesta House Maternity, Kenya’s leading luxury photo studio specializing in maternity photography. We provide an all-inclusive experience in a world-class luxury studio, featuring world-class sets, professional makeup, and a curated selection of luxury gowns. We’re here to ensure your maternity shoot is an elegant, memorable, and stress-free experience.`;
             return {
                 response: greetingResponse,
@@ -1261,7 +1298,7 @@ DO NOT repeat your previous question. Instead:
         if (draft && draft.step === 'reschedule_confirm') {
             this.logger.log(`[RESCHEDULE] In confirmation state for customer ${customerId}`);
             if (/(yes|confirm|do it|sure|okay|fine|go ahead|please|yep|yeah)/i.test(message)) {
-                const bookingId = draft.recipientPhone;
+                const bookingId = draft.bookingId;
                 const newDateObj = new Date(draft.dateTimeIso);
                 if (bookingId && draft.dateTimeIso) {
                     await this.bookingsService.updateBooking(bookingId, { dateTime: newDateObj });
@@ -1348,14 +1385,14 @@ DO NOT repeat your previous question. Instead:
                         date: null,
                         time: null,
                         dateTimeIso: null,
-                        recipientPhone: targetBooking.id,
+                        bookingId: targetBooking.id,
                     },
                     create: {
                         customerId,
                         step: 'reschedule',
                         service: targetBooking.service,
                         name: targetBooking.recipientName || '',
-                        recipientPhone: targetBooking.id,
+                        bookingId: targetBooking.id,
                     },
                 });
                 const extraction = await this.extractBookingDetails(message, history);

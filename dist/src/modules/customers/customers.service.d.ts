@@ -6,14 +6,14 @@ export declare class CustomersService {
     constructor(prisma: PrismaService, whatsappService: WhatsappService);
     create(data: any): Promise<{
         id: string;
-        phone: string | null;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
-        name: string;
         email: string | null;
         whatsappId: string | null;
         instagramId: string | null;
         messengerId: string | null;
+        phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
         lastInstagramMessageAt: Date | null;
@@ -25,14 +25,14 @@ export declare class CustomersService {
     sendPhotoLink(customerId: string, link: string): Promise<any>;
     findByWhatsappId(whatsappId: string): Promise<{
         id: string;
-        phone: string | null;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
-        name: string;
         email: string | null;
         whatsappId: string | null;
         instagramId: string | null;
         messengerId: string | null;
+        phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
         lastInstagramMessageAt: Date | null;
@@ -43,14 +43,14 @@ export declare class CustomersService {
     }>;
     findByInstagramId(instagramId: string): Promise<{
         id: string;
-        phone: string | null;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
-        name: string;
         email: string | null;
         whatsappId: string | null;
         instagramId: string | null;
         messengerId: string | null;
+        phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
         lastInstagramMessageAt: Date | null;
@@ -61,14 +61,14 @@ export declare class CustomersService {
     }>;
     findByMessengerId(messengerId: string): Promise<{
         id: string;
-        phone: string | null;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
-        name: string;
         email: string | null;
         whatsappId: string | null;
         instagramId: string | null;
         messengerId: string | null;
+        phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
         lastInstagramMessageAt: Date | null;
@@ -79,14 +79,14 @@ export declare class CustomersService {
     }>;
     findByEmail(email: string): Promise<{
         id: string;
-        phone: string | null;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
-        name: string;
         email: string | null;
         whatsappId: string | null;
         instagramId: string | null;
         messengerId: string | null;
+        phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
         lastInstagramMessageAt: Date | null;
@@ -99,7 +99,6 @@ export declare class CustomersService {
         messages: {
             id: string;
             createdAt: Date;
-            customerId: string;
             content: string;
             platform: string;
             direction: string;
@@ -107,30 +106,31 @@ export declare class CustomersService {
             handledBy: string | null;
             isResolved: boolean | null;
             isEscalated: boolean | null;
+            customerId: string;
         }[];
         bookings: {
             id: string;
-            status: string;
             createdAt: Date;
             updatedAt: Date;
             customerId: string;
             service: string;
+            dateTime: Date;
+            status: string;
+            durationMinutes: number | null;
             recipientName: string | null;
             recipientPhone: string | null;
-            dateTime: Date;
-            durationMinutes: number | null;
             googleEventId: string | null;
         }[];
     } & {
         id: string;
-        phone: string | null;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
-        name: string;
         email: string | null;
         whatsappId: string | null;
         instagramId: string | null;
         messengerId: string | null;
+        phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
         lastInstagramMessageAt: Date | null;
@@ -143,7 +143,6 @@ export declare class CustomersService {
         messages: {
             id: string;
             createdAt: Date;
-            customerId: string;
             content: string;
             platform: string;
             direction: string;
@@ -151,30 +150,31 @@ export declare class CustomersService {
             handledBy: string | null;
             isResolved: boolean | null;
             isEscalated: boolean | null;
+            customerId: string;
         }[];
         bookings: {
             id: string;
-            status: string;
             createdAt: Date;
             updatedAt: Date;
             customerId: string;
             service: string;
+            dateTime: Date;
+            status: string;
+            durationMinutes: number | null;
             recipientName: string | null;
             recipientPhone: string | null;
-            dateTime: Date;
-            durationMinutes: number | null;
             googleEventId: string | null;
         }[];
     } & {
         id: string;
-        phone: string | null;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
-        name: string;
         email: string | null;
         whatsappId: string | null;
         instagramId: string | null;
         messengerId: string | null;
+        phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
         lastInstagramMessageAt: Date | null;
@@ -185,14 +185,14 @@ export declare class CustomersService {
     }>;
     updatePhone(whatsappId: string, phone: string): Promise<{
         id: string;
-        phone: string | null;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
-        name: string;
         email: string | null;
         whatsappId: string | null;
         instagramId: string | null;
         messengerId: string | null;
+        phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
         lastInstagramMessageAt: Date | null;
@@ -203,14 +203,14 @@ export declare class CustomersService {
     }>;
     toggleAiEnabled(customerId: string, enabled: boolean): Promise<{
         id: string;
-        phone: string | null;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
-        name: string;
         email: string | null;
         whatsappId: string | null;
         instagramId: string | null;
         messengerId: string | null;
+        phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
         lastInstagramMessageAt: Date | null;
@@ -223,7 +223,6 @@ export declare class CustomersService {
         messages: {
             id: string;
             createdAt: Date;
-            customerId: string;
             content: string;
             platform: string;
             direction: string;
@@ -231,30 +230,31 @@ export declare class CustomersService {
             handledBy: string | null;
             isResolved: boolean | null;
             isEscalated: boolean | null;
+            customerId: string;
         }[];
         bookings: {
             id: string;
-            status: string;
             createdAt: Date;
             updatedAt: Date;
             customerId: string;
             service: string;
+            dateTime: Date;
+            status: string;
+            durationMinutes: number | null;
             recipientName: string | null;
             recipientPhone: string | null;
-            dateTime: Date;
-            durationMinutes: number | null;
             googleEventId: string | null;
         }[];
     } & {
         id: string;
-        phone: string | null;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
-        name: string;
         email: string | null;
         whatsappId: string | null;
         instagramId: string | null;
         messengerId: string | null;
+        phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
         lastInstagramMessageAt: Date | null;
@@ -267,7 +267,6 @@ export declare class CustomersService {
         messages: {
             id: string;
             createdAt: Date;
-            customerId: string;
             content: string;
             platform: string;
             direction: string;
@@ -275,30 +274,31 @@ export declare class CustomersService {
             handledBy: string | null;
             isResolved: boolean | null;
             isEscalated: boolean | null;
+            customerId: string;
         }[];
         bookings: {
             id: string;
-            status: string;
             createdAt: Date;
             updatedAt: Date;
             customerId: string;
             service: string;
+            dateTime: Date;
+            status: string;
+            durationMinutes: number | null;
             recipientName: string | null;
             recipientPhone: string | null;
-            dateTime: Date;
-            durationMinutes: number | null;
             googleEventId: string | null;
         }[];
     } & {
         id: string;
-        phone: string | null;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
-        name: string;
         email: string | null;
         whatsappId: string | null;
         instagramId: string | null;
         messengerId: string | null;
+        phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
         lastInstagramMessageAt: Date | null;
@@ -309,14 +309,14 @@ export declare class CustomersService {
     })[]>;
     update(id: string, updateCustomerDto: Partial<any>): Promise<{
         id: string;
-        phone: string | null;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
-        name: string;
         email: string | null;
         whatsappId: string | null;
         instagramId: string | null;
         messengerId: string | null;
+        phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
         lastInstagramMessageAt: Date | null;
@@ -327,14 +327,14 @@ export declare class CustomersService {
     }>;
     remove(id: string): Promise<{
         id: string;
-        phone: string | null;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
-        name: string;
         email: string | null;
         whatsappId: string | null;
         instagramId: string | null;
         messengerId: string | null;
+        phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
         lastInstagramMessageAt: Date | null;
@@ -345,14 +345,14 @@ export declare class CustomersService {
     }>;
     createWithMessengerId(messengerId: string): Promise<{
         id: string;
-        phone: string | null;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
-        name: string;
         email: string | null;
         whatsappId: string | null;
         instagramId: string | null;
         messengerId: string | null;
+        phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
         lastInstagramMessageAt: Date | null;
@@ -363,14 +363,14 @@ export declare class CustomersService {
     }>;
     updateLastInstagramMessageAt(instagramId: string, timestamp: Date): Promise<{
         id: string;
-        phone: string | null;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
-        name: string;
         email: string | null;
         whatsappId: string | null;
         instagramId: string | null;
         messengerId: string | null;
+        phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
         lastInstagramMessageAt: Date | null;
@@ -381,14 +381,14 @@ export declare class CustomersService {
     }>;
     updateLastMessengerMessageAt(messengerId: string, timestamp: Date): Promise<{
         id: string;
-        phone: string | null;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
-        name: string;
         email: string | null;
         whatsappId: string | null;
         instagramId: string | null;
         messengerId: string | null;
+        phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
         lastInstagramMessageAt: Date | null;
@@ -399,8 +399,8 @@ export declare class CustomersService {
     }>;
     getPhotoLinks(customerId: string): Promise<{
         id: string;
-        link: string;
         customerId: string;
+        link: string;
         sentAt: Date;
     }[]>;
 }
