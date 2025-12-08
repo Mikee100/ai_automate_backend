@@ -3,6 +3,7 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { BookingDraftCompletedEvent } from '../../bookings/events/booking.events';
 import { PaymentsService } from '../payments.service';
 import { MessagesService } from '../../messages/messages.service';
+import { PrismaService } from '../../../prisma/prisma.service';
 
 @Injectable()
 export class PaymentListener {
@@ -11,6 +12,7 @@ export class PaymentListener {
     constructor(
         private paymentsService: PaymentsService,
         private messagesService: MessagesService,
+        private prisma: PrismaService,
     ) { }
 
     @OnEvent('booking.draft.completed')
@@ -24,6 +26,13 @@ export class PaymentListener {
                 phone = `254${phone.replace(/^0+/, '')}`;
             }
 
+            // Determine platform based on customer's social media presence
+            const customer = await this.prisma.customer.findUnique({
+                where: { id: event.customerId },
+                select: { instagramId: true, whatsappId: true }
+            });
+            const platform = customer?.instagramId ? 'instagram' : 'whatsapp';
+
             // ENHANCEMENT: Send pre-payment notification
             const prepaymentMsg = `⏱️ *Get Ready!*\n\nYou'll receive an M-Pesa payment prompt on your phone in the next 3 seconds for *KSH ${event.depositAmount}*.\n\nPlease have your M-Pesa PIN ready! 📲✨`;
 
@@ -31,9 +40,9 @@ export class PaymentListener {
                 await this.messagesService.sendOutboundMessage(
                     event.customerId,
                     prepaymentMsg,
-                    'whatsapp'
+                    platform
                 );
-                this.logger.log(`[Event] Pre-payment notification sent to ${event.customerId}`);
+                this.logger.log(`[Event] Pre-payment notification sent to ${event.customerId} via ${platform}`);
 
                 // Small delay to ensure message is delivered before STK push
                 await new Promise(resolve => setTimeout(resolve, 1000));

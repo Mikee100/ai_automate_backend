@@ -8,7 +8,9 @@ export declare class WebhooksController {
     }>;
     verifyInstagram(mode: string, challenge: string, token: string): string;
     handleInstagram(body: any): Promise<void>;
-    handleMessenger(body: any): Promise<void>;
+    handleMessenger(body: any): Promise<{
+        status: string;
+    }>;
     handleTelegram(body: any): Promise<void>;
     verifyFacebook(mode: string, challenge: string, token: string): string;
 }

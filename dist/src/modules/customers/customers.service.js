@@ -76,6 +76,12 @@ let CustomersService = class CustomersService {
             data: { phone },
         });
     }
+    async updatePhoneByMessengerId(messengerId, phone) {
+        return this.prisma.customer.update({
+            where: { messengerId },
+            data: { phone },
+        });
+    }
     async toggleAiEnabled(customerId, enabled) {
         return this.prisma.customer.update({
             where: { id: customerId },

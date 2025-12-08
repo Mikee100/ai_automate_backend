@@ -13,6 +13,11 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MessagesService = void 0;
+async;
+getCustomerById(customerId, string);
+{
+    return this.prisma.customer.findUnique({ where: { id: customerId } });
+}
 const common_1 = require("@nestjs/common");
 const bull_1 = require("@nestjs/bull");
 const prisma_service_1 = require("../../prisma/prisma.service");

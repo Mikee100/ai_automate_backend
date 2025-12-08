@@ -80,6 +80,13 @@ export class CustomersService {
     });
   }
 
+  async updatePhoneByMessengerId(messengerId: string, phone: string) {
+    return this.prisma.customer.update({
+      where: { messengerId },
+      data: { phone },
+    });
+  }
+
   async toggleAiEnabled(customerId: string, enabled: boolean) {
     return this.prisma.customer.update({
       where: { id: customerId },

@@ -12,6 +12,7 @@ async function bootstrap() {
       'webhooks/whatsapp',
       'webhooks/whatsapp/*',
       'webhooks/instagram',
+      'webhooks/messenger',
       'webhooks/*',
       'admin/queues',
       'admin/queues/*',

@@ -24,8 +24,9 @@ const bookings_service_1 = require("../bookings/bookings.service");
 const payments_service_1 = require("../payments/payments.service");
 const whatsapp_service_1 = require("../whatsapp/whatsapp.service");
 const instagram_service_1 = require("../instagram/instagram.service");
+const messenger_send_service_1 = require("./messenger-send.service");
 let WebhooksService = class WebhooksService {
-    constructor(messagesService, customersService, aiService, aiSettingsService, bookingsService, paymentsService, whatsappService, instagramService, messageQueue, websocketGateway) {
+    constructor(messagesService, customersService, aiService, aiSettingsService, bookingsService, paymentsService, whatsappService, instagramService, messengerSendService, messageQueue, websocketGateway) {
         this.messagesService = messagesService;
         this.customersService = customersService;
         this.aiService = aiService;
@@ -34,6 +35,7 @@ let WebhooksService = class WebhooksService {
         this.paymentsService = paymentsService;
         this.whatsappService = whatsappService;
         this.instagramService = instagramService;
+        this.messengerSendService = messengerSendService;
         this.messageQueue = messageQueue;
         this.websocketGateway = websocketGateway;
     }
@@ -108,6 +110,53 @@ let WebhooksService = class WebhooksService {
             direction: 'inbound',
             customerId: customer.id,
         });
+        const intent = await this.messagesService.classifyIntent(text);
+        if (intent === 'reschedule') {
+            const bookings = await this.bookingsService.getActiveBookings(customer.id);
+            if (!bookings || bookings.length === 0) {
+                await this.whatsappService.sendMessage(from, `I couldn't find an active booking for you. Would you like to start a new booking?`);
+                return;
+            }
+            let booking = bookings[0];
+            if (bookings.length > 1) {
+                await this.whatsappService.sendMessage(from, `You have multiple active bookings. Please reply with the date or service of the booking you want to reschedule.`);
+                await this.bookingsService.setAwaitingRescheduleSelection(customer.id, true);
+                return;
+            }
+            const now = new Date();
+            const bookingTime = new Date(booking.dateTime);
+            const hoursDiff = (bookingTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+            if (booking.status === 'completed' || booking.status === 'cancelled') {
+                await this.whatsappService.sendMessage(from, `Your booking cannot be rescheduled as it is already completed or cancelled.`);
+                return;
+            }
+            if (hoursDiff < 72) {
+                await this.whatsappService.sendMessage(from, `Rescheduling is only allowed at least 72 hours before your booking. Please contact support for urgent changes.`);
+                return;
+            }
+            const isAwaitingRescheduleTime = await this.bookingsService.isAwaitingRescheduleTime(booking.id);
+            if (!isAwaitingRescheduleTime) {
+                await this.whatsappService.sendMessage(from, `Sure! Please reply with your new preferred date and time for your booking (e.g. '12th Dec, 3pm').`);
+                await this.bookingsService.setAwaitingRescheduleTime(booking.id, true);
+                return;
+            }
+            else {
+                const newTime = await this.aiService.extractDateTime(text);
+                if (!newTime) {
+                    await this.whatsappService.sendMessage(from, `Sorry, I couldn't understand the new date/time. Please reply with your preferred date and time (e.g. '12th Dec, 3pm').`);
+                    return;
+                }
+                const conflict = await this.bookingsService.checkTimeConflict(newTime);
+                if (conflict) {
+                    await this.whatsappService.sendMessage(from, `That time is not available. Please choose another date and time.`);
+                    return;
+                }
+                await this.bookingsService.updateBookingTime(booking.id, newTime);
+                await this.bookingsService.setAwaitingRescheduleTime(booking.id, false);
+                await this.whatsappService.sendMessage(from, `Your booking has been rescheduled to ${newTime}. If you need further changes, let us know!`);
+                return;
+            }
+        }
         const phoneMatch = text.match(/0\d{9}/);
         if (phoneMatch) {
             const newPhone = phoneMatch[0];
@@ -308,27 +357,192 @@ Just let me know! 💖`);
         return 'ERROR';
     }
     async handleMessengerWebhook(data) {
-        const message = data.entry[0].messaging[0];
-        const from = message.sender.id;
-        const text = message.message.text;
-        let customer = await this.customersService.findByEmail(`${from}@messenger.com`);
-        if (!customer) {
-            customer = await this.customersService.create({
-                name: `Messenger User ${from}`,
-                email: `${from}@messenger.com`,
-            });
+        console.log('Processing Messenger webhook:', JSON.stringify(data, null, 2));
+        if (!data.object || data.object !== 'page' || !Array.isArray(data.entry)) {
+            console.log('No valid page object or entries in Messenger webhook payload');
+            return;
         }
-        await this.messagesService.create({
-            content: text,
-            platform: 'messenger',
-            direction: 'inbound',
-            customerId: customer.id,
-        });
-        const intent = await this.messagesService.classifyIntent(text);
-        if (intent === 'faq') {
-            const answer = await this.aiService.answerFaq(text);
-            console.log('Send Messenger response:', answer);
+        for (const entry of data.entry) {
+            if (!Array.isArray(entry.messaging))
+                continue;
+            for (const event of entry.messaging) {
+                const senderId = event.sender?.id;
+                const message = event.message;
+                if (message?.is_echo) {
+                    console.log('Ignoring echo message (sent by bot)');
+                    continue;
+                }
+                if (!senderId || !message || !message.mid || !message.text) {
+                    console.log("Ignoring non-text message or missing data");
+                    continue;
+                }
+                const text = message.text;
+                console.log('Received Messenger text message from', senderId, ':', text);
+                let customer = await this.customersService.findByMessengerId(senderId);
+                if (!customer) {
+                    console.log('Creating new customer for Messenger ID:', senderId);
+                    customer = await this.customersService.create({
+                        name: `Messenger User ${senderId}`,
+                        email: `${senderId}@messenger.local`,
+                        messengerId: senderId,
+                    });
+                }
+                console.log('Customer found/created:', customer.id);
+                await this.customersService.updateLastMessengerMessageAt(senderId, new Date());
+                console.log('✅ Updated lastMessengerMessageAt for 24-hour window tracking');
+                const existing = await this.messagesService.findByExternalId(message.mid);
+                if (existing) {
+                    console.log("Duplicate inbound message ignored");
+                    return;
+                }
+                const createdMessage = await this.messagesService.create({
+                    content: text,
+                    platform: 'messenger',
+                    direction: 'inbound',
+                    customerId: customer.id,
+                    externalId: message.mid,
+                });
+                console.log('Messenger message created in database:', createdMessage.id);
+                this.websocketGateway.emitNewMessage('messenger', {
+                    id: createdMessage.id,
+                    from: senderId,
+                    to: '',
+                    content: text,
+                    timestamp: createdMessage.createdAt.toISOString(),
+                    direction: 'inbound',
+                    customerId: customer.id,
+                    customerName: customer.name,
+                });
+                const intent = await this.messagesService.classifyIntent(text);
+                if (intent === 'reschedule') {
+                    const bookings = await this.bookingsService.getActiveBookings(customer.id);
+                    if (!bookings || bookings.length === 0) {
+                        await this.messengerSendService.sendMessage(senderId, `I couldn't find an active booking for you. Would you like to start a new booking?`);
+                        return;
+                    }
+                    let booking = bookings[0];
+                    if (bookings.length > 1) {
+                        await this.messengerSendService.sendMessage(senderId, `You have multiple active bookings. Please reply with the date or service of the booking you want to reschedule.`);
+                        await this.bookingsService.setAwaitingRescheduleSelection(customer.id, true);
+                        return;
+                    }
+                    const now = new Date();
+                    const bookingTime = new Date(booking.dateTime);
+                    const hoursDiff = (bookingTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+                    if (booking.status === 'completed' || booking.status === 'cancelled') {
+                        await this.messengerSendService.sendMessage(senderId, `Your booking cannot be rescheduled as it is already completed or cancelled.`);
+                        return;
+                    }
+                    if (hoursDiff < 72) {
+                        await this.messengerSendService.sendMessage(senderId, `Rescheduling is only allowed at least 72 hours before your booking. Please contact support for urgent changes.`);
+                        return;
+                    }
+                    const isAwaitingRescheduleTime = await this.bookingsService.isAwaitingRescheduleTime(booking.id);
+                    if (!isAwaitingRescheduleTime) {
+                        await this.messengerSendService.sendMessage(senderId, `Sure! Please reply with your new preferred date and time for your booking (e.g. '12th Dec, 3pm').`);
+                        await this.bookingsService.setAwaitingRescheduleTime(booking.id, true);
+                        return;
+                    }
+                    else {
+                        const newTime = await this.aiService.extractDateTime(text);
+                        if (!newTime) {
+                            await this.messengerSendService.sendMessage(senderId, `Sorry, I couldn't understand the new date/time. Please reply with your preferred date and time (e.g. '12th Dec, 3pm').`);
+                            return;
+                        }
+                        const conflict = await this.bookingsService.checkTimeConflict(newTime);
+                        if (conflict) {
+                            await this.messengerSendService.sendMessage(senderId, `That time is not available. Please choose another date and time.`);
+                            return;
+                        }
+                        await this.bookingsService.updateBookingTime(booking.id, newTime);
+                        await this.bookingsService.setAwaitingRescheduleTime(booking.id, false);
+                        await this.messengerSendService.sendMessage(senderId, `Your booking has been rescheduled to ${newTime}. If you need further changes, let us know!`);
+                        return;
+                    }
+                }
+                const phoneMatch = text.match(/0\d{9}/);
+                if (phoneMatch) {
+                    const newPhone = phoneMatch[0];
+                    console.log(`User provided new phone number: ${newPhone}`);
+                    await this.customersService.updatePhoneByMessengerId(senderId, newPhone);
+                    const draft = await this.bookingsService.getBookingDraft(customer.id);
+                    if (draft) {
+                        const depositAmount = await this.bookingsService.getDepositForDraft(customer.id) || 2000;
+                        const packages = await this.aiService.getCachedPackages();
+                        const selectedPackage = packages.find(p => p.name === draft.service);
+                        const fullPrice = selectedPackage?.price || 0;
+                        const confirmationMessage = `Perfect! I have your phone number: ${newPhone} 📱
+
+📦 *${draft.service}*
+💰 Full Price: KSH ${fullPrice.toLocaleString()}
+💳 Deposit Required: KSH ${depositAmount.toLocaleString()}
+
+📋 *Important Policies:*
+
+💵 *Payment:*
+• Remaining balance is due after the shoot
+
+📸 *Photo Delivery:*
+• Edited photos delivered in *10 working days*
+
+⏰ *Cancellation/Rescheduling:*
+• Must be made at least *72 hours* before your shoot time
+• Changes within 72 hours are non-refundable
+• Session fee will be forfeited for late cancellations
+
+To confirm your booking and accept these terms, please reply with *"CONFIRM"* and I'll send the M-PESA payment prompt to your phone.
+
+Or reply *"CANCEL"* if you'd like to make changes. 💖`;
+                        await this.messengerSendService.sendMessage(senderId, confirmationMessage);
+                        console.log(`Deposit confirmation sent to ${newPhone}. Waiting for user confirmation.`);
+                    }
+                }
+                else if (text.toLowerCase() === 'confirm') {
+                    const draft = await this.bookingsService.getBookingDraft(customer.id);
+                    if (draft) {
+                        const customerData = await this.customersService.findOne(customer.id);
+                        if (customerData?.phone) {
+                            const amount = await this.bookingsService.getDepositForDraft(customer.id) || 2000;
+                            try {
+                                const checkoutId = await this.paymentsService.initiateSTKPush(draft.id, customerData.phone, amount);
+                                await this.messengerSendService.sendMessage(senderId, `Payment request sent! Please check your phone and enter your M-PESA PIN to complete the deposit payment. 💳✨`);
+                                console.log(`STK Push initiated for ${customerData.phone}, CheckoutRequestID: ${checkoutId}`);
+                            }
+                            catch (error) {
+                                console.error('STK Push failed:', error);
+                                await this.messengerSendService.sendMessage(senderId, `Sorry, there was an issue initiating payment. Please try again or contact us at ${process.env.CUSTOMER_CARE_PHONE || '0720 111928'}. 💖`);
+                            }
+                        }
+                        else {
+                            await this.messengerSendService.sendMessage(senderId, `I don't have your phone number yet. Please share it so I can send the payment request. 📱`);
+                        }
+                    }
+                    else {
+                        await this.messengerSendService.sendMessage(senderId, `I don't see a pending booking. Would you like to start a new booking? 💖`);
+                    }
+                }
+                else if (text.toLowerCase() === 'cancel') {
+                    await this.messengerSendService.sendMessage(senderId, `No problem! What would you like to change? You can:
+• Choose a different package
+• Pick a different date/time
+• Start over
+
+Just let me know! 💖`);
+                }
+                else {
+                    const globalAiEnabled = await this.aiSettingsService.isAiEnabled();
+                    const customerAiEnabled = customer.aiEnabled ?? true;
+                    if (globalAiEnabled && customerAiEnabled) {
+                        console.log("Queueing Messenger message for AI...");
+                        await this.messageQueue.add("processMessage", { messageId: createdMessage.id });
+                    }
+                    else {
+                        console.log('AI disabled (global or customer-specific) - Messenger message not queued');
+                    }
+                }
+            }
         }
+        return { status: 'ok' };
     }
     async handleTelegramWebhook(data) {
         const message = data.message;
@@ -357,7 +571,7 @@ Just let me know! 💖`);
 exports.WebhooksService = WebhooksService;
 exports.WebhooksService = WebhooksService = __decorate([
     (0, common_1.Injectable)(),
-    __param(8, (0, bull_1.InjectQueue)('messageQueue')),
+    __param(9, (0, bull_1.InjectQueue)('messageQueue')),
     __metadata("design:paramtypes", [messages_service_1.MessagesService,
         customers_service_1.CustomersService,
         ai_service_1.AiService,
@@ -365,6 +579,7 @@ exports.WebhooksService = WebhooksService = __decorate([
         bookings_service_1.BookingsService,
         payments_service_1.PaymentsService,
         whatsapp_service_1.WhatsappService,
-        instagram_service_1.InstagramService, Object, websocket_gateway_1.WebsocketGateway])
+        instagram_service_1.InstagramService,
+        messenger_send_service_1.MessengerSendService, Object, websocket_gateway_1.WebsocketGateway])
 ], WebhooksService);
 //# sourceMappingURL=webhooks.service.js.map

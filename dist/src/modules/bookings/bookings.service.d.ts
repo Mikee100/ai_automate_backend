@@ -22,7 +22,9 @@ export declare class BookingsService {
     isAwaitingRescheduleTime(bookingId: string): Promise<boolean>;
     getActiveBookings(customerId: string): Promise<{
         id: string;
+        createdAt: Date;
         customerId: string;
+        updatedAt: Date;
         service: string;
         dateTime: Date;
         status: string;
@@ -30,8 +32,6 @@ export declare class BookingsService {
         recipientName: string | null;
         recipientPhone: string | null;
         googleEventId: string | null;
-        createdAt: Date;
-        updatedAt: Date;
     }[]>;
     setAwaitingRescheduleSelection(customerId: string, awaiting: boolean): Promise<void>;
     setAwaitingRescheduleTime(bookingId: string, awaiting: boolean): Promise<void>;
@@ -40,7 +40,6 @@ export declare class BookingsService {
         customer: {
             id: string;
             createdAt: Date;
-            updatedAt: Date;
             name: string;
             email: string | null;
             phone: string | null;
@@ -54,10 +53,13 @@ export declare class BookingsService {
             dailyTokenUsage: number;
             tokenResetDate: Date | null;
             totalTokensUsed: number;
+            updatedAt: Date;
         };
     } & {
         id: string;
+        createdAt: Date;
         customerId: string;
+        updatedAt: Date;
         service: string;
         dateTime: Date;
         status: string;
@@ -65,16 +67,14 @@ export declare class BookingsService {
         recipientName: string | null;
         recipientPhone: string | null;
         googleEventId: string | null;
-        createdAt: Date;
-        updatedAt: Date;
     }>;
     private readonly logger;
     private readonly STUDIO_TZ;
     getPackages(type?: string): Promise<{
         id: string;
         createdAt: Date;
-        updatedAt: Date;
         name: string;
+        updatedAt: Date;
         type: string;
         price: number;
         deposit: number;
@@ -100,8 +100,8 @@ export declare class BookingsService {
     getPackageById(id: string): Promise<{
         id: string;
         createdAt: Date;
-        updatedAt: Date;
         name: string;
+        updatedAt: Date;
         type: string;
         price: number;
         deposit: number;
@@ -132,13 +132,13 @@ export declare class BookingsService {
     private formatDraftIncompleteMessage;
     getBookingDraft(customerId: string): Promise<{
         id: string;
+        createdAt: Date;
         customerId: string;
+        name: string | null;
+        updatedAt: Date;
         service: string | null;
         recipientName: string | null;
         recipientPhone: string | null;
-        createdAt: Date;
-        updatedAt: Date;
-        name: string | null;
         date: string | null;
         time: string | null;
         dateTimeIso: string | null;
@@ -151,13 +151,13 @@ export declare class BookingsService {
     getDepositForDraft(customerId: string): Promise<number>;
     createBookingDraft(customerId: string): Promise<{
         id: string;
+        createdAt: Date;
         customerId: string;
+        name: string | null;
+        updatedAt: Date;
         service: string | null;
         recipientName: string | null;
         recipientPhone: string | null;
-        createdAt: Date;
-        updatedAt: Date;
-        name: string | null;
         date: string | null;
         time: string | null;
         dateTimeIso: string | null;
@@ -169,13 +169,13 @@ export declare class BookingsService {
     }>;
     updateBookingDraft(customerId: string, updates: Partial<any>): Promise<{
         id: string;
+        createdAt: Date;
         customerId: string;
+        name: string | null;
+        updatedAt: Date;
         service: string | null;
         recipientName: string | null;
         recipientPhone: string | null;
-        createdAt: Date;
-        updatedAt: Date;
-        name: string | null;
         date: string | null;
         time: string | null;
         dateTimeIso: string | null;
@@ -187,13 +187,13 @@ export declare class BookingsService {
     }>;
     deleteBookingDraft(customerId: string): Promise<{
         id: string;
+        createdAt: Date;
         customerId: string;
+        name: string | null;
+        updatedAt: Date;
         service: string | null;
         recipientName: string | null;
         recipientPhone: string | null;
-        createdAt: Date;
-        updatedAt: Date;
-        name: string | null;
         date: string | null;
         time: string | null;
         dateTimeIso: string | null;
@@ -212,7 +212,9 @@ export declare class BookingsService {
         recipientPhone?: string;
     }): Promise<{
         id: string;
+        createdAt: Date;
         customerId: string;
+        updatedAt: Date;
         service: string;
         dateTime: Date;
         status: string;
@@ -220,12 +222,12 @@ export declare class BookingsService {
         recipientName: string | null;
         recipientPhone: string | null;
         googleEventId: string | null;
-        createdAt: Date;
-        updatedAt: Date;
     }>;
     createBookingFromMessage(message: any): Promise<{
         id: string;
+        createdAt: Date;
         customerId: string;
+        updatedAt: Date;
         service: string;
         dateTime: Date;
         status: string;
@@ -233,8 +235,6 @@ export declare class BookingsService {
         recipientName: string | null;
         recipientPhone: string | null;
         googleEventId: string | null;
-        createdAt: Date;
-        updatedAt: Date;
     }>;
     checkAvailability(requested: Date, service?: string): Promise<{
         available: boolean;
@@ -248,7 +248,6 @@ export declare class BookingsService {
         customer: {
             id: string;
             createdAt: Date;
-            updatedAt: Date;
             name: string;
             email: string | null;
             phone: string | null;
@@ -262,10 +261,13 @@ export declare class BookingsService {
             dailyTokenUsage: number;
             tokenResetDate: Date | null;
             totalTokensUsed: number;
+            updatedAt: Date;
         };
     } & {
         id: string;
+        createdAt: Date;
         customerId: string;
+        updatedAt: Date;
         service: string;
         dateTime: Date;
         status: string;
@@ -273,14 +275,11 @@ export declare class BookingsService {
         recipientName: string | null;
         recipientPhone: string | null;
         googleEventId: string | null;
-        createdAt: Date;
-        updatedAt: Date;
     }>;
     confirmBooking(bookingId: string): Promise<{
         customer: {
             id: string;
             createdAt: Date;
-            updatedAt: Date;
             name: string;
             email: string | null;
             phone: string | null;
@@ -294,10 +293,13 @@ export declare class BookingsService {
             dailyTokenUsage: number;
             tokenResetDate: Date | null;
             totalTokensUsed: number;
+            updatedAt: Date;
         };
     } & {
         id: string;
+        createdAt: Date;
         customerId: string;
+        updatedAt: Date;
         service: string;
         dateTime: Date;
         status: string;
@@ -305,14 +307,11 @@ export declare class BookingsService {
         recipientName: string | null;
         recipientPhone: string | null;
         googleEventId: string | null;
-        createdAt: Date;
-        updatedAt: Date;
     }>;
     cancelBooking(bookingId: string): Promise<{
         customer: {
             id: string;
             createdAt: Date;
-            updatedAt: Date;
             name: string;
             email: string | null;
             phone: string | null;
@@ -326,10 +325,13 @@ export declare class BookingsService {
             dailyTokenUsage: number;
             tokenResetDate: Date | null;
             totalTokensUsed: number;
+            updatedAt: Date;
         };
     } & {
         id: string;
+        createdAt: Date;
         customerId: string;
+        updatedAt: Date;
         service: string;
         dateTime: Date;
         status: string;
@@ -337,15 +339,12 @@ export declare class BookingsService {
         recipientName: string | null;
         recipientPhone: string | null;
         googleEventId: string | null;
-        createdAt: Date;
-        updatedAt: Date;
     }>;
     getBookings(customerId?: string): Promise<{
         bookings: ({
             customer: {
                 id: string;
                 createdAt: Date;
-                updatedAt: Date;
                 name: string;
                 email: string | null;
                 phone: string | null;
@@ -359,10 +358,13 @@ export declare class BookingsService {
                 dailyTokenUsage: number;
                 tokenResetDate: Date | null;
                 totalTokensUsed: number;
+                updatedAt: Date;
             };
         } & {
             id: string;
+            createdAt: Date;
             customerId: string;
+            updatedAt: Date;
             service: string;
             dateTime: Date;
             status: string;
@@ -370,16 +372,14 @@ export declare class BookingsService {
             recipientName: string | null;
             recipientPhone: string | null;
             googleEventId: string | null;
-            createdAt: Date;
-            updatedAt: Date;
         })[];
         total: number;
     }>;
     createPackage(data: any): Promise<{
         id: string;
         createdAt: Date;
-        updatedAt: Date;
         name: string;
+        updatedAt: Date;
         type: string;
         price: number;
         deposit: number;
@@ -398,8 +398,8 @@ export declare class BookingsService {
     updatePackage(id: string, data: any): Promise<{
         id: string;
         createdAt: Date;
-        updatedAt: Date;
         name: string;
+        updatedAt: Date;
         type: string;
         price: number;
         deposit: number;
@@ -418,8 +418,8 @@ export declare class BookingsService {
     deletePackage(id: string): Promise<{
         id: string;
         createdAt: Date;
-        updatedAt: Date;
         name: string;
+        updatedAt: Date;
         type: string;
         price: number;
         deposit: number;
@@ -439,7 +439,6 @@ export declare class BookingsService {
         customer: {
             id: string;
             createdAt: Date;
-            updatedAt: Date;
             name: string;
             email: string | null;
             phone: string | null;
@@ -453,10 +452,13 @@ export declare class BookingsService {
             dailyTokenUsage: number;
             tokenResetDate: Date | null;
             totalTokensUsed: number;
+            updatedAt: Date;
         };
     } & {
         id: string;
+        createdAt: Date;
         customerId: string;
+        updatedAt: Date;
         service: string;
         dateTime: Date;
         status: string;
@@ -464,8 +466,6 @@ export declare class BookingsService {
         recipientName: string | null;
         recipientPhone: string | null;
         googleEventId: string | null;
-        createdAt: Date;
-        updatedAt: Date;
     }>;
     formatBookingConfirmationMessage(booking: any, mpesaReceipt: string, reminderTimes?: Array<{
         days: number;
@@ -488,13 +488,13 @@ export declare class BookingsService {
     private static parseDurationToMinutes;
     advanceBookingStep(customerId: string, nextStep: BookingStep): Promise<{
         id: string;
+        createdAt: Date;
         customerId: string;
+        name: string | null;
+        updatedAt: Date;
         service: string | null;
         recipientName: string | null;
         recipientPhone: string | null;
-        createdAt: Date;
-        updatedAt: Date;
-        name: string | null;
         date: string | null;
         time: string | null;
         dateTimeIso: string | null;
@@ -507,13 +507,13 @@ export declare class BookingsService {
     getBookingStep(customerId: string): Promise<BookingStep>;
     editBookingDraft(customerId: string, field: string, value: any): Promise<{
         id: string;
+        createdAt: Date;
         customerId: string;
+        name: string | null;
+        updatedAt: Date;
         service: string | null;
         recipientName: string | null;
         recipientPhone: string | null;
-        createdAt: Date;
-        updatedAt: Date;
-        name: string | null;
         date: string | null;
         time: string | null;
         dateTimeIso: string | null;
@@ -525,13 +525,13 @@ export declare class BookingsService {
     }>;
     reviewBookingDraft(customerId: string): Promise<{
         id: string;
+        createdAt: Date;
         customerId: string;
+        name: string | null;
+        updatedAt: Date;
         service: string | null;
         recipientName: string | null;
         recipientPhone: string | null;
-        createdAt: Date;
-        updatedAt: Date;
-        name: string | null;
         date: string | null;
         time: string | null;
         dateTimeIso: string | null;
@@ -543,13 +543,13 @@ export declare class BookingsService {
     }>;
     confirmBookingDraft(customerId: string): Promise<{
         id: string;
+        createdAt: Date;
         customerId: string;
+        name: string | null;
+        updatedAt: Date;
         service: string | null;
         recipientName: string | null;
         recipientPhone: string | null;
-        createdAt: Date;
-        updatedAt: Date;
-        name: string | null;
         date: string | null;
         time: string | null;
         dateTimeIso: string | null;

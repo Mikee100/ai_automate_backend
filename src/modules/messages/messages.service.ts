@@ -1,3 +1,9 @@
+  /**
+   * Public method to get customer by ID
+   */
+  async getCustomerById(customerId: string) {
+    return this.prisma.customer.findUnique({ where: { id: customerId } });
+  }
 import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';

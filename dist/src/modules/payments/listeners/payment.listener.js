@@ -16,10 +16,12 @@ const event_emitter_1 = require("@nestjs/event-emitter");
 const booking_events_1 = require("../../bookings/events/booking.events");
 const payments_service_1 = require("../payments.service");
 const messages_service_1 = require("../../messages/messages.service");
+const prisma_service_1 = require("../../../prisma/prisma.service");
 let PaymentListener = PaymentListener_1 = class PaymentListener {
-    constructor(paymentsService, messagesService) {
+    constructor(paymentsService, messagesService, prisma) {
         this.paymentsService = paymentsService;
         this.messagesService = messagesService;
+        this.prisma = prisma;
         this.logger = new common_1.Logger(PaymentListener_1.name);
     }
     async handleBookingDraftCompleted(event) {
@@ -29,10 +31,15 @@ let PaymentListener = PaymentListener_1 = class PaymentListener {
             if (!phone.startsWith('254')) {
                 phone = `254${phone.replace(/^0+/, '')}`;
             }
+            const customer = await this.prisma.customer.findUnique({
+                where: { id: event.customerId },
+                select: { instagramId: true, whatsappId: true }
+            });
+            const platform = customer?.instagramId ? 'instagram' : 'whatsapp';
             const prepaymentMsg = `⏱️ *Get Ready!*\n\nYou'll receive an M-Pesa payment prompt on your phone in the next 3 seconds for *KSH ${event.depositAmount}*.\n\nPlease have your M-Pesa PIN ready! 📲✨`;
             try {
-                await this.messagesService.sendOutboundMessage(event.customerId, prepaymentMsg, 'whatsapp');
-                this.logger.log(`[Event] Pre-payment notification sent to ${event.customerId}`);
+                await this.messagesService.sendOutboundMessage(event.customerId, prepaymentMsg, platform);
+                this.logger.log(`[Event] Pre-payment notification sent to ${event.customerId} via ${platform}`);
                 await new Promise(resolve => setTimeout(resolve, 1000));
             }
             catch (msgError) {
@@ -56,6 +63,7 @@ __decorate([
 exports.PaymentListener = PaymentListener = PaymentListener_1 = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [payments_service_1.PaymentsService,
-        messages_service_1.MessagesService])
+        messages_service_1.MessagesService,
+        prisma_service_1.PrismaService])
 ], PaymentListener);
 //# sourceMappingURL=payment.listener.js.map
