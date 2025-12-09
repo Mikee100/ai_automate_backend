@@ -15,31 +15,112 @@ const bull_1 = require("@nestjs/bull");
 const common_1 = require("@nestjs/common");
 const ai_service_1 = require("../modules/ai/ai.service");
 const messenger_send_service_1 = require("../modules/webhooks/messenger-send.service");
+const whatsapp_service_1 = require("../modules/whatsapp/whatsapp.service");
+const instagram_service_1 = require("../modules/instagram/instagram.service");
 const messages_service_1 = require("../modules/messages/messages.service");
+const customers_service_1 = require("../modules/customers/customers.service");
+const websocket_gateway_1 = require("../websockets/websocket.gateway");
 let AiQueueProcessor = AiQueueProcessor_1 = class AiQueueProcessor {
-    constructor(aiService, messengerSendService, messagesService) {
+    constructor(aiService, messengerSendService, whatsappService, instagramService, messagesService, customersService, websocketGateway) {
         this.aiService = aiService;
         this.messengerSendService = messengerSendService;
+        this.whatsappService = whatsappService;
+        this.instagramService = instagramService;
         this.messagesService = messagesService;
+        this.customersService = customersService;
+        this.websocketGateway = websocketGateway;
         this.logger = new common_1.Logger(AiQueueProcessor_1.name);
     }
-    async handleMessengerAiJob(job) {
+    async handleAiJob(job) {
         const { customerId, message, platform } = job.data;
-        this.logger.log(`Processing AI job for Messenger: customerId=${customerId}, message=${message}`);
-        if (platform !== 'messenger') {
-            this.logger.warn('Job platform is not messenger, skipping.');
+        this.logger.log(`Processing centralized AI job: customerId=${customerId}, platform=${platform}, message=${message}`);
+        let aiResponse = "Sorry, I couldn't process your request.";
+        try {
+            const history = await this.messagesService.getConversationHistory(customerId, 10);
+            const aiPromise = this.aiService.handleConversation(message, customerId, history);
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('AI processing timeout')), 30000));
+            const aiResult = await Promise.race([aiPromise, timeoutPromise]);
+            this.logger.debug(`AI result: ${JSON.stringify(aiResult)}`);
+            if (aiResult?.response) {
+                if (typeof aiResult.response === 'string') {
+                    aiResponse = aiResult.response;
+                }
+                else if (typeof aiResult.response === 'object' && aiResult.response.text) {
+                    aiResponse = aiResult.response.text;
+                }
+                else {
+                    aiResponse = "Sorry, I couldn't process your request.";
+                }
+            }
+            else {
+                this.logger.warn('AI result has no response, using fallback');
+            }
+        }
+        catch (error) {
+            this.logger.error('AI processing failed, using fallback response', error);
+        }
+        await this.sendResponseByPlatform(customerId, aiResponse, platform);
+        this.logger.log(`AI response sent to ${platform}.`);
+    }
+    async sendResponseByPlatform(customerId, response, platform) {
+        const customer = await this.customersService.findOne(customerId);
+        if (!customer) {
+            this.logger.error('Customer not found, cannot send response');
             return;
         }
-        const history = await this.messagesService.getConversationHistory(customerId, 10);
-        const aiResult = await this.aiService.handleConversation(message, customerId, history);
-        const aiResponse = aiResult?.response || "Sorry, I couldn't process your request.";
-        const customer = await this.messagesService.getCustomerById(customerId);
-        if (!customer?.messengerId) {
-            this.logger.error('Customer does not have a Messenger ID, cannot send response.');
-            return;
+        try {
+            const outboundMessage = await this.messagesService.create({
+                content: response,
+                platform: platform,
+                direction: 'outbound',
+                customerId,
+            });
+            switch (platform) {
+                case 'whatsapp':
+                    if (customer.whatsappId) {
+                        await this.whatsappService.sendMessage(customer.whatsappId, response);
+                    }
+                    else {
+                        this.logger.error('Customer does not have WhatsApp ID');
+                        return;
+                    }
+                    break;
+                case 'instagram':
+                    if (customer.instagramId) {
+                        await this.instagramService.sendMessage(customer.instagramId, response);
+                    }
+                    else {
+                        this.logger.error('Customer does not have Instagram ID');
+                        return;
+                    }
+                    break;
+                case 'messenger':
+                    if (customer.messengerId) {
+                        await this.messengerSendService.sendMessage(customer.messengerId, response);
+                    }
+                    else {
+                        this.logger.error('Customer does not have Messenger ID');
+                        return;
+                    }
+                    break;
+                default:
+                    this.logger.warn(`Unknown platform: ${platform}, cannot send response`);
+                    return;
+            }
+            this.websocketGateway.emitNewMessage(platform, {
+                id: outboundMessage.id,
+                from: '',
+                to: customer.whatsappId || customer.instagramId || customer.messengerId || '',
+                content: response,
+                timestamp: outboundMessage.createdAt.toISOString(),
+                direction: 'outbound',
+                customerId,
+                customerName: customer.name,
+            });
         }
-        await this.messengerSendService.sendMessage(customer.messengerId, aiResponse);
-        this.logger.log('AI response sent to Messenger.');
+        catch (error) {
+            this.logger.error(`Error sending ${platform} response`, error);
+        }
     }
 };
 exports.AiQueueProcessor = AiQueueProcessor;
@@ -48,12 +129,16 @@ __decorate([
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
-], AiQueueProcessor.prototype, "handleMessengerAiJob", null);
+], AiQueueProcessor.prototype, "handleAiJob", null);
 exports.AiQueueProcessor = AiQueueProcessor = AiQueueProcessor_1 = __decorate([
     (0, bull_1.Processor)('aiQueue'),
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [ai_service_1.AiService,
         messenger_send_service_1.MessengerSendService,
-        messages_service_1.MessagesService])
+        whatsapp_service_1.WhatsappService,
+        instagram_service_1.InstagramService,
+        messages_service_1.MessagesService,
+        customers_service_1.CustomersService,
+        websocket_gateway_1.WebsocketGateway])
 ], AiQueueProcessor);
 //# sourceMappingURL=ai-queue.processor.js.map

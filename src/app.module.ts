@@ -30,6 +30,8 @@ import { ConversationsModule } from './modules/conversations/conversations.modul
 import { SeedingModule } from './modules/seeding/seeding.module';
 import { StatisticsModule } from './modules/statistics/statistics.module';
 
+import { StatisticsModule } from './modules/statistics/statistics.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot({

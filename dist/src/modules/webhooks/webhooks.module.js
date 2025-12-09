@@ -36,6 +36,9 @@ exports.WebhooksModule = WebhooksModule = __decorate([
             bull_1.BullModule.registerQueue({
                 name: 'messageQueue',
             }),
+            bull_1.BullModule.registerQueue({
+                name: 'aiQueue',
+            }),
             websocket_module_1.WebsocketModule,
             messenger_module_1.MessengerModule,
             instagram_module_1.InstagramModule,
