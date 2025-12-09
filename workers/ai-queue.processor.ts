@@ -12,18 +12,20 @@ export class AiQueueProcessor {
   constructor(private aiService: AiService) {}
 
   async process(job: Job<any>): Promise<any> {
-    this.logger.log(`Processing job id=${job.id} with data: ${JSON.stringify(job.data)}`);
+    this.logger.log(`[AI QUEUE] Received job id=${job.id} with data: ${JSON.stringify(job.data)}`);
     try {
-      const { question } = job.data;
-      if (!question) {
-        this.logger.warn(`Job id=${job.id} missing 'question' field. Data: ${JSON.stringify(job.data)}`);
-        throw new Error("Job data missing 'question' field");
+      const { message, customerId, platform } = job.data;
+      this.logger.log(`[AI QUEUE] Extracted fields - message: ${message}, customerId: ${customerId}, platform: ${platform}`);
+      if (!message) {
+        this.logger.warn(`[AI QUEUE] Job id=${job.id} missing 'message' field. Data: ${JSON.stringify(job.data)}`);
+        throw new Error("Job data missing 'message' field");
       }
+      this.logger.log(`[AI QUEUE] Calling aiService.processAiRequest for job id=${job.id}`);
       const answer = await this.aiService.processAiRequest(job.data);
-      this.logger.log(`Job id=${job.id} processed successfully. Answer: ${JSON.stringify(answer)}`);
+      this.logger.log(`[AI QUEUE] Job id=${job.id} processed successfully. Answer: ${JSON.stringify(answer)}`);
       return { answer };
     } catch (error) {
-      this.logger.error(`Error processing job id=${job.id}: ${error.message}`, error.stack);
+      this.logger.error(`[AI QUEUE] Error processing job id=${job.id}: ${error.message}`, error.stack);
       throw error;
     }
   }

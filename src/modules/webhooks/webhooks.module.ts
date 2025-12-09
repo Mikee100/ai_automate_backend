@@ -23,6 +23,9 @@ import { InstagramModule } from '../instagram/instagram.module';
     BullModule.registerQueue({
       name: 'messageQueue',
     }),
+    BullModule.registerQueue({
+      name: 'aiQueue',
+    }),
     WebsocketModule,
     MessengerModule,
     InstagramModule,

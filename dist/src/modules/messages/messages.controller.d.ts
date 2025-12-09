@@ -6,24 +6,26 @@ export declare class MessagesController {
     create(createMessageDto: CreateMessageDto): Promise<{
         id: string;
         createdAt: Date;
-        content: string;
         platform: string;
+        content: string;
         direction: string;
+        customerId: string;
         externalId: string | null;
         handledBy: string | null;
         isResolved: boolean | null;
         isEscalated: boolean | null;
-        customerId: string;
     }>;
     findAll(): Promise<({
         customer: {
             id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            name: string;
             email: string | null;
+            phone: string | null;
             whatsappId: string | null;
             instagramId: string | null;
             messengerId: string | null;
-            name: string;
-            phone: string | null;
             aiEnabled: boolean;
             isAiPaused: boolean;
             lastInstagramMessageAt: Date | null;
@@ -31,30 +33,30 @@ export declare class MessagesController {
             dailyTokenUsage: number;
             tokenResetDate: Date | null;
             totalTokensUsed: number;
-            createdAt: Date;
-            updatedAt: Date;
         };
     } & {
         id: string;
         createdAt: Date;
-        content: string;
         platform: string;
+        content: string;
         direction: string;
+        customerId: string;
         externalId: string | null;
         handledBy: string | null;
         isResolved: boolean | null;
         isEscalated: boolean | null;
-        customerId: string;
     })[]>;
     findByCustomer(customerId: string): Promise<({
         customer: {
             id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            name: string;
             email: string | null;
+            phone: string | null;
             whatsappId: string | null;
             instagramId: string | null;
             messengerId: string | null;
-            name: string;
-            phone: string | null;
             aiEnabled: boolean;
             isAiPaused: boolean;
             lastInstagramMessageAt: Date | null;
@@ -62,19 +64,17 @@ export declare class MessagesController {
             dailyTokenUsage: number;
             tokenResetDate: Date | null;
             totalTokensUsed: number;
-            createdAt: Date;
-            updatedAt: Date;
         };
     } & {
         id: string;
         createdAt: Date;
-        content: string;
         platform: string;
+        content: string;
         direction: string;
+        customerId: string;
         externalId: string | null;
         handledBy: string | null;
         isResolved: boolean | null;
         isEscalated: boolean | null;
-        customerId: string;
     })[]>;
 }

@@ -25,6 +25,7 @@ export class WebhooksService {
     private instagramService: InstagramService,
     private messengerSendService: MessengerSendService,
     @InjectQueue('messageQueue') private messageQueue: Queue,
+    @InjectQueue('aiQueue') private aiQueue: Queue,
     private websocketGateway: WebsocketGateway,
   ) { }
   async handleWhatsAppWebhook(body: any) {
@@ -278,8 +279,12 @@ Just let me know! 💖`
       const customerAiEnabled = customer.aiEnabled ?? true; // Default to true if not set
 
       if (globalAiEnabled && customerAiEnabled) {
-        console.log("Queueing message for AI...");
-        await this.messageQueue.add("processMessage", { messageId: created.id });
+        console.log("Queueing message for centralized AI...");
+        await this.aiQueue.add("handleAiJob", {
+          customerId: customer.id,
+          message: text,
+          platform: 'whatsapp'
+        });
       } else {
         console.log('AI disabled (global or customer-specific) - message not queued');
       }
@@ -417,12 +422,14 @@ Just let me know! 💖`
       console.log(`[AI DEBUG] Instagram: customerId=${customer.id}, aiEnabled=${customer.aiEnabled}`);
 
       if (globalAiEnabled && customerAiEnabled) {
-        // Queue the message for AI processing
-        console.log('Adding Instagram message to queue for processing...');
-        await this.messageQueue.add('processMessage', {
-          messageId: createdMessage.id,
+        // Queue the message for centralized AI processing
+        console.log('Adding Instagram message to centralized AI queue...');
+        await this.aiQueue.add('handleAiJob', {
+          customerId: customer.id,
+          message: text,
+          platform: 'instagram'
         });
-        console.log('Instagram message added to queue successfully');
+        console.log('Instagram message added to centralized AI queue successfully');
       } else {
         console.log('AI disabled (global or customer-specific) - Instagram message not queued');
       }
@@ -669,8 +676,12 @@ Just let me know! 💖`
           const customerAiEnabled = customer.aiEnabled ?? true; // Default to true if not set
 
           if (globalAiEnabled && customerAiEnabled) {
-            console.log("Queueing Messenger message for AI...");
-            await this.messageQueue.add("processMessage", { messageId: createdMessage.id });
+            console.log("Queueing Messenger message for centralized AI...");
+            await this.aiQueue.add("handleAiJob", {
+              customerId: customer.id,
+              message: text,
+              platform: 'messenger'
+            });
           } else {
             console.log('AI disabled (global or customer-specific) - Messenger message not queued');
           }

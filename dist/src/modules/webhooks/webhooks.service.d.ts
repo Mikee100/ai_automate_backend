@@ -20,8 +20,9 @@ export declare class WebhooksService {
     private instagramService;
     private messengerSendService;
     private messageQueue;
+    private aiQueue;
     private websocketGateway;
-    constructor(messagesService: MessagesService, customersService: CustomersService, aiService: AiService, aiSettingsService: AiSettingsService, bookingsService: BookingsService, paymentsService: PaymentsService, whatsappService: WhatsappService, instagramService: InstagramService, messengerSendService: MessengerSendService, messageQueue: Queue, websocketGateway: WebsocketGateway);
+    constructor(messagesService: MessagesService, customersService: CustomersService, aiService: AiService, aiSettingsService: AiSettingsService, bookingsService: BookingsService, paymentsService: PaymentsService, whatsappService: WhatsappService, instagramService: InstagramService, messengerSendService: MessengerSendService, messageQueue: Queue, aiQueue: Queue, websocketGateway: WebsocketGateway);
     handleWhatsAppWebhook(body: any): Promise<{
         status: string;
     }>;

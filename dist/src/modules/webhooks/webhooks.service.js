@@ -26,7 +26,7 @@ const whatsapp_service_1 = require("../whatsapp/whatsapp.service");
 const instagram_service_1 = require("../instagram/instagram.service");
 const messenger_send_service_1 = require("./messenger-send.service");
 let WebhooksService = class WebhooksService {
-    constructor(messagesService, customersService, aiService, aiSettingsService, bookingsService, paymentsService, whatsappService, instagramService, messengerSendService, messageQueue, websocketGateway) {
+    constructor(messagesService, customersService, aiService, aiSettingsService, bookingsService, paymentsService, whatsappService, instagramService, messengerSendService, messageQueue, aiQueue, websocketGateway) {
         this.messagesService = messagesService;
         this.customersService = customersService;
         this.aiService = aiService;
@@ -37,6 +37,7 @@ let WebhooksService = class WebhooksService {
         this.instagramService = instagramService;
         this.messengerSendService = messengerSendService;
         this.messageQueue = messageQueue;
+        this.aiQueue = aiQueue;
         this.websocketGateway = websocketGateway;
     }
     async handleWhatsAppWebhook(body) {
@@ -230,8 +231,12 @@ Just let me know! 💖`);
             const globalAiEnabled = await this.aiSettingsService.isAiEnabled();
             const customerAiEnabled = customer.aiEnabled ?? true;
             if (globalAiEnabled && customerAiEnabled) {
-                console.log("Queueing message for AI...");
-                await this.messageQueue.add("processMessage", { messageId: created.id });
+                console.log("Queueing message for centralized AI...");
+                await this.aiQueue.add("handleAiJob", {
+                    customerId: customer.id,
+                    message: text,
+                    platform: 'whatsapp'
+                });
             }
             else {
                 console.log('AI disabled (global or customer-specific) - message not queued');
@@ -339,11 +344,13 @@ Just let me know! 💖`);
             const customerAiEnabled = customer.aiEnabled;
             console.log(`[AI DEBUG] Instagram: customerId=${customer.id}, aiEnabled=${customer.aiEnabled}`);
             if (globalAiEnabled && customerAiEnabled) {
-                console.log('Adding Instagram message to queue for processing...');
-                await this.messageQueue.add('processMessage', {
-                    messageId: createdMessage.id,
+                console.log('Adding Instagram message to centralized AI queue...');
+                await this.aiQueue.add('handleAiJob', {
+                    customerId: customer.id,
+                    message: text,
+                    platform: 'instagram'
                 });
-                console.log('Instagram message added to queue successfully');
+                console.log('Instagram message added to centralized AI queue successfully');
             }
             else {
                 console.log('AI disabled (global or customer-specific) - Instagram message not queued');
@@ -533,8 +540,12 @@ Just let me know! 💖`);
                     const globalAiEnabled = await this.aiSettingsService.isAiEnabled();
                     const customerAiEnabled = customer.aiEnabled ?? true;
                     if (globalAiEnabled && customerAiEnabled) {
-                        console.log("Queueing Messenger message for AI...");
-                        await this.messageQueue.add("processMessage", { messageId: createdMessage.id });
+                        console.log("Queueing Messenger message for centralized AI...");
+                        await this.aiQueue.add("handleAiJob", {
+                            customerId: customer.id,
+                            message: text,
+                            platform: 'messenger'
+                        });
                     }
                     else {
                         console.log('AI disabled (global or customer-specific) - Messenger message not queued');
@@ -572,6 +583,7 @@ exports.WebhooksService = WebhooksService;
 exports.WebhooksService = WebhooksService = __decorate([
     (0, common_1.Injectable)(),
     __param(9, (0, bull_1.InjectQueue)('messageQueue')),
+    __param(10, (0, bull_1.InjectQueue)('aiQueue')),
     __metadata("design:paramtypes", [messages_service_1.MessagesService,
         customers_service_1.CustomersService,
         ai_service_1.AiService,
@@ -580,6 +592,6 @@ exports.WebhooksService = WebhooksService = __decorate([
         payments_service_1.PaymentsService,
         whatsapp_service_1.WhatsappService,
         instagram_service_1.InstagramService,
-        messenger_send_service_1.MessengerSendService, Object, websocket_gateway_1.WebsocketGateway])
+        messenger_send_service_1.MessengerSendService, Object, Object, websocket_gateway_1.WebsocketGateway])
 ], WebhooksService);
 //# sourceMappingURL=webhooks.service.js.map

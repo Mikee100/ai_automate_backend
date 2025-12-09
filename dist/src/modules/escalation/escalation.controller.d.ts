@@ -5,14 +5,14 @@ export declare class EscalationController {
     getOpenEscalations(): Promise<({
         customer: {
             id: string;
-            name: string;
             createdAt: Date;
             updatedAt: Date;
+            name: string;
             email: string | null;
+            phone: string | null;
             whatsappId: string | null;
             instagramId: string | null;
             messengerId: string | null;
-            phone: string | null;
             aiEnabled: boolean;
             isAiPaused: boolean;
             lastInstagramMessageAt: Date | null;
@@ -25,24 +25,24 @@ export declare class EscalationController {
         id: string;
         createdAt: Date;
         updatedAt: Date;
-        sentimentScore: number | null;
+        description: string | null;
         customerId: string;
         status: string;
         metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        sentimentScore: number | null;
         reason: string | null;
-        description: string | null;
         escalationType: string;
     })[]>;
     resolveEscalation(id: string): Promise<{
         id: string;
         createdAt: Date;
         updatedAt: Date;
-        sentimentScore: number | null;
+        description: string | null;
         customerId: string;
         status: string;
         metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        sentimentScore: number | null;
         reason: string | null;
-        description: string | null;
         escalationType: string;
     }>;
 }

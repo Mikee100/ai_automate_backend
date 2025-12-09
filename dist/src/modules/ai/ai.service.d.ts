@@ -96,10 +96,11 @@ export declare class AiService {
     private generateBookingReply;
     getOrCreateDraft(customerId: string): Promise<{
         id: string;
-        name: string | null;
         createdAt: Date;
         updatedAt: Date;
+        name: string | null;
         customerId: string;
+        bookingId: string | null;
         service: string | null;
         recipientName: string | null;
         recipientPhone: string | null;
@@ -109,15 +110,15 @@ export declare class AiService {
         isForSomeoneElse: boolean | null;
         step: string;
         conflictResolution: string | null;
-        bookingId: string | null;
         version: number;
     }>;
     mergeIntoDraft(customerId: string, extraction: any): Promise<{
         id: string;
-        name: string | null;
         createdAt: Date;
         updatedAt: Date;
+        name: string | null;
         customerId: string;
+        bookingId: string | null;
         service: string | null;
         recipientName: string | null;
         recipientPhone: string | null;
@@ -127,7 +128,6 @@ export declare class AiService {
         isForSomeoneElse: boolean | null;
         step: string;
         conflictResolution: string | null;
-        bookingId: string | null;
         version: number;
     }>;
     checkAndCompleteIfConfirmed(draft: any, extraction: any, customerId: string, bookingsService: any): Promise<{

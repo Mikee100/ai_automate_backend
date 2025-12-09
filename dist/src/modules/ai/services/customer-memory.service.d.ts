@@ -81,13 +81,13 @@ export declare class CustomerMemoryService {
             createdAt: Date;
             updatedAt: Date;
             customerId: string;
+            status: string;
+            googleEventId: string | null;
             service: string;
             dateTime: Date;
-            status: string;
             durationMinutes: number | null;
             recipientName: string | null;
             recipientPhone: string | null;
-            googleEventId: string | null;
         }[];
         isVIP: boolean;
         isReturning: boolean;

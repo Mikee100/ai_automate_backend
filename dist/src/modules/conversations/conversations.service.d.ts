@@ -33,21 +33,21 @@ export declare class ConversationsService {
     getConversationMessages(customerId: string, platform?: string): Promise<{
         id: string;
         createdAt: Date;
-        content: string;
         platform: string;
+        content: string;
         direction: string;
     }[]>;
     sendReply(customerId: string, message: string, platform: string): Promise<{
         id: string;
         createdAt: Date;
-        content: string;
         platform: string;
+        content: string;
         direction: string;
+        customerId: string;
         externalId: string | null;
         handledBy: string | null;
         isResolved: boolean | null;
         isEscalated: boolean | null;
-        customerId: string;
     }>;
     private isActive;
 }
