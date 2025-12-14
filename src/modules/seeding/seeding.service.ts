@@ -20,7 +20,7 @@ export class SeedingService {
     async seedPackages() {
         this.logger.log('Seeding packages...');
 
-        // Combined list of packages (Studio + Outdoor)
+        // Studio packages only
         const packages = [
             // Studio Packages
             {
@@ -142,58 +142,6 @@ export class SeedingService {
                 wig: true,
                 notes: 'VVIP indoor studio maternity package with balloon backdrop, A3 mount, photobook, and styled wig.',
             },
-            // Outdoor Packages
-            {
-                name: 'Standard Outdoor Package',
-                type: 'outdoor',
-                price: 20000,
-                deposit: 2000,
-                duration: '2 hrs',
-                images: 15,
-                makeup: true,
-                outfits: 2,
-                styling: true,
-                photobook: false,
-                photobookSize: null,
-                mount: false,
-                balloonBackdrop: false,
-                wig: false,
-                notes: 'Standard outdoor maternity photography package.',
-            },
-            {
-                name: 'Economy Outdoor Package',
-                type: 'outdoor',
-                price: 25000,
-                deposit: 2000,
-                duration: '2 hrs 30 mins',
-                images: 20,
-                makeup: true,
-                outfits: 3,
-                styling: true,
-                photobook: false,
-                photobookSize: null,
-                mount: false,
-                balloonBackdrop: false,
-                wig: false,
-                notes: 'Economy outdoor maternity photography package.',
-            },
-            {
-                name: 'Executive Outdoor Package',
-                type: 'outdoor',
-                price: 35000,
-                deposit: 2000,
-                duration: '2 hrs 30 mins',
-                images: 25,
-                makeup: true,
-                outfits: 4,
-                styling: true,
-                photobook: true,
-                photobookSize: '8x8"',
-                mount: false,
-                balloonBackdrop: false,
-                wig: false,
-                notes: 'Executive outdoor maternity photography package with photobook.',
-            },
         ];
 
         for (const pkg of packages) {
@@ -208,55 +156,6 @@ export class SeedingService {
 
     async seedKnowledgeBase() {
         this.logger.log('Seeding knowledge base...');
-
-        // Outdoor packages knowledge
-        const outdoorPackages = [
-            {
-                question: 'What are your outdoor packages?',
-                answer: `Our outdoor maternity packages are designed to celebrate your beautiful journey in natural settings. Here are our options:
-
-⭐ Standard Package — KSH 20,000
-- 2 hrs session
-- 15 soft copy images
-- Professional Makeup
-- 2 of your own outfits & Styling
-
-⭐ Economy Package — KSH 25,000
-- 2 hrs 30 mins session
-- 20 soft copy images
-- Professional Makeup
-- 3 of your own outfits & Styling
-
-⭐ Executive Package — KSH 35,000
-- 2 hrs 30 mins session
-- 25 soft copy images
-- Professional Makeup
-- 4 of your own outfits & Styling
-- 8x8" Photobook (hard pages)
-
-All outdoor packages include professional photography to capture your glow in beautiful natural locations.`
-            },
-            {
-                question: 'Tell me about outdoor maternity packages',
-                answer: `Our outdoor maternity packages let you celebrate your pregnancy in stunning natural environments. We have three beautiful options:
-
-⭐ Standard Package — KSH 20,000: 2 hours, 15 edited images, makeup, 2 outfits
-⭐ Economy Package — KSH 25,000: 2.5 hours, 20 edited images, makeup, 3 outfits
-⭐ Executive Package — KSH 35,000: 2.5 hours, 25 edited images, makeup, 4 outfits, photobook
-
-Each session is tailored to make you feel special and capture your radiance.`
-            },
-            {
-                question: 'What outdoor packages do you offer?',
-                answer: `We offer three outdoor maternity photography packages:
-
-1. Standard Package (KSH 20,000): 2 hrs, 15 images, makeup, 2 outfits
-2. Economy Package (KSH 25,000): 2.5 hrs, 20 images, makeup, 3 outfits
-3. Executive Package (KSH 35,000): 2.5 hrs, 25 images, makeup, 4 outfits, photobook
-
-Perfect for celebrating your pregnancy in nature's beauty!`
-            }
-        ];
 
         // Studio packages knowledge
         const studioPackages = [
@@ -345,6 +244,54 @@ Each package is designed to make you feel like the queen you are!`
 7. VVIP (KSH 50,000): 3.5 hrs, 30 images, balloon backdrop, A3 mount, photobook, wig
 
 Located at 4th Avenue Parklands, Diamond Plaza Annex, 2nd Floor.`
+            },
+            {
+                question: 'Tell me about the standard package',
+                answer: `Our Standard Package is perfect for capturing beautiful maternity moments in our studio! Here's what's included:
+
+⭐ Standard Package — KSH 10,000
+- 1 hr 30 mins session
+- 6 soft copy images
+- Professional Makeup
+- 2 of your own outfits & Styling
+
+This package is ideal for those looking for a beautiful maternity photoshoot experience at an accessible price point. All sessions take place at our comfortable studio located at 4th Avenue Parklands, Diamond Plaza Annex, 2nd Floor. 💖`
+            },
+            {
+                question: 'What is the standard package',
+                answer: `Our Standard Package is a beautiful studio maternity photography package priced at KSH 10,000. It includes:
+
+- 1 hr 30 mins session in our studio
+- 6 soft copy edited images
+- Professional Makeup included
+- 2 of your own outfits & Professional Styling
+
+Perfect for capturing your beautiful pregnancy journey in our comfortable studio environment! 🌸`
+            },
+            {
+                question: 'Tell me about the economy package',
+                answer: `Our Economy Package offers great value for a beautiful studio maternity shoot! Here's what's included:
+
+⭐ Economy Package — KSH 15,000
+- 2 hrs session
+- 12 soft copy images
+- Professional Makeup
+- 3 of your own outfits & Styling
+
+This package gives you more time, more images, and more outfit changes - perfect for capturing variety in your maternity photos! 💖`
+            },
+            {
+                question: 'Tell me about the executive package',
+                answer: `Our Executive Package includes everything you need for a beautiful studio maternity shoot! Here's what's included:
+
+⭐ Executive Package — KSH 20,000
+- 2 hrs 30 mins session
+- 15 soft copy images
+- Professional Makeup
+- 4 of your own outfits & Styling
+- 1 A3 mount
+
+The A3 mount is perfect for displaying your favorite photo at home! 📸💖`
             }
         ];
 
@@ -352,14 +299,8 @@ Located at 4th Avenue Parklands, Diamond Plaza Annex, 2nd Floor.`
         const generalPackages = [
             {
                 question: 'What packages do you offer?',
-                answer: `We offer beautiful maternity photography packages for both outdoor and studio settings. 
+                answer: `We offer beautiful studio maternity photography packages:
 
-OUTDOOR PACKAGES:
-⭐ Standard Package — KSH 20,000 (2 hrs, 15 images)
-⭐ Economy Package — KSH 25,000 (2.5 hrs, 20 images)
-⭐ Executive Package — KSH 35,000 (2.5 hrs, 25 images, photobook)
-
-STUDIO PACKAGES:
 ⭐ Standard Package — KSH 10,000 (1.5 hrs, 6 images)
 ⭐ Economy Package — KSH 15,000 (2 hrs, 12 images)
 ⭐ Executive Package — KSH 20,000 (2.5 hrs, 15 images, A3 mount)
@@ -372,22 +313,15 @@ All packages include professional makeup and styling. Studio location: 4th Avenu
             },
             {
                 question: 'How much do your packages cost?',
-                answer: `Our maternity photography packages range from KSH 10,000 to KSH 50,000:
+                answer: `Our studio maternity photography packages range from KSH 10,000 to KSH 50,000:
 
-OUTDOOR: KSH 20,000 - 35,000
-STUDIO: KSH 10,000 - 50,000
-
-Standard Studio: KSH 10,000
-Economy Studio: KSH 15,000
-Executive Studio: KSH 20,000
-Gold Studio: KSH 30,000
-Platinum Studio: KSH 35,000
-VIP Studio: KSH 45,000
-VVIP Studio: KSH 50,000
-
-Standard Outdoor: KSH 20,000
-Economy Outdoor: KSH 25,000
-Executive Outdoor: KSH 35,000
+Standard Package: KSH 10,000
+Economy Package: KSH 15,000
+Executive Package: KSH 20,000
+Gold Package: KSH 30,000
+Platinum Package: KSH 35,000
+VIP Package: KSH 45,000
+VVIP Package: KSH 50,000
 
 Each package includes professional services tailored to celebrate your pregnancy journey.`
             },
@@ -401,7 +335,7 @@ Each package includes professional services tailored to celebrate your pregnancy
 - Your choice of outfits (we provide styling)
 
 Additional inclusions vary by package:
-- Photobooks (Executive Outdoor, Gold/VIP/VVIP Studio)
+- Photobooks (Gold/VIP/VVIP Studio)
 - A3 mounts (Executive/Platinum/VVIP Studio)
 - Balloon backdrops (Platinum/VIP/VVIP Studio)
 - Styled wigs (VVIP Studio)
@@ -444,7 +378,7 @@ Just bring yourself and your beautiful bump! 🌸`
             }
         ];
 
-        const allKnowledge = [...outdoorPackages, ...studioPackages, ...generalPackages];
+        const allKnowledge = [...studioPackages, ...generalPackages];
 
         for (const item of allKnowledge) {
             // Use AiService to generate embedding and manage Pinecone, BUT wrapped in our logic

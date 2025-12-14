@@ -10,6 +10,7 @@ import { CalendarService } from '../calendar/calendar.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PackagesService } from '../packages/packages.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
+import { BookingCreatedEvent } from './events/booking.events';
 import * as chrono from 'chrono-node';
 import { DateTime, Duration } from 'luxon';
 
@@ -109,6 +110,7 @@ export class BookingsService {
       this.logger.debug(`[STK] Using phone: ${phone}, amount: ${depositAmount}`);
 
       // Emit event for payment initiation
+      this.logger.log(`[BOOKING] Emitting booking.draft.completed event for customerId=${customerId}, draftId=${draft.id}`);
       this.eventEmitter.emit('booking.draft.completed', {
         customerId,
         draftId: draft.id,
@@ -117,6 +119,7 @@ export class BookingsService {
         recipientPhone,
         depositAmount,
       });
+      this.logger.log(`[BOOKING] Event emitted successfully`);
 
       return {
         message: "I've sent a request to your phone for the deposit. 📲 Once you complete that, your magical session will be officially booked! ✨",
@@ -442,6 +445,7 @@ export class BookingsService {
       const latestPayment = await this.getLatestPaymentForDraft(customerId);
       if (latestPayment?.bookingDraft) {
         draft = latestPayment.bookingDraft;
+        this.logger.debug(`[RESEND] Restored draft from payment ${latestPayment.id}`);
       }
     }
     
@@ -449,13 +453,83 @@ export class BookingsService {
       return { success: false, message: "I don't see a pending booking. Would you like to start a new booking? 💖" };
     }
 
-    if (draft.step !== 'confirm') {
-      return { success: false, message: "Your booking isn't ready for payment yet. Let's complete the booking details first! 📋" };
+    // Check if we have all required fields for payment (more flexible than just checking step)
+    const hasRequiredFields = draft.service && draft.date && draft.time && draft.name;
+    if (!hasRequiredFields) {
+      // If draft was cleaned up and missing fields, try to restore from payment
+      const latestPayment = await this.getLatestPaymentForDraft(customerId);
+      if (latestPayment?.bookingDraft) {
+        const paymentDraft = latestPayment.bookingDraft;
+        // Restore missing fields from payment's draft if available
+        const updates: any = {};
+        if (!draft.service && paymentDraft.service) updates.service = paymentDraft.service;
+        if (!draft.date && paymentDraft.date) updates.date = paymentDraft.date;
+        if (!draft.time && paymentDraft.time) updates.time = paymentDraft.time;
+        if (!draft.name && paymentDraft.name) updates.name = paymentDraft.name;
+        if (!draft.recipientPhone && paymentDraft.recipientPhone) updates.recipientPhone = paymentDraft.recipientPhone;
+        
+        if (Object.keys(updates).length > 0) {
+          this.logger.debug(`[RESEND] Restoring missing draft fields from payment: ${JSON.stringify(Object.keys(updates))}`);
+          await this.prisma.bookingDraft.update({
+            where: { id: draft.id },
+            data: updates
+          });
+          draft = await this.getBookingDraft(customerId);
+          
+          // Re-check after restoration
+          const hasRequiredFieldsAfterRestore = draft.service && draft.date && draft.time && draft.name;
+          if (!hasRequiredFieldsAfterRestore) {
+            return { success: false, message: "Your booking isn't ready for payment yet. Let's complete the booking details first! 📋" };
+          }
+        } else {
+          return { success: false, message: "Your booking isn't ready for payment yet. Let's complete the booking details first! 📋" };
+        }
+      } else {
+        return { success: false, message: "Your booking isn't ready for payment yet. Let's complete the booking details first! 📋" };
+      }
     }
 
-    const phone = newPhone || draft.recipientPhone;
+    // Get phone number - try newPhone, then draft.recipientPhone, then customer.phone
+    let phone = newPhone || draft.recipientPhone;
+    let originalPhone = phone; // Store original for logging
+    if (!phone) {
+      // Fallback to customer's phone number
+      const customer = await this.prisma.customer.findUnique({ where: { id: customerId } });
+      phone = customer?.phone;
+      originalPhone = phone; // Update original for logging
+    }
+    
+    // Format phone number to international format (254XXXXXXXXX)
+    if (phone) {
+      const { formatPhoneNumber } = require('../../utils/booking');
+      phone = formatPhoneNumber(phone);
+      this.logger.debug(`[RESEND] Formatted phone number: "${originalPhone}" -> "${phone}"`);
+    }
+    
     if (!phone) {
       return { success: false, message: "I need your phone number to send the payment prompt. Could you please provide it? 📱" };
+    }
+
+    // Update draft with phone number, recipientName, and step if needed
+    const updates: any = {};
+    if (phone && phone !== draft.recipientPhone) {
+      updates.recipientPhone = phone;
+    }
+    // Default recipientName to name if missing
+    if (draft.name && !draft.recipientName) {
+      updates.recipientName = draft.name;
+    }
+    // If we have all required fields, update step to 'confirm'
+    if (hasRequiredFields && draft.step !== 'confirm') {
+      updates.step = 'confirm';
+    }
+    if (Object.keys(updates).length > 0) {
+      await this.prisma.bookingDraft.update({
+        where: { id: draft.id },
+        data: updates
+      });
+      // Reload draft to get updated values
+      draft = await this.getBookingDraft(customerId);
     }
 
     const amount = await this.getDepositForDraft(customerId) || 2000;
@@ -533,6 +607,101 @@ export class BookingsService {
   async deleteBookingDraft(customerId: string) {
     // Use deleteMany to avoid errors if draft doesn't exist
     return this.prisma.bookingDraft.deleteMany({ where: { customerId } });
+  }
+
+  /**
+   * Check if a booking draft is stale (old draft with failed payment or no recent activity)
+   * A draft is considered stale if:
+   * - It has a failed payment (regardless of age) - failed payments mean booking didn't complete
+   * - It's older than 1 hour with a failed payment (more lenient cleanup)
+   * - It's older than 48 hours with no payment attempts
+   * - It's older than 7 days regardless of payment status
+   */
+  async isDraftStale(customerId: string): Promise<boolean> {
+    const draft = await this.getBookingDraft(customerId);
+    if (!draft) return false;
+
+    const now = new Date();
+    const draftAge = now.getTime() - new Date(draft.updatedAt || draft.createdAt).getTime();
+    const hoursOld = draftAge / (1000 * 60 * 60);
+    const minutesOld = draftAge / (1000 * 60);
+
+    // Draft older than 7 days is always stale
+    if (hoursOld > 168) {
+      return true;
+    }
+
+    // Check payment status
+    const latestPayment = await this.getLatestPaymentForDraft(customerId);
+    
+    // CRITICAL: Drafts with failed payments are considered stale immediately
+    // This prevents showing failed booking details when user asks unrelated questions
+    if (latestPayment && latestPayment.status === 'failed') {
+      // If payment failed more than 1 hour ago, definitely stale
+      if (hoursOld > 1) {
+        return true;
+      }
+      // If payment failed recently (within 1 hour), still consider it stale
+      // to prevent showing booking details for non-booking queries
+      // But allow retry if user explicitly asks about payment
+      return true;
+    }
+
+    // Draft older than 48 hours with no payment attempts is stale
+    if (!latestPayment && hoursOld > 48) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Check if a draft has a failed payment (even if recent)
+   * This is used to determine if we should suppress booking details for non-booking queries
+   */
+  async hasFailedPayment(customerId: string): Promise<boolean> {
+    const latestPayment = await this.getLatestPaymentForDraft(customerId);
+    return latestPayment?.status === 'failed';
+  }
+
+  /**
+   * Clean up stale booking drafts for a customer
+   * Returns true if a stale draft was found and deleted
+   * Also cleans up drafts with failed payments that are older than 1 hour
+   * IMPORTANT: Does NOT clean up if there's a pending payment (user might want to resend)
+   */
+  async cleanupStaleDraft(customerId: string): Promise<boolean> {
+    const draft = await this.getBookingDraft(customerId);
+    if (!draft) return false;
+
+    // CRITICAL: Don't clean up if there's a pending payment
+    // User might want to resend the payment prompt
+    const latestPayment = await this.getLatestPaymentForDraft(customerId);
+    if (latestPayment && latestPayment.status === 'pending') {
+      this.logger.debug(`[CLEANUP] Skipping cleanup - pending payment exists for customer ${customerId}`);
+      return false;
+    }
+
+    const isStale = await this.isDraftStale(customerId);
+    if (isStale) {
+      this.logger.debug(`[CLEANUP] Cleaning up stale draft for customer ${customerId}`);
+      await this.deleteBookingDraft(customerId);
+      return true;
+    }
+    
+    // Also check if payment failed more than 1 hour ago - clean it up
+    if (latestPayment && latestPayment.status === 'failed') {
+      const paymentAge = Date.now() - new Date(latestPayment.createdAt).getTime();
+      const hoursOld = paymentAge / (1000 * 60 * 60);
+      
+      if (hoursOld > 1) {
+        this.logger.debug(`[CLEANUP] Cleaning up draft with failed payment (${hoursOld.toFixed(1)} hours old) for customer ${customerId}`);
+        await this.deleteBookingDraft(customerId);
+        return true;
+      }
+    }
+    
+    return false;
   }
 
   /* --------------------------
@@ -870,11 +1039,37 @@ export class BookingsService {
   }
 
   async confirmBooking(bookingId: string) {
+    // Check if booking was previously provisional (to determine if we should emit event)
+    const existingBooking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { customer: true }
+    });
+
+    if (!existingBooking) {
+      throw new Error(`Booking ${bookingId} not found`);
+    }
+
+    const wasProvisional = existingBooking.status === 'provisional';
+
     const booking = await this.prisma.booking.update({
       where: { id: bookingId },
       data: { status: 'confirmed' },
       include: { customer: true }
     });
+
+    // Emit booking.created event if this was a provisional booking being confirmed
+    if (wasProvisional) {
+      this.eventEmitter.emit(
+        'booking.created',
+        new BookingCreatedEvent(
+          booking.id,
+          booking.customerId,
+          booking.service,
+          booking.dateTime,
+          booking.customer.name,
+        ),
+      );
+    }
 
     // Create Google Calendar event
     try {

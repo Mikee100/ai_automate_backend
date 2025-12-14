@@ -18,6 +18,7 @@ import { AdvancedIntentService } from './services/advanced-intent.service';
 import { PersonalizationService } from './services/personalization.service';
 import { FeedbackLoopService } from './services/feedback-loop.service';
 import { PredictiveAnalyticsService } from './services/predictive-analytics.service';
+import { ResponseQualityService } from './services/response-quality.service';
 export declare class AiService {
     private configService;
     private prisma;
@@ -29,6 +30,7 @@ export declare class AiService {
     private personalization;
     private feedbackLoop;
     private predictiveAnalytics;
+    private responseQuality;
     private bookingsService?;
     private messagesService?;
     private escalationService?;
@@ -67,7 +69,8 @@ export declare class AiService {
     private readonly customerCarePhone;
     private readonly customerCareEmail;
     private readonly businessHours;
-    constructor(configService: ConfigService, prisma: PrismaService, circuitBreaker: CircuitBreakerService, customerMemory: CustomerMemoryService, conversationLearning: ConversationLearningService, domainExpertise: DomainExpertiseService, advancedIntent: AdvancedIntentService, personalization: PersonalizationService, feedbackLoop: FeedbackLoopService, predictiveAnalytics: PredictiveAnalyticsService, bookingsService?: BookingsService, messagesService?: MessagesService, escalationService?: EscalationService, aiQueue?: Queue, notificationsService?: NotificationsService, websocketGateway?: WebsocketGateway);
+    private readonly businessDescription;
+    constructor(configService: ConfigService, prisma: PrismaService, circuitBreaker: CircuitBreakerService, customerMemory: CustomerMemoryService, conversationLearning: ConversationLearningService, domainExpertise: DomainExpertiseService, advancedIntent: AdvancedIntentService, personalization: PersonalizationService, feedbackLoop: FeedbackLoopService, predictiveAnalytics: PredictiveAnalyticsService, responseQuality: ResponseQualityService, bookingsService?: BookingsService, messagesService?: MessagesService, escalationService?: EscalationService, aiQueue?: Queue, notificationsService?: NotificationsService, websocketGateway?: WebsocketGateway);
     private initializeTokenEncoding;
     private checkAndEscalateIfHandoffMentioned;
     createEscalationAlert(customerId: string, type: 'reschedule_request' | 'ai_escalation', title: string, message: string, metadata?: any): Promise<void>;
@@ -141,7 +144,7 @@ export declare class AiService {
         version: number;
     }>;
     mergeIntoDraft(customerId: string, extraction: any, existingDraft?: any): Promise<any>;
-    private determineBookingStep;
+    determineBookingStep(draft: any): string | null;
     checkAndCompleteIfConfirmed(draft: any, extraction: any, customerId: string, bookingsService: any): Promise<{
         action: string;
         error: string;

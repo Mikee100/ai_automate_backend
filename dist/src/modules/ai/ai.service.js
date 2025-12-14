@@ -55,6 +55,7 @@ const advanced_intent_service_1 = require("./services/advanced-intent.service");
 const personalization_service_1 = require("./services/personalization.service");
 const feedback_loop_service_1 = require("./services/feedback-loop.service");
 const predictive_analytics_service_1 = require("./services/predictive-analytics.service");
+const response_quality_service_1 = require("./services/response-quality.service");
 let AiService = AiService_1 = class AiService {
     async extractDateTime(text) {
         const results = chrono.parse(text);
@@ -112,7 +113,7 @@ let AiService = AiService_1 = class AiService {
         }
         return details;
     }
-    constructor(configService, prisma, circuitBreaker, customerMemory, conversationLearning, domainExpertise, advancedIntent, personalization, feedbackLoop, predictiveAnalytics, bookingsService, messagesService, escalationService, aiQueue, notificationsService, websocketGateway) {
+    constructor(configService, prisma, circuitBreaker, customerMemory, conversationLearning, domainExpertise, advancedIntent, personalization, feedbackLoop, predictiveAnalytics, responseQuality, bookingsService, messagesService, escalationService, aiQueue, notificationsService, websocketGateway) {
         this.configService = configService;
         this.prisma = prisma;
         this.circuitBreaker = circuitBreaker;
@@ -123,6 +124,7 @@ let AiService = AiService_1 = class AiService {
         this.personalization = personalization;
         this.feedbackLoop = feedbackLoop;
         this.predictiveAnalytics = predictiveAnalytics;
+        this.responseQuality = responseQuality;
         this.bookingsService = bookingsService;
         this.messagesService = messagesService;
         this.escalationService = escalationService;
@@ -154,6 +156,7 @@ let AiService = AiService_1 = class AiService {
         this.customerCarePhone = '0720 111928';
         this.customerCareEmail = 'info@fiestahouseattire.com';
         this.businessHours = 'Monday-Saturday: 9:00 AM - 6:00 PM';
+        this.businessDescription = 'We specialize in professional maternity photography services, offering elegant and memorable photoshoot experiences. Our studio provides beautiful indoor sessions with professional makeup, styling, and a variety of stunning backdrops. We offer multiple packages ranging from intimate sessions to full VIP experiences, all designed to celebrate your pregnancy journey. Our goal is to make your maternity experience as elegant and memorable as possible!';
         this.openai = new openai_1.default({ apiKey: this.configService.get('OPENAI_API_KEY') });
         this.embeddingModel = this.configService.get('OPENAI_EMBEDDING_MODEL', 'text-embedding-3-small');
         this.extractorModel = this.configService.get('OPENAI_EXTRACTOR_MODEL', 'gpt-4o');
@@ -1124,6 +1127,33 @@ ${conversationText.substring(0, 2000)}...`;
         const start = Date.now();
         let mediaUrls = [];
         try {
+            const questionLower = question.toLowerCase();
+            const familyPartnerKeywords = ['family', 'partner', 'husband', 'wife', 'spouse', 'children', 'kids', 'come with', 'bring', 'accompany', 'join'];
+            const isFamilyQuestion = familyPartnerKeywords.some(kw => questionLower.includes(kw)) &&
+                (questionLower.includes('can') || questionLower.includes('may') || questionLower.includes('allowed') || questionLower.includes('welcome'));
+            if (isFamilyQuestion) {
+                prediction = "Yes, absolutely! Partners and family members are always welcome to join your photoshoot. Many of our packages include couple and family shots - it's a beautiful way to celebrate this journey together! 💖";
+                confidence = 1.0;
+                this.logger.debug(`[AiService] Family/partner question detected. Using direct response.`);
+                return { text: prediction, mediaUrls };
+            }
+            const businessDescriptionPatterns = [
+                /what.*business.*do/i,
+                /what.*you.*do/i,
+                /what.*services/i,
+                /what.*do.*you.*offer/i,
+                /what.*is.*this.*business/i,
+                /tell.*me.*about.*business/i,
+                /describe.*business/i,
+                /what.*does.*your.*business/i
+            ];
+            const isBusinessDescriptionQuestion = businessDescriptionPatterns.some(pattern => pattern.test(question));
+            if (isBusinessDescriptionQuestion) {
+                prediction = `Thank you for your interest! ${this.businessName} specializes in professional maternity photography services. We offer beautiful studio maternity photoshoots with professional makeup, styling, and a variety of packages to capture this special time in your life. Our packages range from intimate sessions to full VIP experiences, all designed to make you feel elegant and celebrated. We're located at ${this.businessLocation.replace(' We look forward to welcoming you! 💖', '')}. Would you like to know more about our packages or book a session? 💖`;
+                confidence = 1.0;
+                this.logger.debug(`[AiService] Business description question detected. Using direct response.`);
+                return { text: prediction, mediaUrls };
+            }
             const backdropRegex = /(backdrop|background|studio set|flower wall|portfolio|show.*(image|photo|picture|portfolio))/i;
             let isBackdropQuery = backdropRegex.test(question);
             this.logger.debug(`[AiService] Question: "${question}", isBackdropQuery: ${isBackdropQuery}`);
@@ -1165,9 +1195,20 @@ ${conversationText.substring(0, 2000)}...`;
                     const messages = [
                         {
                             role: 'system',
-                            content: `You are a warm, empathetic AI assistant for a maternity photoshoot studio. Always answer with genuine care and conversational intelligence.
+                            content: `You are a warm, empathetic AI assistant for ${this.businessName}. Always answer with genuine care and conversational intelligence.
+
+BUSINESS INFORMATION:
+- Business Name: ${this.businessName}
+- Location: ${this.businessLocation.replace(' We look forward to welcoming you! 💖', '')}
+- Website: ${this.businessWebsite}
+- Phone: ${this.customerCarePhone}
+- Email: ${this.customerCareEmail}
+- Hours: ${this.businessHours}
+- What We Do: ${this.businessDescription}
 
 IMPORTANT: Before generating any answer, ALWAYS check the database FAQs provided in context. If a relevant FAQ is found, use its answer directly and do NOT invent or hallucinate. Only generate a new answer if no FAQ matches.
+
+When asked about what the business does or what services are offered, use the business information above. Never use generic placeholders like "[Business Name]" or "[brief description of services offered]". Always use the specific business details provided.
 
 POLICY QUESTIONS - You MUST answer these directly:
 - Family/Partner questions: "Yes, absolutely! Partners and family members are always welcome to join your photoshoot. Many of our packages include couple and family shots - it's a beautiful way to celebrate this journey together! 💖"
@@ -1334,9 +1375,16 @@ Return ONLY valid JSON (no commentary, no explanation). Schema:
 }
 
 CONTEXT:
-Current Date: ${currentDate} (Today is day ${currentDayOfMonth} of ${currentMonth})
+Current Date: ${currentDate} (Today is day ${currentDayOfMonth} of ${currentMonth}, Year: ${new Date().getFullYear()})
+Current Year: ${new Date().getFullYear()}
 Timezone: Africa/Nairobi (EAT)
 ${draftContext}
+
+CRITICAL YEAR HANDLING:
+- When user provides a date without a year (e.g., "19th", "December 19th", "19th at 3pm"), assume CURRENT YEAR (${new Date().getFullYear()})
+- Only extract a different year if explicitly mentioned by the user
+- Dates in the past relative to today should be interpreted as NEXT YEAR if they're more than a few days ago
+- NEVER suggest years in the past (like 2023) unless the user explicitly mentions them
 
 EXTRACTION RULES (CRITICAL - FOLLOW STRICTLY):
 1. Extract ONLY what is explicitly present in the CURRENT message
@@ -1369,7 +1417,8 @@ TIME EXTRACTION:
 
 PHONE EXTRACTION:
 - Extract any phone number pattern (07XX, +254, etc.)
-- Keep original format user provided
+- Phone numbers will be automatically converted to international format (254XXXXXXXXX)
+- Examples: "0721840961" → "254721840961", "+254721840961" → "254721840961"
 
 SUB-INTENT DETECTION:
 - start: User initiating a new booking ("I want to book", "Can I schedule")
@@ -1439,7 +1488,10 @@ User: "yes please"
                 date: typeof parsed.date === 'string' ? parsed.date : undefined,
                 time: typeof parsed.time === 'string' ? parsed.time : undefined,
                 name: typeof parsed.name === 'string' ? parsed.name : undefined,
-                recipientPhone: typeof parsed.recipientPhone === 'string' ? parsed.recipientPhone : undefined,
+                recipientPhone: typeof parsed.recipientPhone === 'string' ? (() => {
+                    const { formatPhoneNumber } = require('../../utils/booking');
+                    return formatPhoneNumber(parsed.recipientPhone);
+                })() : undefined,
                 subIntent: ['start', 'provide', 'confirm', 'deposit_confirmed', 'cancel', 'reschedule', 'unknown'].includes(detectedSubIntent) ? detectedSubIntent : 'unknown',
             };
             if (extraction.date || extraction.time || extraction.service) {
@@ -1522,6 +1574,7 @@ ACTIVE LISTENING PATTERNS:
 
 RECOVERY STRATEGIES:
 - If date is ambiguous → Clarify: "Do you mean this Friday (Dec 6th) or next Friday (Dec 13th)?"
+- If date lacks year → Assume current year (${new Date().getFullYear()}) - DO NOT ask to confirm the year unless it's clearly ambiguous
 - If package unclear → Show options with numbers: "We have: 1️⃣ Studio Classic 2️⃣ Outdoor Premium - just tell me the number!"
 - If user seems frustrated → Simplify immediately: "I might be making this too complicated. Let's start fresh..."
 
@@ -1540,10 +1593,18 @@ CURRENT BOOKING STATE:
   
   Current Step: ${draft.step || 'service'}
   Next info needed: ${nextStep}
+  Current Year: ${new Date().getFullYear()}
   User just updated: ${isUpdate ? 'Yes - ' + Object.keys(extraction).filter(k => extraction[k]).join(', ') : 'No'}
   User is correcting: ${isCorrection ? 'Yes' : 'No'}
   
 ${updateAcknowledgment ? `IMPORTANT: Acknowledge what user just provided: "${updateAcknowledgment}"` : ''}
+
+CRITICAL YEAR HANDLING:
+- Current year is ${new Date().getFullYear()}
+- When user provides dates without year (e.g., "19th", "December 19th"), assume ${new Date().getFullYear()}
+- DO NOT ask to confirm the year unless the user explicitly mentions a different year
+- NEVER suggest past years (like 2023) - always use current or future years
+- If date and time are both provided, move to next step (name) - don't ask for year confirmation
 
 USER'S LATEST MESSAGE: "${message}"
 WHAT WE EXTRACTED: ${JSON.stringify(extraction)}
@@ -1643,7 +1704,10 @@ DO NOT repeat your previous question. Instead:
         }
         if (extraction.recipientPhone !== undefined && extraction.recipientPhone !== null) {
             if (this.validatePhoneNumber(extraction.recipientPhone)) {
-                updates.recipientPhone = extraction.recipientPhone;
+                const { formatPhoneNumber } = require('../../utils/booking');
+                const formattedPhone = formatPhoneNumber(extraction.recipientPhone);
+                this.logger.debug(`[PHONE] Formatting phone: "${extraction.recipientPhone}" -> "${formattedPhone}"`);
+                updates.recipientPhone = formattedPhone;
             }
             else {
                 this.logger.warn(`Invalid phone number provided: ${extraction.recipientPhone}`);
@@ -1729,8 +1793,19 @@ DO NOT repeat your previous question. Instead:
             missing.push('time');
         if (!draft.name)
             missing.push('name');
-        if (!draft.recipientPhone)
-            missing.push('recipientPhone');
+        if (!draft.recipientPhone) {
+            const customer = await this.prisma.customer.findUnique({ where: { id: customerId } });
+            if (customer?.phone) {
+                const { formatPhoneNumber } = require('../../utils/booking');
+                const formattedPhone = formatPhoneNumber(customer.phone);
+                await this.mergeIntoDraft(customerId, { recipientPhone: formattedPhone });
+                draft.recipientPhone = formattedPhone;
+                this.logger.debug(`[SMART EXTRACTION] Using customer phone as recipientPhone: ${customer.phone} -> ${formattedPhone}`);
+            }
+            else {
+                missing.push('recipientPhone');
+            }
+        }
         if (!draft.recipientName) {
             draft.recipientName = draft.name;
             await this.mergeIntoDraft(customerId, { recipientName: draft.name });
@@ -1826,7 +1901,9 @@ DO NOT repeat your previous question. Instead:
     async confirmCustomerPhone(customerId) {
         const customer = await this.prisma.customer.findUnique({ where: { id: customerId } });
         if (customer && customer.phone) {
-            await this.mergeIntoDraft(customerId, { recipientPhone: customer.phone });
+            const { formatPhoneNumber } = require('../../utils/booking');
+            const formattedPhone = formatPhoneNumber(customer.phone);
+            await this.mergeIntoDraft(customerId, { recipientPhone: formattedPhone });
             return true;
         }
         return false;
@@ -1901,7 +1978,7 @@ DO NOT repeat your previous question. Instead:
                     this.logger.warn('[LEARNING] Personalization failed', err);
                 }
             }
-            const finalResponseText = typeof result.response === 'string' ? result.response :
+            let finalResponseText = typeof result.response === 'string' ? result.response :
                 (typeof result.response === 'object' && result.response !== null && 'text' in result.response) ? result.response.text :
                     '';
             wasSuccessful = !finalResponseText?.includes('trouble') &&
@@ -1969,6 +2046,35 @@ DO NOT repeat your previous question. Instead:
             catch (err) {
                 this.logger.warn('[LEARNING] Failed to update customer memory', err);
             }
+            try {
+                const responseText = finalResponseText || '';
+                if (responseText) {
+                    const qualityCheck = await this.responseQuality.validateResponse(responseText, {
+                        userMessage: message,
+                        customerId,
+                        intent: intentAnalysis?.primaryIntent,
+                        emotionalTone: intentAnalysis?.emotionalTone,
+                        history,
+                    });
+                    if (!qualityCheck.passed && qualityCheck.improvedResponse) {
+                        this.logger.log(`[QUALITY] Response improved: ${qualityCheck.score.overall.toFixed(1)}/10`);
+                        result.response = qualityCheck.improvedResponse;
+                        finalResponseText = qualityCheck.improvedResponse;
+                    }
+                    else if (!qualityCheck.passed) {
+                        this.logger.warn(`[QUALITY] Response quality low: ${qualityCheck.score.overall.toFixed(1)}/10 - ${qualityCheck.reason}`);
+                        if (qualityCheck.shouldEscalate && this.escalationService) {
+                            await this.escalationService.createEscalation(customerId, `Low quality response detected: ${qualityCheck.reason}`, 'quality_check', { qualityScore: qualityCheck.score, originalResponse: responseText });
+                        }
+                    }
+                    else {
+                        this.logger.debug(`[QUALITY] Response quality good: ${qualityCheck.score.overall.toFixed(1)}/10`);
+                    }
+                }
+            }
+            catch (err) {
+                this.logger.warn('[QUALITY] Failed to validate response quality', err);
+            }
             return result;
         }
         catch (err) {
@@ -2014,6 +2120,9 @@ DO NOT repeat your previous question. Instead:
         };
     }
     async processConversationLogic(message, customerId, history = [], bookingsService, enrichedContext, intentAnalysis) {
+        if (bookingsService) {
+            await bookingsService.cleanupStaleDraft(customerId);
+        }
         const earlyDraft = await this.getOrCreateDraft(customerId);
         const existingBooking = bookingsService ? await bookingsService.getLatestConfirmedBooking(customerId) : null;
         const isFaqAboutBookingProcess = /(how.*(does|is|are|work|long|much)|what.*(is|are|the|process|include|cost|amount)|booking.*(process|work|cost|include|policy|hours|refund|cancel)|deposit.*(amount|cost|is)|refund|cancel.*policy|when.*(are|is).*open)/i.test(message);
@@ -2231,6 +2340,7 @@ DO NOT repeat your previous question. Instead:
             const allBookings = await this.prisma.booking.findMany({
                 where: {
                     customerId: customer.id,
+                    status: { not: 'cancelled' },
                 },
                 orderBy: { dateTime: 'desc' },
                 take: 10,
@@ -2931,11 +3041,13 @@ DO NOT repeat your previous question. Instead:
             this.logger.log(`[SMART EXTRACTION] Detected WhatsApp number confirmation: "${message}"`);
             const customer = await this.prisma.customer.findUnique({ where: { id: customerId } });
             if (customer?.phone && !draft.recipientPhone) {
+                const { formatPhoneNumber } = require('../../utils/booking');
+                const formattedPhone = formatPhoneNumber(customer.phone);
                 await this.prisma.bookingDraft.update({
                     where: { customerId },
-                    data: { recipientPhone: customer.phone }
+                    data: { recipientPhone: formattedPhone }
                 });
-                this.logger.log(`[SMART EXTRACTION] Set recipientPhone to customer phone: ${customer.phone}`);
+                this.logger.log(`[SMART EXTRACTION] Set recipientPhone to customer phone: ${customer.phone} -> ${formattedPhone}`);
                 draft = await this.prisma.bookingDraft.findUnique({ where: { customerId } });
             }
         }
@@ -2944,6 +3056,36 @@ DO NOT repeat your previous question. Instead:
             const nameResponse = `Our business is called ${this.businessName}. If you have any questions about our services or need assistance, I'm here to help! 😊`;
             const updatedHistory = [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: nameResponse }];
             return { response: nameResponse, draft: null, updatedHistory };
+        }
+        const businessDescriptionPatterns = [
+            /what.*business.*do/i,
+            /what.*you.*do/i,
+            /what.*services/i,
+            /what.*do.*you.*offer/i,
+            /what.*is.*this.*business/i,
+            /tell.*me.*about.*business/i,
+            /describe.*business/i,
+            /what.*does.*your.*business/i
+        ];
+        const isBusinessDescriptionQuery = businessDescriptionPatterns.some(pattern => pattern.test(message));
+        if (isBusinessDescriptionQuery) {
+            const businessResponse = `Thank you for your interest! ${this.businessName} specializes in professional maternity photography services. We offer beautiful studio maternity photoshoots with professional makeup, styling, and a variety of packages to capture this special time in your life. Our packages range from intimate sessions to full VIP experiences, all designed to make you feel elegant and celebrated. We're located at ${this.businessLocation.replace(' We look forward to welcoming you! 💖', '')}. Would you like to know more about our packages or book a session? 💖`;
+            const updatedHistory = [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: businessResponse }];
+            return { response: businessResponse, draft: null, updatedHistory };
+        }
+        const familyPartnerKeywords = ['family', 'partner', 'husband', 'wife', 'spouse', 'children', 'kids', 'come with', 'bring', 'accompany', 'join'];
+        const isFamilyQuestion = familyPartnerKeywords.some(kw => lower.includes(kw)) &&
+            (lower.includes('can') || lower.includes('may') || lower.includes('allowed') || lower.includes('welcome'));
+        if (isFamilyQuestion) {
+            const familyResponse = "Yes, absolutely! Partners and family members are always welcome to join your photoshoot. Many of our packages include couple and family shots - it's a beautiful way to celebrate this journey together! 💖";
+            const updatedHistory = [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: familyResponse }];
+            return { response: familyResponse, draft: null, updatedHistory };
+        }
+        const businessDescriptionKeywords = ['what does your business do', 'what do you do', 'what services', 'what are your services', 'what do you offer', 'what services do you offer', 'tell me about your business', 'what is your business about', 'what kind of business', 'what type of business'];
+        if (businessDescriptionKeywords.some((kw) => lower.includes(kw))) {
+            const descriptionResponse = `Thank you for reaching out! ${this.businessDescription}\n\nWe offer studio maternity photography packages ranging from KSH 10,000 to KSH 50,000, each designed to make you feel beautiful and celebrated during this special time. Our packages include professional makeup, styling, and various options like balloon backdrops, photobooks, and more.\n\nWould you like to know more about our packages or book a session? I'm here to help! 💖`;
+            const updatedHistory = [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: descriptionResponse }];
+            return { response: descriptionResponse, draft: null, updatedHistory };
         }
         const locationQueryKeywords = ['location', 'where', 'address', 'located', 'studio location', 'studio address', 'where are you', 'where is the studio', 'studio address'];
         if (locationQueryKeywords.some((kw) => lower.includes(kw))) {
@@ -3278,14 +3420,14 @@ DO NOT repeat your previous question. Instead:
 exports.AiService = AiService;
 exports.AiService = AiService = AiService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __param(10, (0, common_1.Inject)((0, common_1.forwardRef)(() => bookings_service_1.BookingsService))),
-    __param(10, (0, common_1.Optional)()),
+    __param(11, (0, common_1.Inject)((0, common_1.forwardRef)(() => bookings_service_1.BookingsService))),
     __param(11, (0, common_1.Optional)()),
     __param(12, (0, common_1.Optional)()),
-    __param(13, (0, bull_1.InjectQueue)('aiQueue')),
-    __param(14, (0, common_1.Optional)()),
-    __param(15, (0, common_1.Inject)((0, common_1.forwardRef)(() => websocket_gateway_1.WebsocketGateway))),
+    __param(13, (0, common_1.Optional)()),
+    __param(14, (0, bull_1.InjectQueue)('aiQueue')),
     __param(15, (0, common_1.Optional)()),
+    __param(16, (0, common_1.Inject)((0, common_1.forwardRef)(() => websocket_gateway_1.WebsocketGateway))),
+    __param(16, (0, common_1.Optional)()),
     __metadata("design:paramtypes", [config_1.ConfigService,
         prisma_service_1.PrismaService,
         circuit_breaker_service_1.CircuitBreakerService,
@@ -3296,6 +3438,7 @@ exports.AiService = AiService = AiService_1 = __decorate([
         personalization_service_1.PersonalizationService,
         feedback_loop_service_1.FeedbackLoopService,
         predictive_analytics_service_1.PredictiveAnalyticsService,
+        response_quality_service_1.ResponseQualityService,
         bookings_service_1.BookingsService,
         messages_service_1.MessagesService,
         escalation_service_1.EscalationService, Object, notifications_service_1.NotificationsService,

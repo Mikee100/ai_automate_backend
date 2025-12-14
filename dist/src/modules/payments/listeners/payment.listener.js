@@ -25,7 +25,7 @@ let PaymentListener = PaymentListener_1 = class PaymentListener {
         this.logger = new common_1.Logger(PaymentListener_1.name);
     }
     async handleBookingDraftCompleted(event) {
-        this.logger.log(`[Event] BookingDraftCompleted: customerId=${event.customerId}, draftId=${event.draftId}`);
+        this.logger.log(`[Event] ⚡ BookingDraftCompleted event received: customerId=${event.customerId}, draftId=${event.draftId}, amount=${event.depositAmount}`);
         try {
             let phone = event.recipientPhone;
             if (!phone.startsWith('254')) {
@@ -45,11 +45,17 @@ let PaymentListener = PaymentListener_1 = class PaymentListener {
             catch (msgError) {
                 this.logger.warn(`[Event] Failed to send pre-payment notification, continuing with STK push:`, msgError);
             }
-            await this.paymentsService.initiateSTKPush(event.draftId, phone, event.depositAmount);
-            this.logger.log(`[Event] STK Push initiated for deposit of ${event.depositAmount} KSH for draft ${event.draftId}`);
+            this.logger.log(`[Event] Calling initiateSTKPush with draftId=${event.draftId}, phone=${phone}, amount=${event.depositAmount}`);
+            const result = await this.paymentsService.initiateSTKPush(event.draftId, phone, event.depositAmount);
+            this.logger.log(`[Event] ✅ STK Push successfully initiated for deposit of ${event.depositAmount} KSH for draft ${event.draftId}, CheckoutRequestID: ${result.checkoutRequestId}`);
         }
         catch (error) {
-            this.logger.error(`[Event] Failed to initiate STK Push for draft ${event.draftId}`, error);
+            this.logger.error(`[Event] ❌ Failed to initiate STK Push for draft ${event.draftId}`, error);
+            this.logger.error(`[Event] Error details:`, {
+                message: error.message,
+                stack: error.stack,
+                response: error.response?.data,
+            });
         }
     }
 };

@@ -76,7 +76,7 @@ export class DomainExpertiseService {
 
         // Decision paralysis
         if (lower.includes('which package') || lower.includes('don\'t know which') || lower.includes('help me choose')) {
-            return `I'd love to help you choose the perfect package! 💖 Let me ask you a few quick questions:\n\n1. Do you want professional makeup included?\n2. How many outfit changes would you like?\n3. What's your budget range?\n4. Studio or outdoor shoot?\n\nOr I can recommend our most popular package - the Gold Package! It's our best value and includes everything most mamas want. Interested? 🌸`;
+            return `I'd love to help you choose the perfect package! 💖 Let me ask you a few quick questions:\n\n1. Do you want professional makeup included?\n2. How many outfit changes would you like?\n3. What's your budget range?\n4. Are there specific features you're interested in (like photobook, balloon backdrop, etc.)?\n\nOr I can recommend our most popular package - the Gold Package! It's our best value and includes everything most mamas want. Interested? 🌸`;
         }
 
         // Rescheduling concerns
@@ -110,10 +110,10 @@ export class DomainExpertiseService {
                 }
             }
 
-            // Type preference
-            if (criteria.preferredType && pkg.type === criteria.preferredType) {
+            // Type preference (only studio available now)
+            if (criteria.preferredType && pkg.type === criteria.preferredType && pkg.type === 'studio') {
                 score += 20;
-                reasons.push(`${criteria.preferredType === 'studio' ? 'Studio' : 'Outdoor'} shoot as preferred`);
+                reasons.push('Studio shoot as preferred');
             }
 
             // Makeup preference
@@ -186,7 +186,7 @@ export class DomainExpertiseService {
 
         // June/July/August - Summer
         if (currentMonth >= 6 && currentMonth <= 8) {
-            return `☀️ Summer is perfect for outdoor shoots! Our beach location packages are very popular this time of year. The natural lighting is absolutely gorgeous! 🌊`;
+            return `☀️ Summer is perfect for studio photoshoots! Our beautiful backdrops and professional lighting create stunning images any time of year. We love capturing your glow in our comfortable studio environment! ✨`;
         }
 
         // General
@@ -209,7 +209,7 @@ export class DomainExpertiseService {
         } else if (lower.includes('gold')) {
             suggestions.push(
                 "Upgrade to Platinum for more outfit changes and images! 📸",
-                "Add our beach outdoor session for stunning natural backdrop photos 🌊",
+                "Add a customized balloon backdrop for a stunning, personalized look! 🎈",
                 "Include partner/family shots to capture the whole journey together 💑"
             );
         } else if (lower.includes('executive')) {

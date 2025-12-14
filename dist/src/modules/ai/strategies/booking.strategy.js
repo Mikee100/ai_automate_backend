@@ -7,6 +7,12 @@ class BookingStrategy {
     }
     canHandle(intent, context) {
         const { hasDraft, message } = context;
+        const wantsToRetryPayment = /^(resend|retry|try.*again|send.*again)$/i.test(message.trim()) ||
+            /(resend|retry|try.*again|try.*payment|retry.*payment|lets.*retry|let.*retry|want.*retry|need.*retry|can.*retry).*(payment|prompt|mpesa)/i.test(message) ||
+            /(payment|prompt|mpesa).*(resend|retry|try.*again)/i.test(message);
+        if (wantsToRetryPayment) {
+            return true;
+        }
         const isRescheduleIntent = /\b(reschedul\w*)\b/i.test(message) ||
             /(i want to|i'd like to|i need to|can i|can we).*reschedule/i.test(message) ||
             /(change|move|modify).*(booking|appointment|date|time)/i.test(message);
@@ -14,24 +20,48 @@ class BookingStrategy {
             return false;
         }
         const wantsToStartBooking = /(how.*(do|can).*(make|book|start|get|schedule).*(booking|appointment)|(i want|i'd like|i need|can i|please).*(to book|booking|appointment|make.*booking|schedule)|let.*book|start.*booking)/i.test(message);
-        const wantsToRetryPayment = /(resend|retry|try.*again|try.*payment|retry.*payment|lets.*retry|let.*retry|want.*retry|need.*retry|can.*retry).*(payment|prompt|mpesa)/i.test(message) ||
-            /(payment|prompt|mpesa).*(resend|retry|try.*again)/i.test(message);
-        return hasDraft || intent === 'booking' || wantsToStartBooking || wantsToRetryPayment;
+        return hasDraft || intent === 'booking' || wantsToStartBooking;
     }
     async generateResponse(message, context) {
         const { aiService, logger, history, historyLimit, customerId, bookingsService, hasDraft, prisma } = context;
         const { DateTime } = require('luxon');
         let draft = await aiService.getOrCreateDraft(customerId);
+        const wantsToRetryPayment = /^(resend|retry|try.*again|send.*again)$/i.test(message.trim()) ||
+            /(resend|retry|try.*again|try.*payment|retry.*payment|lets.*retry|let.*retry|want.*retry|need.*retry|can.*retry).*(payment|prompt|mpesa)/i.test(message) ||
+            /(payment|prompt|mpesa).*(resend|retry|try.*again)/i.test(message);
+        if (draft && !wantsToRetryPayment) {
+            const wasStale = await bookingsService.cleanupStaleDraft(customerId);
+            if (wasStale) {
+                logger.debug(`[STRATEGY] Stale draft detected and cleaned up for customer ${customerId}`);
+                draft = null;
+            }
+        }
+        if (draft && bookingsService) {
+            const hasFailed = await bookingsService.hasFailedPayment(customerId);
+            if (hasFailed) {
+                const lower = message.toLowerCase();
+                const isBookingRelated = /(how.*(do|can).*(make|book|start|get|schedule).*(booking|appointment)|(i want|i'd like|i need|can i|please).*(to book|booking|appointment|make.*booking|schedule)|let.*book|start.*booking)/i.test(message) ||
+                    /(resend|retry|try.*again|try.*payment|retry.*payment|lets.*retry|let.*retry|want.*retry|need.*retry|can.*retry).*(payment|prompt|mpesa)/i.test(message) ||
+                    /(payment|prompt|mpesa|deposit|confirm|booking|appointment|book|schedule|date|time|package)/i.test(lower);
+                if (!isBookingRelated) {
+                    logger.debug(`[STRATEGY] Draft has failed payment and message is not booking-related, skipping booking strategy`);
+                    return null;
+                }
+            }
+        }
         if (draft && (draft.step === 'reschedule' || draft.step === 'reschedule_confirm')) {
             logger.debug(`[STRATEGY] Draft is in reschedule mode (step: ${draft.step}), skipping booking strategy`);
             return null;
         }
         const lowerMessage = message.toLowerCase().trim();
-        const isPaymentQuery = /(payment|pay|mpesa|prompt|sent|received|money|paid|transaction|deposit|checkout|check.*payment|payment.*status|didn.*receive|not.*receive|haven.*receive|wrong.*number|change.*number|resend|send.*again|retry|try.*again|try.*payment|retry.*payment|cancel.*payment|payment.*cancel|stuck|frozen|not.*working|payment.*issue|problem.*payment|help.*payment|payment.*help)/i.test(message);
-        if (isPaymentQuery && /(resend|retry|try.*again|try.*payment|retry.*payment|lets.*retry|let.*retry)/i.test(message)) {
+        const isResendRequest = /^(resend|retry|try.*again|send.*again)$/i.test(message.trim()) ||
+            /(resend|retry|try.*again|try.*payment|retry.*payment|lets.*retry|let.*retry|want.*retry|need.*retry|can.*retry).*(payment|prompt|mpesa)/i.test(message) ||
+            /(payment|prompt|mpesa).*(resend|retry|try.*again)/i.test(message);
+        if (isResendRequest) {
+            logger.debug(`[PAYMENT] User requesting to resend payment prompt - handling immediately`);
             const latestPayment = await bookingsService.getLatestPaymentForDraft(customerId);
             if (latestPayment && (latestPayment.status === 'failed' || latestPayment.status === 'pending')) {
-                logger.debug(`[PAYMENT] User requesting to resend payment prompt (draft may not exist)`);
+                logger.debug(`[PAYMENT] Found ${latestPayment.status} payment, resending prompt`);
                 const result = await bookingsService.resendPaymentPrompt(customerId);
                 return {
                     response: result.message,
@@ -47,8 +77,12 @@ class BookingStrategy {
                         updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: "I don't see any pending payment to retry. Would you like to start a new booking? Just let me know what package you're interested in! 💖" }]
                     };
                 }
+                else {
+                    logger.debug(`[PAYMENT] No payment found but draft exists, checking if ready for payment`);
+                }
             }
         }
+        const isPaymentQuery = /(payment|pay|mpesa|prompt|sent|received|money|paid|transaction|deposit|checkout|check.*payment|payment.*status|didn.*receive|not.*receive|haven.*receive|wrong.*number|change.*number|resend|send.*again|retry|try.*again|try.*payment|retry.*payment|cancel.*payment|payment.*cancel|stuck|frozen|not.*working|payment.*issue|problem.*payment|help.*payment|payment.*help)/i.test(message);
         if (isPaymentQuery && draft) {
             if (/(didn.*receive|not.*receive|haven.*receive|no.*prompt|didn.*get|not.*get|haven.*get|where.*prompt|when.*prompt|prompt.*not|still.*waiting)/i.test(message)) {
                 logger.debug(`[PAYMENT] User reports not receiving prompt`);
@@ -728,6 +762,18 @@ class BookingStrategy {
             return { response, draft, updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
         }
         if (completion.action === 'ready_for_deposit') {
+            if (draft) {
+                const isStale = await bookingsService.isDraftStale(customerId);
+                if (isStale) {
+                    logger.debug(`[STRATEGY] Stale draft detected when showing booking details, cleaning up`);
+                    await bookingsService.cleanupStaleDraft(customerId);
+                    return {
+                        response: "I notice your previous booking request has expired. Would you like to start a fresh booking? Just let me know what package you're interested in! 💖",
+                        draft: null,
+                        updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: "I notice your previous booking request has expired. Would you like to start a fresh booking? Just let me know what package you're interested in! 💖" }]
+                    };
+                }
+            }
             if (completion.requiresResend) {
                 logger.debug(`[STRATEGY] Resending payment after failed attempt`);
                 const result = await bookingsService.resendPaymentPrompt(customerId);
@@ -758,6 +804,18 @@ class BookingStrategy {
                     };
                 }
                 else if (!latestPayment) {
+                    if (draft) {
+                        const isStale = await bookingsService.isDraftStale(customerId);
+                        if (isStale) {
+                            logger.debug(`[STRATEGY] Stale draft detected when showing booking details, cleaning up`);
+                            await bookingsService.cleanupStaleDraft(customerId);
+                            return {
+                                response: "I notice your previous booking request has expired. Would you like to start a fresh booking? Just let me know what package you're interested in! 💖",
+                                draft: null,
+                                updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: "I notice your previous booking request has expired. Would you like to start a fresh booking? Just let me know what package you're interested in! 💖" }]
+                            };
+                        }
+                    }
                     const pkg = await bookingsService.packagesService.findPackageByName(draft.service);
                     const depositAmount = pkg?.deposit || 2000;
                     const response = `Great! Here are your booking details:\n\n• Package: ${draft.service}\n• Date: ${draft.date}\n• Time: ${draft.time}\n• Name: ${draft.name}\n• Phone: ${draft.recipientPhone || 'Not provided'}\n\nTo confirm your booking, a deposit of KSH ${depositAmount} is required.\n\nReply with *CONFIRM* to accept and receive the payment prompt. If you need to make changes, just let me know!`;
@@ -770,6 +828,47 @@ class BookingStrategy {
             }
         }
         const response = await aiService.generateBookingReply(message, draft, extraction, history, bookingsService);
+        const claimsToSendPayment = /(send.*payment|payment.*prompt|sending.*payment|i.*send|i'll.*send|i will.*send|payment.*request|mpesa.*prompt|finalize.*booking.*deposit|send.*you.*payment|payment.*will.*be|i'm.*sending|sending.*you|let's.*finalize|let.*finalize)/i.test(response);
+        const isDraftIncomplete = !draft.service || !draft.date || !draft.time || !draft.name || !draft.recipientPhone;
+        if (claimsToSendPayment && isDraftIncomplete) {
+            logger.warn(`[SECURITY] AI claimed to send payment but draft is incomplete for customer ${customerId}`);
+            const missing = [];
+            if (!draft.service)
+                missing.push('package');
+            if (!draft.date)
+                missing.push('date');
+            if (!draft.time)
+                missing.push('time');
+            if (!draft.name)
+                missing.push('name');
+            if (!draft.recipientPhone)
+                missing.push('phone number');
+            const nextMissing = missing[0];
+            let accurateResponse = '';
+            if (nextMissing === 'package') {
+                accurateResponse = "I'd love to help you complete your booking! Which package would you like to book? 📸";
+            }
+            else if (nextMissing === 'date') {
+                accurateResponse = "Great! What date would you like to book? Just let me know the day (e.g., 'December 15th' or 'next Friday'). 📅";
+            }
+            else if (nextMissing === 'time') {
+                accurateResponse = "Perfect! What time works best for you? (e.g., '2pm', 'morning', 'afternoon') ⏰";
+            }
+            else if (nextMissing === 'name') {
+                accurateResponse = "Almost there! What name should I use for this booking? 👤";
+            }
+            else if (nextMissing === 'phone number') {
+                accurateResponse = "Just one more thing! What's your phone number? This is where I'll send the payment prompt. 📱";
+            }
+            else {
+                accurateResponse = `I need a few more details to complete your booking: ${missing.join(', ')}. Let's start with ${nextMissing} - could you provide that? 💖`;
+            }
+            return {
+                response: accurateResponse,
+                draft,
+                updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: accurateResponse }]
+            };
+        }
         const isFalseConfirmation = /(confirmed booking|Everything is set|booking is confirmed|your booking.*confirmed)/i.test(response) &&
             !(await bookingsService.getLatestConfirmedBooking(customerId));
         if (isFalseConfirmation) {

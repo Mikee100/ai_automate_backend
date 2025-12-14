@@ -28,10 +28,96 @@ let FeedbackLoopService = FeedbackLoopService_1 = class FeedbackLoopService {
             },
         });
         this.logger.log(`Collected feedback for prediction ${predictionId}: ${feedback.thumbsUp ? '👍' : '👎'}`);
+        this.processFeedbackRealTime(predictionId, feedback).catch(err => {
+            this.logger.error('Error in real-time feedback processing', err);
+        });
         if (feedback.thumbsUp === false || (feedback.rating && feedback.rating < 3)) {
             await this.triggerImprovement(predictionId);
         }
         return responseFeedback;
+    }
+    async processFeedbackRealTime(predictionId, feedback) {
+        try {
+            const prediction = await this.prisma.aiPrediction.findUnique({
+                where: { id: predictionId },
+            });
+            if (!prediction)
+                return;
+            if (feedback.thumbsUp === true || (feedback.rating && feedback.rating >= 4)) {
+                await this.considerAddingSuccessfulResponseToKB(prediction);
+            }
+            if (feedback.thumbsUp === false || (feedback.rating && feedback.rating < 3)) {
+                await this.analyzeNegativeFeedback(prediction, feedback);
+            }
+        }
+        catch (error) {
+            this.logger.error('Error in real-time feedback processing', error);
+        }
+    }
+    async considerAddingSuccessfulResponseToKB(prediction) {
+        try {
+            const isFAQ = /^(what|how|when|where|why|can|do|is|are|does|will)/i.test(prediction.input.trim());
+            if (!isFAQ)
+                return;
+            const existing = await this.prisma.knowledgeBase.findFirst({
+                where: {
+                    question: { contains: prediction.input.substring(0, 50), mode: 'insensitive' },
+                },
+            });
+            if (existing) {
+                const existingLength = existing.answer.length;
+                const newLength = prediction.prediction.length;
+                if (newLength > existingLength * 1.2) {
+                    await this.prisma.knowledgeBase.update({
+                        where: { id: existing.id },
+                        data: {
+                            answer: prediction.prediction,
+                            updatedAt: new Date(),
+                        },
+                    });
+                    this.logger.log(`Real-time KB update: Improved answer for "${prediction.input.substring(0, 50)}..."`);
+                }
+                return;
+            }
+            await this.prisma.knowledgeBase.create({
+                data: {
+                    question: prediction.input,
+                    answer: prediction.prediction,
+                    category: 'general',
+                    embedding: [],
+                },
+            });
+            this.logger.log(`Real-time KB update: Added new FAQ "${prediction.input.substring(0, 50)}..."`);
+        }
+        catch (error) {
+            this.logger.error('Error adding successful response to KB', error);
+        }
+    }
+    async analyzeNegativeFeedback(prediction, feedback) {
+        try {
+            const issues = [];
+            if (feedback.wasHelpful === false)
+                issues.push('not_helpful');
+            if (feedback.wasAccurate === false)
+                issues.push('inaccurate');
+            if (feedback.wasEmpathetic === false)
+                issues.push('not_empathetic');
+            await this.prisma.conversationLearning.create({
+                data: {
+                    customerId: 'system',
+                    userMessage: prediction.input,
+                    aiResponse: prediction.prediction,
+                    extractedIntent: 'unknown',
+                    wasSuccessful: false,
+                    conversationOutcome: `negative_feedback: ${issues.join(', ')}`,
+                    shouldAddToKB: false,
+                },
+            });
+            this.logger.warn(`Negative feedback analyzed: ${issues.join(', ')} for "${prediction.input.substring(0, 50)}..."`);
+        }
+        catch (error) {
+            this.logger.error('Error analyzing negative feedback', error);
+        }
     }
     async triggerImprovement(predictionId) {
         const prediction = await this.prisma.aiPrediction.findUnique({

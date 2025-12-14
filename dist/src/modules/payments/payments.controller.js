@@ -29,8 +29,16 @@ let PaymentsController = PaymentsController_1 = class PaymentsController {
         return { status: payment.status, payment };
     }
     async handleCallback(body) {
-        this.logger.log('✅ M-Pesa callback received:', JSON.stringify(body));
-        await this.paymentsService.handleCallback(body);
+        this.logger.log('📥 [CONTROLLER] M-Pesa callback received');
+        this.logger.debug(`[CONTROLLER] Callback body keys: ${Object.keys(body).join(', ')}`);
+        try {
+            await this.paymentsService.handleCallback(body);
+            this.logger.log('✅ [CONTROLLER] Callback processed successfully');
+        }
+        catch (error) {
+            this.logger.error(`❌ [CONTROLLER] Error processing callback: ${error.message}`);
+            this.logger.error(`[CONTROLLER] Error stack: ${error.stack}`);
+        }
         return {
             ResultCode: 0,
             ResultDesc: 'Accepted'

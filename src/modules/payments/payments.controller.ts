@@ -21,11 +21,19 @@ export class PaymentsController {
   // === M-PESA CALLBACK URL ===
   @Post('callback')
   async handleCallback(@Body() body: any) {
-    this.logger.log('✅ M-Pesa callback received:', JSON.stringify(body));
-
-    await this.paymentsService.handleCallback(body);
+    this.logger.log('📥 [CONTROLLER] M-Pesa callback received');
+    this.logger.debug(`[CONTROLLER] Callback body keys: ${Object.keys(body).join(', ')}`);
+    
+    try {
+      await this.paymentsService.handleCallback(body);
+      this.logger.log('✅ [CONTROLLER] Callback processed successfully');
+    } catch (error) {
+      this.logger.error(`❌ [CONTROLLER] Error processing callback: ${error.message}`);
+      this.logger.error(`[CONTROLLER] Error stack: ${error.stack}`);
+    }
 
     // This response MUST be returned so M-Pesa stops re-sending callbacks
+    // M-PESA expects this exact format
     return {
       ResultCode: 0,
       ResultDesc: 'Accepted'

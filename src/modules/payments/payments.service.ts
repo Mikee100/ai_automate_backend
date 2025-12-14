@@ -2,6 +2,7 @@ import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MessagesService } from '../messages/messages.service';
 import { DateTime } from 'luxon';
@@ -11,6 +12,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { PackagesService } from '../packages/packages.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { MessengerSendService } from '../webhooks/messenger-send.service';
+import { BookingCreatedEvent } from '../bookings/events/booking.events';
 import { firstValueFrom } from 'rxjs';
 
 @Injectable()
@@ -29,6 +31,7 @@ export class PaymentsService {
     private messagesService: MessagesService,
     private notificationsService: NotificationsService,
     private whatsappService: WhatsappService,
+    private eventEmitter: EventEmitter2,
     @Inject(forwardRef(() => AiService)) private aiService: AiService,
     @Inject(forwardRef(() => BookingsService)) private bookingsService: BookingsService,
     @InjectQueue('aiQueue') private aiQueue: Queue,
@@ -76,6 +79,15 @@ export class PaymentsService {
 
 
 
+  /**
+   * Formats phone number to M-PESA format (254XXXXXXXXX)
+   * Uses shared utility function from utils/booking.ts
+   */
+  private formatPhoneNumber(phone: string): string {
+    const { formatPhoneNumber } = require('../../utils/booking');
+    return formatPhoneNumber(phone);
+  }
+
   async initiateSTKPush(bookingDraftId: string, phone: string, amount: number): Promise<{ checkoutRequestId: string; paymentId: string }> {
     const draft = await this.prisma.bookingDraft.findUnique({
       where: { id: bookingDraftId },
@@ -91,13 +103,24 @@ export class PaymentsService {
       throw new Error('Package not found');
     }
 
+    // Format phone number properly
+    const formattedPhone = this.formatPhoneNumber(phone);
+    this.logger.log(`[STK] Phone number formatting: "${phone}" -> "${formattedPhone}"`);
+
+    // Validate callback URL
+    if (!this.callbackUrl) {
+      this.logger.error(`[STK] MPESA_CALLBACK_URL is not set in environment variables!`);
+      throw new Error('M-PESA callback URL is not configured');
+    }
+    this.logger.log(`[STK] Callback URL: ${this.callbackUrl}`);
+
     // Always create a new payment for every new booking draft
     await this.prisma.payment.deleteMany({ where: { bookingDraftId } });
     const payment = await this.prisma.payment.create({
       data: {
         bookingDraftId,
         amount,
-        phone: phone.startsWith('254') ? phone : `254${phone.substring(1)}`,
+        phone: formattedPhone,
         status: 'pending',
       },
     });
@@ -113,19 +136,38 @@ export class PaymentsService {
       Timestamp: timestamp,
       TransactionType: 'CustomerPayBillOnline',
       Amount: amount,
-      PartyA: phone.startsWith('254') ? phone : `254${phone.substring(1)}`,
+      PartyA: formattedPhone,
       PartyB: this.shortcode,
-      PhoneNumber: phone.startsWith('254') ? phone : `254${phone.substring(1)}`,
+      PhoneNumber: formattedPhone,
       CallBackURL: this.callbackUrl,
       AccountReference: 'Fiesta House',
       TransactionDesc: `Deposit for ${draft.service} booking`,
     };
     const stkUrl = `${this.mpesaBaseUrl}/mpesa/stkpush/v1/processrequest`;
-    // this.logger.log(`Initiating STK Push to URL: ${stkUrl}`);
-    // this.logger.log(`STK Push request body: ${JSON.stringify(stkRequestBody)}`);
-    // this.logger.log(`Authorization header: Bearer ${accessToken.substring(0, 10)}...`);
 
     try {
+      this.logger.log(`[STK] Initiating STK Push`);
+      this.logger.log(`[STK] URL: ${stkUrl}`);
+      this.logger.log(`[STK] Phone (original): ${phone}`);
+      this.logger.log(`[STK] Phone (formatted): ${formattedPhone}`);
+      this.logger.log(`[STK] Amount: ${amount} KSH`);
+      this.logger.log(`[STK] Callback URL: ${this.callbackUrl}`);
+      this.logger.debug(`[STK] Request body: ${JSON.stringify(stkRequestBody)}`);
+      
+      // WARNING: In sandbox mode, the phone number MUST be registered in M-PESA Developer Portal
+      if (this.mpesaBaseUrl.includes('sandbox')) {
+        this.logger.warn(`[STK] ⚠️ SANDBOX MODE: Phone number ${formattedPhone} must be registered in M-PESA Developer Portal to receive STK push!`);
+        this.logger.warn(`[STK] ⚠️ Register test numbers at: https://developer.safaricom.co.ke/`);
+        this.logger.warn(`[STK] ⚠️ IMPORTANT: Even if M-PESA API returns success, STK push will NOT appear on your phone unless the number is registered in the sandbox!`);
+        this.logger.warn(`[STK] ⚠️ Steps to register:`);
+        this.logger.warn(`[STK]    1. Go to https://developer.safaricom.co.ke/`);
+        this.logger.warn(`[STK]    2. Log in to your account`);
+        this.logger.warn(`[STK]    3. Navigate to "Test Credentials" or "Sandbox Test Numbers"`);
+        this.logger.warn(`[STK]    4. Register phone: ${formattedPhone} (or ${formattedPhone.replace('254', '0')})`);
+        this.logger.warn(`[STK]    5. Wait 2-3 minutes for registration to take effect`);
+        this.logger.warn(`[STK]    6. Try the STK push again`);
+      }
+      
       const stkResponse = await firstValueFrom(
         this.httpService.post(stkUrl, stkRequestBody, {
           headers: {
@@ -135,12 +177,16 @@ export class PaymentsService {
         }),
       );
       const data = (stkResponse as { data: any }).data;
+      
+      this.logger.log(`[STK] M-PESA API Response: ${JSON.stringify(data)}`);
+      
       if (data.ResponseCode !== '0') {
+        this.logger.error(`[STK] M-PESA API returned error: ResponseCode=${data.ResponseCode}, errorMessage=${data.errorMessage || data.CustomerMessage || 'Unknown error'}`);
         await this.prisma.payment.update({
           where: { id: payment.id },
           data: { status: 'failed' },
         });
-        throw new Error(`STK Push failed: ${data.errorMessage}`);
+        throw new Error(`STK Push failed: ${data.errorMessage || data.CustomerMessage || 'Unknown error'}`);
       }
 
       await this.prisma.payment.update({
@@ -148,7 +194,30 @@ export class PaymentsService {
         data: { checkoutRequestId: data.CheckoutRequestID },
       });
 
-      // this.logger.log(`STK Push initiated for payment ${payment.id}, CheckoutRequestID: ${data.CheckoutRequestID}`);
+      this.logger.log(`[STK] ✅ STK Push successfully initiated for payment ${payment.id}`);
+      this.logger.log(`[STK] CheckoutRequestID: ${data.CheckoutRequestID}`);
+      this.logger.log(`[STK] MerchantRequestID: ${data.MerchantRequestID}`);
+      this.logger.log(`[STK] ⏳ Waiting for user to complete payment on phone ${formattedPhone}...`);
+      this.logger.log(`[STK] 📞 Callback will be sent to: ${this.callbackUrl}`);
+      
+      // In sandbox mode, provide additional diagnostic information
+      if (this.mpesaBaseUrl.includes('sandbox')) {
+        this.logger.warn(`[STK] ⚠️ CRITICAL SANDBOX REQUIREMENT:`);
+        this.logger.warn(`[STK] ⚠️ Your phone number ${formattedPhone} MUST be registered in M-PESA Developer Portal`);
+        this.logger.warn(`[STK] ⚠️ Even though M-PESA API returned success, the STK push will NOT appear on your phone`);
+        this.logger.warn(`[STK] ⚠️ unless the number is registered in the sandbox.`);
+        this.logger.warn(`[STK] ⚠️`);
+        this.logger.warn(`[STK] ⚠️ TO FIX THIS:`);
+        this.logger.warn(`[STK] ⚠️ 1. Go to: https://developer.safaricom.co.ke/`);
+        this.logger.warn(`[STK] ⚠️ 2. Log in to your developer account`);
+        this.logger.warn(`[STK] ⚠️ 3. Navigate to "Test Credentials" or "Sandbox Test Numbers"`);
+        this.logger.warn(`[STK] ⚠️ 4. Register: ${formattedPhone} (or ${formattedPhone.replace('254', '0')})`);
+        this.logger.warn(`[STK] ⚠️ 5. Wait 2-3 minutes for registration to take effect`);
+        this.logger.warn(`[STK] ⚠️ 6. Try the STK push again`);
+        this.logger.warn(`[STK] ⚠️`);
+        this.logger.warn(`[STK] ⚠️ You can check payment status with:`);
+        this.logger.warn(`[STK] ⚠️ GET /api/mpesa/status/${data.CheckoutRequestID}`);
+      }
 
       // Schedule timeout job for 60 seconds
       await this.paymentsQueue.add(
@@ -160,11 +229,17 @@ export class PaymentsService {
           removeOnFail: true,
         },
       );
-      // this.logger.log(`Scheduled timeout for payment ${payment.id} in 60s`);
 
       return { checkoutRequestId: data.CheckoutRequestID, paymentId: payment.id };
     } catch (error) {
-      this.logger.error(`STK Push request failed: ${error.message}`, error.response?.data || error);
+      this.logger.error(`[STK] ❌ STK Push request failed: ${error.message}`);
+      this.logger.error(`[STK] Full error details:`, {
+        message: error.message,
+        stack: error.stack,
+        response: error.response?.data,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+      });
       await this.prisma.payment.update({
         where: { id: payment.id },
         data: { status: 'failed' },
@@ -176,11 +251,25 @@ export class PaymentsService {
 
 
   async handleCallback(body: any) {
+    this.logger.log(`[CALLBACK] 📥 M-PESA callback received`);
+    this.logger.debug(`[CALLBACK] Full callback body: ${JSON.stringify(body, null, 2)}`);
+    
     // M-Pesa sends validation and confirmation callbacks
     const { Body } = body;
+    
+    if (!Body || !Body.stkCallback) {
+      this.logger.error(`[CALLBACK] ❌ Invalid callback structure. Expected Body.stkCallback`);
+      this.logger.error(`[CALLBACK] Received structure: ${JSON.stringify(Object.keys(body))}`);
+      return;
+    }
+    
     const { stkCallback } = Body;
-    const { CheckoutRequestID } = stkCallback;
-    const { ResultCode, ResultDesc, CallbackMetadata } = stkCallback;
+    const { CheckoutRequestID, MerchantRequestID, ResultCode, ResultDesc, CallbackMetadata } = stkCallback;
+
+    this.logger.log(`[CALLBACK] CheckoutRequestID: ${CheckoutRequestID}`);
+    this.logger.log(`[CALLBACK] MerchantRequestID: ${MerchantRequestID}`);
+    this.logger.log(`[CALLBACK] ResultCode: ${ResultCode}`);
+    this.logger.log(`[CALLBACK] ResultDesc: ${ResultDesc}`);
 
     const payment = await this.prisma.payment.findFirst({
       where: { checkoutRequestId: CheckoutRequestID },
@@ -188,20 +277,28 @@ export class PaymentsService {
     });
 
     if (!payment) {
-      this.logger.warn(`Payment not found for CheckoutRequestID: ${CheckoutRequestID}`);
+      this.logger.warn(`[CALLBACK] ⚠️ Payment not found for CheckoutRequestID: ${CheckoutRequestID}`);
+      this.logger.warn(`[CALLBACK] This might be a duplicate callback or the payment was deleted`);
       return;
     }
 
+    this.logger.log(`[CALLBACK] ✅ Found payment: ${payment.id}, status: ${payment.status}`);
+
     if (ResultCode === 0 || ResultCode === '0') {
       // Success
+      this.logger.log(`[CALLBACK] ✅ Payment successful!`);
       let receipt = '';
       if (CallbackMetadata && CallbackMetadata.Item) {
         const item = CallbackMetadata.Item.find((i: any) => i.Name === 'MpesaReceiptNumber');
-        if (item) receipt = item.Value;
+        if (item) {
+          receipt = item.Value;
+          this.logger.log(`[CALLBACK] M-PESA Receipt Number: ${receipt}`);
+        }
       }
       await this.confirmPayment(payment, receipt);
     } else {
       // Failed
+      this.logger.warn(`[CALLBACK] ❌ Payment failed: ${ResultDesc} (Code: ${ResultCode})`);
       await this.handlePaymentFailure(payment, ResultDesc, ResultCode);
     }
   }
@@ -256,6 +353,18 @@ export class PaymentsService {
       await this.prisma.bookingDraft.delete({
         where: { id: draft.id },
       });
+
+      // Emit booking.created event to trigger reminder scheduling
+      this.eventEmitter.emit(
+        'booking.created',
+        new BookingCreatedEvent(
+          booking.id,
+          booking.customerId,
+          booking.service,
+          booking.dateTime,
+          booking.customer.name,
+        ),
+      );
 
       // SCHEDULE REMINDERS
       const bookingDate = DateTime.fromJSDate(booking.dateTime);

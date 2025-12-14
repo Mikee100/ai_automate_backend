@@ -232,6 +232,9 @@ export declare class BookingsService {
         version: number;
     }>;
     deleteBookingDraft(customerId: string): Promise<import(".prisma/client").Prisma.BatchPayload>;
+    isDraftStale(customerId: string): Promise<boolean>;
+    hasFailedPayment(customerId: string): Promise<boolean>;
+    cleanupStaleDraft(customerId: string): Promise<boolean>;
     createBooking(customerId: string, opts: {
         message?: string;
         dateTime?: Date;

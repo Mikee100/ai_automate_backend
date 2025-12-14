@@ -1,5 +1,7 @@
 // src/modules/ai/services/conversation-learning.service.ts
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import OpenAI from 'openai';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 interface LearningEntry {
@@ -16,8 +18,18 @@ interface LearningEntry {
 @Injectable()
 export class ConversationLearningService {
     private readonly logger = new Logger(ConversationLearningService.name);
+    private readonly openai: OpenAI;
+    private readonly enableRealTimeLearning: boolean;
 
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private configService: ConfigService,
+    ) {
+        this.openai = new OpenAI({ 
+            apiKey: this.configService.get<string>('OPENAI_API_KEY') 
+        });
+        this.enableRealTimeLearning = this.configService.get<boolean>('ENABLE_REAL_TIME_LEARNING', true);
+    }
 
     /**
      * Record a learning entry from conversation
@@ -39,7 +51,176 @@ export class ConversationLearningService {
         });
 
         this.logger.debug(`Recorded learning for customer ${customerId}, intent: ${entry.extractedIntent}`);
+
+        // Real-time learning: Process immediately if enabled
+        if (this.enableRealTimeLearning) {
+            // Don't await - run in background to not block response
+            this.processRealTimeLearning(learning, entry).catch(err => {
+                this.logger.error('Error in real-time learning', err);
+            });
+        }
+
         return learning;
+    }
+
+    /**
+     * Real-time learning: Process learning immediately
+     */
+    private async processRealTimeLearning(learning: any, entry: LearningEntry): Promise<void> {
+        try {
+            // If successful, check if it should be added to knowledge base
+            if (entry.wasSuccessful && entry.extractedIntent === 'faq') {
+                await this.considerAddingToKB(learning);
+            }
+
+            // If failed, analyze failure pattern
+            if (!entry.wasSuccessful) {
+                await this.analyzeFailurePattern(learning, entry);
+            }
+
+            // Update response patterns for this intent
+            await this.updateResponsePatterns(entry.extractedIntent, entry);
+        } catch (error) {
+            this.logger.error('Error in real-time learning processing', error);
+        }
+    }
+
+    /**
+     * Consider adding successful FAQ to knowledge base in real-time
+     */
+    private async considerAddingToKB(learning: any): Promise<void> {
+        try {
+            // Check if similar question already exists
+            const existing = await this.prisma.knowledgeBase.findFirst({
+                where: {
+                    question: { contains: learning.userMessage.substring(0, 50), mode: 'insensitive' },
+                },
+            });
+
+            if (existing) {
+                // Update existing KB entry if this response is better
+                const existingScore = await this.scoreKBEntry(existing.answer, learning.userMessage);
+                const newScore = await this.scoreKBEntry(learning.aiResponse, learning.userMessage);
+                
+                if (newScore > existingScore) {
+                    await this.prisma.knowledgeBase.update({
+                        where: { id: existing.id },
+                        data: {
+                            answer: learning.aiResponse,
+                            updatedAt: new Date(),
+                        },
+                    });
+                    this.logger.log(`Updated KB entry: "${learning.userMessage.substring(0, 50)}..."`);
+                }
+                return;
+            }
+
+            // Check if this question appears frequently (quick check)
+            const similarCount = await this.prisma.conversationLearning.count({
+                where: {
+                    userMessage: { contains: learning.userMessage.substring(0, 30), mode: 'insensitive' },
+                    wasSuccessful: true,
+                    extractedIntent: 'faq',
+                },
+            });
+
+            // If appears 2+ times with success, add to KB
+            if (similarCount >= 2) {
+                await this.prisma.knowledgeBase.create({
+                    data: {
+                        question: learning.userMessage,
+                        answer: learning.aiResponse,
+                        category: 'general',
+                        embedding: [], // Will be populated by embedding service
+                    },
+                });
+                this.logger.log(`Real-time KB update: Added "${learning.userMessage.substring(0, 50)}..."`);
+            }
+        } catch (error) {
+            this.logger.error('Error in real-time KB update', error);
+        }
+    }
+
+    /**
+     * Analyze failure pattern in real-time
+     */
+    private async analyzeFailurePattern(learning: any, entry: LearningEntry): Promise<void> {
+        try {
+            // Extract failure reason using AI
+            const failureAnalysis = await this.openai.chat.completions.create({
+                model: 'gpt-4o-mini',
+                messages: [{
+                    role: 'system',
+                    content: 'Analyze why this customer service interaction failed. Return JSON with: reason (string), pattern (string), suggestion (string)'
+                }, {
+                    role: 'user',
+                    content: `User: ${entry.userMessage}\nAI: ${entry.aiResponse}\nOutcome: ${entry.conversationOutcome || 'failed'}`
+                }],
+                response_format: { type: 'json_object' },
+                temperature: 0.3,
+            });
+
+            const analysis = JSON.parse(failureAnalysis.choices[0].message.content || '{}');
+            
+            // Store failure pattern for future reference
+            await this.prisma.conversationLearning.update({
+                where: { id: learning.id },
+                data: {
+                    newKnowledgeExtracted: JSON.stringify(analysis),
+                    shouldAddToKB: false, // Don't add failures to KB
+                },
+            });
+
+            this.logger.warn(`Failure pattern identified: ${analysis.reason}`);
+        } catch (error) {
+            this.logger.error('Error analyzing failure pattern', error);
+        }
+    }
+
+    /**
+     * Update response patterns for intent in real-time
+     */
+    private async updateResponsePatterns(intent: string, entry: LearningEntry): Promise<void> {
+        try {
+            // Get recent successful patterns for this intent
+            const recentSuccessful = await this.getSuccessfulPatterns(intent, 5);
+            
+            // If this is successful, check if it matches existing patterns
+            if (entry.wasSuccessful && recentSuccessful.length > 0) {
+                const patternMatch = recentSuccessful.some(pattern => 
+                    this.similarity(pattern.aiResponse, entry.aiResponse) > 0.8
+                );
+
+                if (!patternMatch) {
+                    // New successful pattern - could be used to improve responses
+                    this.logger.debug(`New successful pattern identified for intent: ${intent}`);
+                }
+            }
+        } catch (error) {
+            this.logger.error('Error updating response patterns', error);
+        }
+    }
+
+    /**
+     * Score KB entry quality
+     */
+    private async scoreKBEntry(answer: string, question: string): Promise<number> {
+        // Simple heuristic: length, completeness, etc.
+        // Could be enhanced with AI scoring
+        const lengthScore = Math.min(answer.length / 100, 1); // Prefer longer answers (up to 100 chars)
+        const completenessScore = answer.includes('?') ? 0.8 : 1; // Prefer statements over questions
+        return (lengthScore + completenessScore) / 2;
+    }
+
+    /**
+     * Simple text similarity (Jaccard similarity)
+     */
+    private similarity(text1: string, text2: string): number {
+        const words1 = new Set(text1.toLowerCase().split(/\s+/));
+        const words2 = new Set(text2.toLowerCase().split(/\s+/));
+        const intersection = new Set([...words1].filter(x => words2.has(x)));
+        const union = new Set([...words1, ...words2]);
+        return intersection.size / union.size;
     }
 
     /**

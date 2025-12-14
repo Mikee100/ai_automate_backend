@@ -13,8 +13,8 @@ export declare class PaymentsController {
             status: string;
             createdAt: Date;
             updatedAt: Date;
-            phone: string;
             bookingId: string | null;
+            phone: string;
             bookingDraftId: string | null;
             amount: number;
             mpesaReceipt: string | null;

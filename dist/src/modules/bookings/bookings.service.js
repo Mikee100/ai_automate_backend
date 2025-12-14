@@ -24,6 +24,7 @@ const calendar_service_1 = require("../calendar/calendar.service");
 const notifications_service_1 = require("../notifications/notifications.service");
 const packages_service_1 = require("../packages/packages.service");
 const whatsapp_service_1 = require("../whatsapp/whatsapp.service");
+const booking_events_1 = require("./events/booking.events");
 const chrono = require("chrono-node");
 const luxon_1 = require("luxon");
 let BookingsService = BookingsService_1 = class BookingsService {
@@ -82,6 +83,7 @@ let BookingsService = BookingsService_1 = class BookingsService {
                 phone = `254${phone.replace(/^0+/, '')}`;
             }
             this.logger.debug(`[STK] Using phone: ${phone}, amount: ${depositAmount}`);
+            this.logger.log(`[BOOKING] Emitting booking.draft.completed event for customerId=${customerId}, draftId=${draft.id}`);
             this.eventEmitter.emit('booking.draft.completed', {
                 customerId,
                 draftId: draft.id,
@@ -90,6 +92,7 @@ let BookingsService = BookingsService_1 = class BookingsService {
                 recipientPhone,
                 depositAmount,
             });
+            this.logger.log(`[BOOKING] Event emitted successfully`);
             return {
                 message: "I've sent a request to your phone for the deposit. 📲 Once you complete that, your magical session will be officially booked! ✨",
                 depositAmount,
@@ -326,17 +329,79 @@ let BookingsService = BookingsService_1 = class BookingsService {
             const latestPayment = await this.getLatestPaymentForDraft(customerId);
             if (latestPayment?.bookingDraft) {
                 draft = latestPayment.bookingDraft;
+                this.logger.debug(`[RESEND] Restored draft from payment ${latestPayment.id}`);
             }
         }
         if (!draft) {
             return { success: false, message: "I don't see a pending booking. Would you like to start a new booking? 💖" };
         }
-        if (draft.step !== 'confirm') {
-            return { success: false, message: "Your booking isn't ready for payment yet. Let's complete the booking details first! 📋" };
+        const hasRequiredFields = draft.service && draft.date && draft.time && draft.name;
+        if (!hasRequiredFields) {
+            const latestPayment = await this.getLatestPaymentForDraft(customerId);
+            if (latestPayment?.bookingDraft) {
+                const paymentDraft = latestPayment.bookingDraft;
+                const updates = {};
+                if (!draft.service && paymentDraft.service)
+                    updates.service = paymentDraft.service;
+                if (!draft.date && paymentDraft.date)
+                    updates.date = paymentDraft.date;
+                if (!draft.time && paymentDraft.time)
+                    updates.time = paymentDraft.time;
+                if (!draft.name && paymentDraft.name)
+                    updates.name = paymentDraft.name;
+                if (!draft.recipientPhone && paymentDraft.recipientPhone)
+                    updates.recipientPhone = paymentDraft.recipientPhone;
+                if (Object.keys(updates).length > 0) {
+                    this.logger.debug(`[RESEND] Restoring missing draft fields from payment: ${JSON.stringify(Object.keys(updates))}`);
+                    await this.prisma.bookingDraft.update({
+                        where: { id: draft.id },
+                        data: updates
+                    });
+                    draft = await this.getBookingDraft(customerId);
+                    const hasRequiredFieldsAfterRestore = draft.service && draft.date && draft.time && draft.name;
+                    if (!hasRequiredFieldsAfterRestore) {
+                        return { success: false, message: "Your booking isn't ready for payment yet. Let's complete the booking details first! 📋" };
+                    }
+                }
+                else {
+                    return { success: false, message: "Your booking isn't ready for payment yet. Let's complete the booking details first! 📋" };
+                }
+            }
+            else {
+                return { success: false, message: "Your booking isn't ready for payment yet. Let's complete the booking details first! 📋" };
+            }
         }
-        const phone = newPhone || draft.recipientPhone;
+        let phone = newPhone || draft.recipientPhone;
+        let originalPhone = phone;
+        if (!phone) {
+            const customer = await this.prisma.customer.findUnique({ where: { id: customerId } });
+            phone = customer?.phone;
+            originalPhone = phone;
+        }
+        if (phone) {
+            const { formatPhoneNumber } = require('../../utils/booking');
+            phone = formatPhoneNumber(phone);
+            this.logger.debug(`[RESEND] Formatted phone number: "${originalPhone}" -> "${phone}"`);
+        }
         if (!phone) {
             return { success: false, message: "I need your phone number to send the payment prompt. Could you please provide it? 📱" };
+        }
+        const updates = {};
+        if (phone && phone !== draft.recipientPhone) {
+            updates.recipientPhone = phone;
+        }
+        if (draft.name && !draft.recipientName) {
+            updates.recipientName = draft.name;
+        }
+        if (hasRequiredFields && draft.step !== 'confirm') {
+            updates.step = 'confirm';
+        }
+        if (Object.keys(updates).length > 0) {
+            await this.prisma.bookingDraft.update({
+                where: { id: draft.id },
+                data: updates
+            });
+            draft = await this.getBookingDraft(customerId);
         }
         const amount = await this.getDepositForDraft(customerId) || 2000;
         try {
@@ -400,6 +465,59 @@ let BookingsService = BookingsService_1 = class BookingsService {
     }
     async deleteBookingDraft(customerId) {
         return this.prisma.bookingDraft.deleteMany({ where: { customerId } });
+    }
+    async isDraftStale(customerId) {
+        const draft = await this.getBookingDraft(customerId);
+        if (!draft)
+            return false;
+        const now = new Date();
+        const draftAge = now.getTime() - new Date(draft.updatedAt || draft.createdAt).getTime();
+        const hoursOld = draftAge / (1000 * 60 * 60);
+        const minutesOld = draftAge / (1000 * 60);
+        if (hoursOld > 168) {
+            return true;
+        }
+        const latestPayment = await this.getLatestPaymentForDraft(customerId);
+        if (latestPayment && latestPayment.status === 'failed') {
+            if (hoursOld > 1) {
+                return true;
+            }
+            return true;
+        }
+        if (!latestPayment && hoursOld > 48) {
+            return true;
+        }
+        return false;
+    }
+    async hasFailedPayment(customerId) {
+        const latestPayment = await this.getLatestPaymentForDraft(customerId);
+        return latestPayment?.status === 'failed';
+    }
+    async cleanupStaleDraft(customerId) {
+        const draft = await this.getBookingDraft(customerId);
+        if (!draft)
+            return false;
+        const latestPayment = await this.getLatestPaymentForDraft(customerId);
+        if (latestPayment && latestPayment.status === 'pending') {
+            this.logger.debug(`[CLEANUP] Skipping cleanup - pending payment exists for customer ${customerId}`);
+            return false;
+        }
+        const isStale = await this.isDraftStale(customerId);
+        if (isStale) {
+            this.logger.debug(`[CLEANUP] Cleaning up stale draft for customer ${customerId}`);
+            await this.deleteBookingDraft(customerId);
+            return true;
+        }
+        if (latestPayment && latestPayment.status === 'failed') {
+            const paymentAge = Date.now() - new Date(latestPayment.createdAt).getTime();
+            const hoursOld = paymentAge / (1000 * 60 * 60);
+            if (hoursOld > 1) {
+                this.logger.debug(`[CLEANUP] Cleaning up draft with failed payment (${hoursOld.toFixed(1)} hours old) for customer ${customerId}`);
+                await this.deleteBookingDraft(customerId);
+                return true;
+            }
+        }
+        return false;
     }
     async createBooking(customerId, opts) {
         let parsedDateTime = null;
@@ -650,11 +768,22 @@ let BookingsService = BookingsService_1 = class BookingsService {
         });
     }
     async confirmBooking(bookingId) {
+        const existingBooking = await this.prisma.booking.findUnique({
+            where: { id: bookingId },
+            include: { customer: true }
+        });
+        if (!existingBooking) {
+            throw new Error(`Booking ${bookingId} not found`);
+        }
+        const wasProvisional = existingBooking.status === 'provisional';
         const booking = await this.prisma.booking.update({
             where: { id: bookingId },
             data: { status: 'confirmed' },
             include: { customer: true }
         });
+        if (wasProvisional) {
+            this.eventEmitter.emit('booking.created', new booking_events_1.BookingCreatedEvent(booking.id, booking.customerId, booking.service, booking.dateTime, booking.customer.name));
+        }
         try {
             const eventId = await this.calendarService.createEvent(booking);
             await this.prisma.booking.update({

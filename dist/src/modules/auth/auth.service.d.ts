@@ -1,7 +1,9 @@
 import { JwtService } from '@nestjs/jwt';
+import { PrismaService } from '../../prisma/prisma.service';
 export declare class AuthService {
     private jwtService;
-    constructor(jwtService: JwtService);
+    private prisma;
+    constructor(jwtService: JwtService, prisma: PrismaService);
     login(email: string, password: string): Promise<{
         access_token: string;
         user: {
@@ -12,7 +14,17 @@ export declare class AuthService {
         };
     }>;
     validateUser(payload: any): Promise<{
-        id: any;
-        email: any;
+        id: string;
+        name: string;
+        email: string;
+        role: string;
+        isActive: boolean;
+    }>;
+    createUser(email: string, password: string, name: string, role?: string): Promise<{
+        id: string;
+        createdAt: Date;
+        name: string;
+        email: string;
+        role: string;
     }>;
 }

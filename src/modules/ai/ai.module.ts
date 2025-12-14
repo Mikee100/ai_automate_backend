@@ -22,6 +22,7 @@ import { AdvancedIntentService } from './services/advanced-intent.service';
 import { PersonalizationService } from './services/personalization.service';
 import { FeedbackLoopService } from './services/feedback-loop.service';
 import { PredictiveAnalyticsService } from './services/predictive-analytics.service';
+import { ResponseQualityService } from './services/response-quality.service';
 
 // Proactive Intelligence
 import { ProactiveOutreachService } from './services/proactive-outreach.service';
@@ -58,6 +59,7 @@ import { OutreachScheduler } from './schedulers/outreach.scheduler';
     PersonalizationService,
     FeedbackLoopService,
     PredictiveAnalyticsService,
+    ResponseQualityService,
     // Proactive Intelligence
     ProactiveOutreachService,
     OutreachProcessor,
@@ -74,6 +76,7 @@ import { OutreachScheduler } from './schedulers/outreach.scheduler';
     PersonalizationService,
     FeedbackLoopService,
     PredictiveAnalyticsService,
+    ResponseQualityService,
     // Export proactive services
     ProactiveOutreachService,
   ],

@@ -29,6 +29,7 @@ const advanced_intent_service_1 = require("./services/advanced-intent.service");
 const personalization_service_1 = require("./services/personalization.service");
 const feedback_loop_service_1 = require("./services/feedback-loop.service");
 const predictive_analytics_service_1 = require("./services/predictive-analytics.service");
+const response_quality_service_1 = require("./services/response-quality.service");
 const proactive_outreach_service_1 = require("./services/proactive-outreach.service");
 const outreach_processor_1 = require("./processors/outreach.processor");
 const outreach_scheduler_1 = require("./schedulers/outreach.scheduler");
@@ -65,6 +66,7 @@ exports.AiModule = AiModule = __decorate([
             personalization_service_1.PersonalizationService,
             feedback_loop_service_1.FeedbackLoopService,
             predictive_analytics_service_1.PredictiveAnalyticsService,
+            response_quality_service_1.ResponseQualityService,
             proactive_outreach_service_1.ProactiveOutreachService,
             outreach_processor_1.OutreachProcessor,
             outreach_scheduler_1.OutreachScheduler,
@@ -79,6 +81,7 @@ exports.AiModule = AiModule = __decorate([
             personalization_service_1.PersonalizationService,
             feedback_loop_service_1.FeedbackLoopService,
             predictive_analytics_service_1.PredictiveAnalyticsService,
+            response_quality_service_1.ResponseQualityService,
             proactive_outreach_service_1.ProactiveOutreachService,
         ],
     })

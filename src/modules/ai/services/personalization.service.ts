@@ -176,7 +176,7 @@ export class PersonalizationService {
 
         if (intent === 'package_inquiry') {
             if (!context.preferredPackages || context.preferredPackages.length === 0) {
-                questions.push("What's most important to you - makeup, multiple outfits, or outdoor location?");
+                questions.push("What's most important to you - makeup, multiple outfits, or specific backdrops?");
                 questions.push("Do you have a budget range in mind?");
             }
         }
@@ -240,7 +240,11 @@ export class PersonalizationService {
 
         // Feature preferences
         if (lower.includes('makeup')) preferences.wantsMakeup = true;
-        if (lower.includes('outdoor') || lower.includes('beach')) preferences.wantsOutdoor = true;
+        // Note: Outdoor packages are no longer available, but we track the preference to inform users
+        if (lower.includes('outdoor') || lower.includes('beach')) {
+            // We'll inform users we only offer studio packages when they ask about outdoor
+            preferences.wantsOutdoor = false; // Set to false since we don't offer outdoor
+        }
 
         return preferences;
     }

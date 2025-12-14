@@ -17,7 +17,7 @@ export class PaymentListener {
 
     @OnEvent('booking.draft.completed')
     async handleBookingDraftCompleted(event: BookingDraftCompletedEvent) {
-        this.logger.log(`[Event] BookingDraftCompleted: customerId=${event.customerId}, draftId=${event.draftId}`);
+        this.logger.log(`[Event] ⚡ BookingDraftCompleted event received: customerId=${event.customerId}, draftId=${event.draftId}, amount=${event.depositAmount}`);
 
         try {
             // Format phone if needed
@@ -51,15 +51,21 @@ export class PaymentListener {
             }
 
             // Initiate STK Push
-            await this.paymentsService.initiateSTKPush(
+            this.logger.log(`[Event] Calling initiateSTKPush with draftId=${event.draftId}, phone=${phone}, amount=${event.depositAmount}`);
+            const result = await this.paymentsService.initiateSTKPush(
                 event.draftId,
                 phone,
                 event.depositAmount,
             );
 
-            this.logger.log(`[Event] STK Push initiated for deposit of ${event.depositAmount} KSH for draft ${event.draftId}`);
+            this.logger.log(`[Event] ✅ STK Push successfully initiated for deposit of ${event.depositAmount} KSH for draft ${event.draftId}, CheckoutRequestID: ${result.checkoutRequestId}`);
         } catch (error) {
-            this.logger.error(`[Event] Failed to initiate STK Push for draft ${event.draftId}`, error);
+            this.logger.error(`[Event] ❌ Failed to initiate STK Push for draft ${event.draftId}`, error);
+            this.logger.error(`[Event] Error details:`, {
+                message: error.message,
+                stack: error.stack,
+                response: error.response?.data,
+            });
         }
     }
 }

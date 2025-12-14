@@ -12,6 +12,7 @@ const bull_1 = require("@nestjs/bull");
 const message_queue_processor_1 = require("../../workers/message-queue.processor");
 const ai_queue_processor_1 = require("./ai-queue.processor");
 const booking_queue_processor_1 = require("../../workers/booking-queue.processor");
+const reminders_queue_processor_1 = require("./reminders-queue.processor");
 const messages_module_1 = require("../modules/messages/messages.module");
 const ai_module_1 = require("../modules/ai/ai.module");
 const bookings_module_1 = require("../modules/bookings/bookings.module");
@@ -20,6 +21,7 @@ const instagram_module_1 = require("../modules/instagram/instagram.module");
 const messenger_module_1 = require("../modules/webhooks/messenger.module");
 const customers_module_1 = require("../modules/customers/customers.module");
 const websocket_module_1 = require("../websockets/websocket.module");
+const reminders_module_1 = require("../modules/reminders/reminders.module");
 let WorkersModule = class WorkersModule {
 };
 exports.WorkersModule = WorkersModule;
@@ -35,6 +37,9 @@ exports.WorkersModule = WorkersModule = __decorate([
             bull_1.BullModule.registerQueue({
                 name: 'bookingQueue',
             }),
+            bull_1.BullModule.registerQueue({
+                name: 'remindersQueue',
+            }),
             messages_module_1.MessagesModule,
             ai_module_1.AiModule,
             bookings_module_1.BookingsModule,
@@ -43,11 +48,13 @@ exports.WorkersModule = WorkersModule = __decorate([
             messenger_module_1.MessengerModule,
             customers_module_1.CustomersModule,
             websocket_module_1.WebsocketModule,
+            reminders_module_1.RemindersModule,
         ],
         providers: [
             message_queue_processor_1.MessageQueueProcessor,
             ai_queue_processor_1.AiQueueProcessor,
             booking_queue_processor_1.BookingQueueProcessor,
+            reminders_queue_processor_1.RemindersQueueProcessor,
         ],
     })
 ], WorkersModule);

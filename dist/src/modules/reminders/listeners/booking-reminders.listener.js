@@ -21,6 +21,7 @@ let BookingRemindersListener = BookingRemindersListener_1 = class BookingReminde
         this.logger = new common_1.Logger(BookingRemindersListener_1.name);
     }
     async handleBookingCreated(event) {
+        this.logger.log(`Scheduling reminders for new booking ${event.bookingId}`);
         try {
             await this.remindersService.scheduleRemindersForBooking(event.bookingId);
         }

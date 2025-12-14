@@ -185,6 +185,7 @@ let WebhooksService = class WebhooksService {
             await this.customersService.updatePhone(from, newPhone);
             const draft = await this.bookingsService.getBookingDraft(customer.id);
             if (draft) {
+                await this.bookingsService.updateBookingDraft(customer.id, { recipientPhone: newPhone });
                 const depositAmount = await this.bookingsService.getDepositForDraft(customer.id) || 2000;
                 const packages = await this.aiService.getCachedPackages();
                 const selectedPackage = packages.find(p => p.name === draft.service);
@@ -224,7 +225,7 @@ Or reply *"CANCEL"* if you'd like to make changes. 💖`;
                     try {
                         const checkoutId = await this.paymentsService.initiateSTKPush(draft.id, customerData.phone, amount);
                         await this.whatsappService.sendMessage(from, `Payment request sent! Please check your phone and enter your M-PESA PIN to complete the deposit payment. 💳✨`);
-                        console.log(`STK Push initiated for ${customerData.phone}, CheckoutRequestID: ${checkoutId}`);
+                        console.log(`STK Push initiated for ${customerData.phone}, CheckoutRequestID: ${checkoutId.checkoutRequestId}`);
                     }
                     catch (error) {
                         console.error('STK Push failed:', error);
@@ -528,6 +529,7 @@ Just let me know! 💖`);
                     await this.customersService.updatePhoneByMessengerId(senderId, newPhone);
                     const draft = await this.bookingsService.getBookingDraft(customer.id);
                     if (draft) {
+                        await this.bookingsService.updateBookingDraft(customer.id, { recipientPhone: newPhone });
                         const depositAmount = await this.bookingsService.getDepositForDraft(customer.id) || 2000;
                         const packages = await this.aiService.getCachedPackages();
                         const selectedPackage = packages.find(p => p.name === draft.service);
@@ -567,7 +569,7 @@ Or reply *"CANCEL"* if you'd like to make changes. 💖`;
                             try {
                                 const checkoutId = await this.paymentsService.initiateSTKPush(draft.id, customerData.phone, amount);
                                 await this.messengerSendService.sendMessage(senderId, `Payment request sent! Please check your phone and enter your M-PESA PIN to complete the deposit payment. 💳✨`);
-                                console.log(`STK Push initiated for ${customerData.phone}, CheckoutRequestID: ${checkoutId}`);
+                                console.log(`STK Push initiated for ${customerData.phone}, CheckoutRequestID: ${checkoutId.checkoutRequestId}`);
                             }
                             catch (error) {
                                 console.error('STK Push failed:', error);

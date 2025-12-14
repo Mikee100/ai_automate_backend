@@ -1,3 +1,4 @@
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../prisma/prisma.service';
 interface LearningEntry {
     userMessage: string;
@@ -11,14 +12,13 @@ interface LearningEntry {
 }
 export declare class ConversationLearningService {
     private prisma;
+    private configService;
     private readonly logger;
-    constructor(prisma: PrismaService);
+    private readonly openai;
+    private readonly enableRealTimeLearning;
+    constructor(prisma: PrismaService, configService: ConfigService);
     recordLearning(customerId: string, entry: LearningEntry, conversationId?: string): Promise<{
         id: string;
-        category: string | null;
-        createdAt: Date;
-        metadata: import("@prisma/client/runtime/library").JsonValue | null;
-        customerId: string;
         conversationId: string | null;
         userMessage: string;
         aiResponse: string;
@@ -29,16 +29,22 @@ export declare class ConversationLearningService {
         conversationOutcome: string | null;
         shouldAddToKB: boolean;
         newKnowledgeExtracted: string | null;
+        category: string | null;
         conversationLength: number;
         timeToResolution: number | null;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        createdAt: Date;
+        customerId: string;
     }>;
+    private processRealTimeLearning;
+    private considerAddingToKB;
+    private analyzeFailurePattern;
+    private updateResponsePatterns;
+    private scoreKBEntry;
+    private similarity;
     markForKBExtraction(learningId: string, category: string, extractedKnowledge: string): Promise<void>;
     getSuccessfulPatterns(intent: string, limit?: number): Promise<{
         id: string;
-        category: string | null;
-        createdAt: Date;
-        metadata: import("@prisma/client/runtime/library").JsonValue | null;
-        customerId: string;
         conversationId: string | null;
         userMessage: string;
         aiResponse: string;
@@ -49,15 +55,15 @@ export declare class ConversationLearningService {
         conversationOutcome: string | null;
         shouldAddToKB: boolean;
         newKnowledgeExtracted: string | null;
+        category: string | null;
         conversationLength: number;
         timeToResolution: number | null;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        createdAt: Date;
+        customerId: string;
     }[]>;
     getFailedConversations(intent?: string, limit?: number): Promise<{
         id: string;
-        category: string | null;
-        createdAt: Date;
-        metadata: import("@prisma/client/runtime/library").JsonValue | null;
-        customerId: string;
         conversationId: string | null;
         userMessage: string;
         aiResponse: string;
@@ -68,8 +74,12 @@ export declare class ConversationLearningService {
         conversationOutcome: string | null;
         shouldAddToKB: boolean;
         newKnowledgeExtracted: string | null;
+        category: string | null;
         conversationLength: number;
         timeToResolution: number | null;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
+        createdAt: Date;
+        customerId: string;
     }[]>;
     analyzePatterns(intent: string): Promise<{
         intent: string;

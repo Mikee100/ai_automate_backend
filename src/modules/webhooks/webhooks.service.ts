@@ -31,6 +31,10 @@ export class WebhooksService {
     private websocketGateway: WebsocketGateway,
     private notificationsService?: NotificationsService,
   ) { }
+  /**
+   * Handle WhatsApp webhook - PRODUCTION MODE: Accepts messages from ALL phone numbers
+   * No phone number restrictions - all incoming messages are processed
+   */
   async handleWhatsAppWebhook(body: any) {
     if (body.object !== 'whatsapp_business_account') {
       return { status: 'ignored' };
@@ -42,6 +46,7 @@ export class WebhooksService {
         const value = change.value;
 
         // PROCESS ONLY IF THERE ARE MESSAGE OBJECTS INSIDE
+        // PRODUCTION: All phone numbers are allowed - no filtering
         if (value?.messages && value.messages.length > 0) {
           await this.processWhatsAppMessage(value);
         }
@@ -51,6 +56,10 @@ export class WebhooksService {
     return { status: 'ok' };
   }
 
+  /**
+   * Process WhatsApp message - PRODUCTION MODE: Accepts messages from ALL phone numbers
+   * No phone number whitelist or restrictions - all valid messages are processed
+   */
   async processWhatsAppMessage(value: any) {
     console.log('[AI DEBUG] processWhatsAppMessage called', JSON.stringify(value));
     const messages = value?.messages;
@@ -60,7 +69,7 @@ export class WebhooksService {
     }
 
     const message = messages[0];
-    const from = message.from;
+    const from = message.from; // PRODUCTION: Accepts any phone number - no restrictions
     const text = message.text?.body;
     const messageId = message.id;
 
@@ -211,6 +220,8 @@ export class WebhooksService {
       // Check if there's a pending booking draft
       const draft = await this.bookingsService.getBookingDraft(customer.id);
       if (draft) {
+        // Also update the draft's recipientPhone
+        await this.bookingsService.updateBookingDraft(customer.id, { recipientPhone: newPhone });
         const depositAmount = await this.bookingsService.getDepositForDraft(customer.id) || 2000;
 
         // Get package details for full price
@@ -263,7 +274,7 @@ Or reply *"CANCEL"* if you'd like to make changes. 💖`;
               `Payment request sent! Please check your phone and enter your M-PESA PIN to complete the deposit payment. 💳✨`
             );
 
-            console.log(`STK Push initiated for ${customerData.phone}, CheckoutRequestID: ${checkoutId}`);
+            console.log(`STK Push initiated for ${customerData.phone}, CheckoutRequestID: ${checkoutId.checkoutRequestId}`);
           } catch (error) {
             console.error('STK Push failed:', error);
             await this.whatsappService.sendMessage(
@@ -644,6 +655,8 @@ Just let me know! 💖`
           // Check if there's a pending booking draft
           const draft = await this.bookingsService.getBookingDraft(customer.id);
           if (draft) {
+            // Also update the draft's recipientPhone
+            await this.bookingsService.updateBookingDraft(customer.id, { recipientPhone: newPhone });
             const depositAmount = await this.bookingsService.getDepositForDraft(customer.id) || 2000;
 
             // Get package details for full price
@@ -696,7 +709,7 @@ Or reply *"CANCEL"* if you'd like to make changes. 💖`;
                   `Payment request sent! Please check your phone and enter your M-PESA PIN to complete the deposit payment. 💳✨`
                 );
 
-                console.log(`STK Push initiated for ${customerData.phone}, CheckoutRequestID: ${checkoutId}`);
+                console.log(`STK Push initiated for ${customerData.phone}, CheckoutRequestID: ${checkoutId.checkoutRequestId}`);
               } catch (error) {
                 console.error('STK Push failed:', error);
                 await this.messengerSendService.sendMessage(

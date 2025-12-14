@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { BullModule } from '@nestjs/bull';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AppController } from './app.controller';
 import { PrismaModule } from './prisma/prisma.module';
@@ -30,12 +32,34 @@ import { InvoicesModule } from './modules/invoices/invoices.module';
 import { ConversationsModule } from './modules/conversations/conversations.module';
 import { SeedingModule } from './modules/seeding/seeding.module';
 import { StatisticsModule } from './modules/statistics/statistics.module';
+import { AdminModule } from './modules/admin/admin.module';
+import { HealthModule } from './modules/health/health.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    // ============================================
+    // SECURITY: Rate Limiting
+    // ============================================
+    ThrottlerModule.forRoot([
+      {
+        name: 'short',
+        ttl: 1000, // 1 second
+        limit: 10, // 10 requests per second
+      },
+      {
+        name: 'medium',
+        ttl: 60000, // 1 minute
+        limit: 100, // 100 requests per minute
+      },
+      {
+        name: 'long',
+        ttl: 3600000, // 1 hour
+        limit: 1000, // 1000 requests per hour
+      },
+    ]),
     BullModule.forRoot({
       redis: process.env.REDIS_URL || 'redis://localhost:6379',
     }),
@@ -67,8 +91,19 @@ import { StatisticsModule } from './modules/statistics/statistics.module';
     ConversationsModule,
     SeedingModule,
     StatisticsModule,
+    AdminModule,
+    HealthModule,
   ],
   controllers: [AppController],
+  providers: [
+    // ============================================
+    // SECURITY: Apply rate limiting globally
+    // ============================================
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule { }
 

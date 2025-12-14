@@ -15,7 +15,7 @@ export class BookingRemindersListener {
 
     @OnEvent('booking.created')
     async handleBookingCreated(event: BookingCreatedEvent) {
-        // this.logger.log(`Scheduling reminders for new booking ${event.bookingId}`);
+        this.logger.log(`Scheduling reminders for new booking ${event.bookingId}`);
         try {
             await this.remindersService.scheduleRemindersForBooking(event.bookingId);
         } catch (error) {

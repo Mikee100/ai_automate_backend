@@ -6,6 +6,17 @@ export class BookingStrategy implements ResponseStrategy {
     canHandle(intent: string, context: any): boolean {
         const { hasDraft, message } = context;
         
+        // CRITICAL: Check for payment resend FIRST, even if intent is reschedule
+        // "resend" alone should always trigger payment resend, not reschedule
+        const wantsToRetryPayment = /^(resend|retry|try.*again|send.*again)$/i.test(message.trim()) ||
+                                    /(resend|retry|try.*again|try.*payment|retry.*payment|lets.*retry|let.*retry|want.*retry|need.*retry|can.*retry).*(payment|prompt|mpesa)/i.test(message) ||
+                                    /(payment|prompt|mpesa).*(resend|retry|try.*again)/i.test(message);
+        
+        // If user wants to resend payment, always handle it (even if intent is reschedule)
+        if (wantsToRetryPayment) {
+            return true;
+        }
+        
         // CRITICAL: Don't handle if user explicitly wants to reschedule
         // This prevents booking strategy from interfering with reschedule flow
         const isRescheduleIntent =
@@ -20,16 +31,11 @@ export class BookingStrategy implements ResponseStrategy {
         // Check if user wants to START a booking (even if no draft exists)
         const wantsToStartBooking = /(how.*(do|can).*(make|book|start|get|schedule).*(booking|appointment)|(i want|i'd like|i need|can i|please).*(to book|booking|appointment|make.*booking|schedule)|let.*book|start.*booking)/i.test(message);
         
-        // Check if user wants to retry/resend payment (even if no draft - payment might have failed)
-        const wantsToRetryPayment = /(resend|retry|try.*again|try.*payment|retry.*payment|lets.*retry|let.*retry|want.*retry|need.*retry|can.*retry).*(payment|prompt|mpesa)/i.test(message) ||
-                                    /(payment|prompt|mpesa).*(resend|retry|try.*again)/i.test(message);
-        
         // Handle if:
         // 1. There's an active draft (continue existing booking)
         // 2. Intent is booking (from intent classifier)
         // 3. User explicitly wants to start booking ("How do I make a booking?")
-        // 4. User wants to retry/resend payment (may not have active draft if payment failed)
-        return hasDraft || intent === 'booking' || wantsToStartBooking || wantsToRetryPayment;
+        return hasDraft || intent === 'booking' || wantsToStartBooking;
     }
 
     async generateResponse(message: string, context: any): Promise<any> {
@@ -40,6 +46,41 @@ export class BookingStrategy implements ResponseStrategy {
 
         // Get existing draft first to check if we're in reschedule mode
         let draft = await aiService.getOrCreateDraft(customerId);
+        
+        // Check if user wants to resend payment BEFORE cleaning up draft
+        // This prevents losing booking details when user wants to resend
+        const wantsToRetryPayment = /^(resend|retry|try.*again|send.*again)$/i.test(message.trim()) ||
+                                    /(resend|retry|try.*again|try.*payment|retry.*payment|lets.*retry|let.*retry|want.*retry|need.*retry|can.*retry).*(payment|prompt|mpesa)/i.test(message) ||
+                                    /(payment|prompt|mpesa).*(resend|retry|try.*again)/i.test(message);
+        
+        // CRITICAL: Check if draft is stale and clean it up before proceeding
+        // BUT: Don't clean up if user wants to resend payment (we need the draft data)
+        if (draft && !wantsToRetryPayment) {
+            const wasStale = await bookingsService.cleanupStaleDraft(customerId);
+            if (wasStale) {
+                logger.debug(`[STRATEGY] Stale draft detected and cleaned up for customer ${customerId}`);
+                draft = null; // Draft was deleted, set to null
+            }
+        }
+        
+        // CRITICAL: If draft has a failed payment and user is asking unrelated questions,
+        // don't show booking details - return null to let other strategies handle it
+        if (draft && bookingsService) {
+            const hasFailed = await bookingsService.hasFailedPayment(customerId);
+            if (hasFailed) {
+                // Check if message is clearly booking/payment related
+                const lower = message.toLowerCase();
+                const isBookingRelated = 
+                    /(how.*(do|can).*(make|book|start|get|schedule).*(booking|appointment)|(i want|i'd like|i need|can i|please).*(to book|booking|appointment|make.*booking|schedule)|let.*book|start.*booking)/i.test(message) ||
+                    /(resend|retry|try.*again|try.*payment|retry.*payment|lets.*retry|let.*retry|want.*retry|need.*retry|can.*retry).*(payment|prompt|mpesa)/i.test(message) ||
+                    /(payment|prompt|mpesa|deposit|confirm|booking|appointment|book|schedule|date|time|package)/i.test(lower);
+                
+                if (!isBookingRelated) {
+                    logger.debug(`[STRATEGY] Draft has failed payment and message is not booking-related, skipping booking strategy`);
+                    return null; // Let other strategies handle non-booking queries
+                }
+            }
+        }
         
         // CRITICAL: If draft is in reschedule mode, skip booking strategy
         // Reschedule flow is handled in processConversationLogic, not here
@@ -53,14 +94,18 @@ export class BookingStrategy implements ResponseStrategy {
         // Handle all payment-related scenarios BEFORE other processing
         // ============================================
         const lowerMessage = message.toLowerCase().trim();
-        const isPaymentQuery = /(payment|pay|mpesa|prompt|sent|received|money|paid|transaction|deposit|checkout|check.*payment|payment.*status|didn.*receive|not.*receive|haven.*receive|wrong.*number|change.*number|resend|send.*again|retry|try.*again|try.*payment|retry.*payment|cancel.*payment|payment.*cancel|stuck|frozen|not.*working|payment.*issue|problem.*payment|help.*payment|payment.*help)/i.test(message);
+        // PRIORITY: Handle "resend" immediately, even if intent was misclassified
+        // This ensures payment resend works regardless of intent classification
+        const isResendRequest = /^(resend|retry|try.*again|send.*again)$/i.test(message.trim()) ||
+                                /(resend|retry|try.*again|try.*payment|retry.*payment|lets.*retry|let.*retry|want.*retry|need.*retry|can.*retry).*(payment|prompt|mpesa)/i.test(message) ||
+                                /(payment|prompt|mpesa).*(resend|retry|try.*again)/i.test(message);
         
-        // Handle payment retry/resend requests even if no draft (user might want to retry after cancellation)
-        if (isPaymentQuery && /(resend|retry|try.*again|try.*payment|retry.*payment|lets.*retry|let.*retry)/i.test(message)) {
+        if (isResendRequest) {
+            logger.debug(`[PAYMENT] User requesting to resend payment prompt - handling immediately`);
             // Check if there's a payment to retry (even if no active draft)
             const latestPayment = await bookingsService.getLatestPaymentForDraft(customerId);
             if (latestPayment && (latestPayment.status === 'failed' || latestPayment.status === 'pending')) {
-                logger.debug(`[PAYMENT] User requesting to resend payment prompt (draft may not exist)`);
+                logger.debug(`[PAYMENT] Found ${latestPayment.status} payment, resending prompt`);
                 const result = await bookingsService.resendPaymentPrompt(customerId);
                 return {
                     response: result.message,
@@ -75,9 +120,14 @@ export class BookingStrategy implements ResponseStrategy {
                         draft: null,
                         updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: "I don't see any pending payment to retry. Would you like to start a new booking? Just let me know what package you're interested in! 💖" }]
                     };
+                } else {
+                    // Have draft but no payment - might be ready to initiate first payment
+                    logger.debug(`[PAYMENT] No payment found but draft exists, checking if ready for payment`);
                 }
             }
         }
+        
+        const isPaymentQuery = /(payment|pay|mpesa|prompt|sent|received|money|paid|transaction|deposit|checkout|check.*payment|payment.*status|didn.*receive|not.*receive|haven.*receive|wrong.*number|change.*number|resend|send.*again|retry|try.*again|try.*payment|retry.*payment|cancel.*payment|payment.*cancel|stuck|frozen|not.*working|payment.*issue|problem.*payment|help.*payment|payment.*help)/i.test(message);
         
         if (isPaymentQuery && draft) {
             // Scenario 1: User says they haven't received the payment prompt
@@ -883,6 +933,20 @@ export class BookingStrategy implements ResponseStrategy {
         // Deposit confirmation step
         // If all details are present, but user hasn't confirmed deposit, prompt for confirmation
         if (completion.action === 'ready_for_deposit') {
+            // CRITICAL: Validate draft is not stale before showing booking details
+            if (draft) {
+                const isStale = await bookingsService.isDraftStale(customerId);
+                if (isStale) {
+                    logger.debug(`[STRATEGY] Stale draft detected when showing booking details, cleaning up`);
+                    await bookingsService.cleanupStaleDraft(customerId);
+                    return {
+                        response: "I notice your previous booking request has expired. Would you like to start a fresh booking? Just let me know what package you're interested in! 💖",
+                        draft: null,
+                        updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: "I notice your previous booking request has expired. Would you like to start a fresh booking? Just let me know what package you're interested in! 💖" }]
+                    };
+                }
+            }
+            
             // Check if this requires resending payment (previous payment failed)
             if (completion.requiresResend) {
                 // User said "Yes" after payment failed - resend payment
@@ -924,6 +988,20 @@ export class BookingStrategy implements ResponseStrategy {
                         updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: result.message }] 
                     };
                 } else if (!latestPayment) {
+                    // CRITICAL: Validate draft is not stale before showing booking details
+                    if (draft) {
+                        const isStale = await bookingsService.isDraftStale(customerId);
+                        if (isStale) {
+                            logger.debug(`[STRATEGY] Stale draft detected when showing booking details, cleaning up`);
+                            await bookingsService.cleanupStaleDraft(customerId);
+                            return {
+                                response: "I notice your previous booking request has expired. Would you like to start a fresh booking? Just let me know what package you're interested in! 💖",
+                                draft: null,
+                                updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: "I notice your previous booking request has expired. Would you like to start a fresh booking? Just let me know what package you're interested in! 💖" }]
+                            };
+                        }
+                    }
+                    
                     // No payment initiated yet - prompt for confirmation
                     const pkg = await bookingsService.packagesService.findPackageByName(draft.service);
                     const depositAmount = pkg?.deposit || 2000;
@@ -939,6 +1017,44 @@ export class BookingStrategy implements ResponseStrategy {
 
         // If not complete, generate reply
         const response = await aiService.generateBookingReply(message, draft, extraction, history, bookingsService);
+        
+        // SECURITY: Check if AI response claims to send payment but draft is incomplete
+        const claimsToSendPayment = /(send.*payment|payment.*prompt|sending.*payment|i.*send|i'll.*send|i will.*send|payment.*request|mpesa.*prompt|finalize.*booking.*deposit|send.*you.*payment|payment.*will.*be|i'm.*sending|sending.*you|let's.*finalize|let.*finalize)/i.test(response);
+        const isDraftIncomplete = !draft.service || !draft.date || !draft.time || !draft.name || !draft.recipientPhone;
+        
+        if (claimsToSendPayment && isDraftIncomplete) {
+            logger.warn(`[SECURITY] AI claimed to send payment but draft is incomplete for customer ${customerId}`);
+            // Determine what's missing and ask for it
+            const missing = [];
+            if (!draft.service) missing.push('package');
+            if (!draft.date) missing.push('date');
+            if (!draft.time) missing.push('time');
+            if (!draft.name) missing.push('name');
+            if (!draft.recipientPhone) missing.push('phone number');
+            
+            const nextMissing = missing[0];
+            let accurateResponse = '';
+            
+            if (nextMissing === 'package') {
+                accurateResponse = "I'd love to help you complete your booking! Which package would you like to book? 📸";
+            } else if (nextMissing === 'date') {
+                accurateResponse = "Great! What date would you like to book? Just let me know the day (e.g., 'December 15th' or 'next Friday'). 📅";
+            } else if (nextMissing === 'time') {
+                accurateResponse = "Perfect! What time works best for you? (e.g., '2pm', 'morning', 'afternoon') ⏰";
+            } else if (nextMissing === 'name') {
+                accurateResponse = "Almost there! What name should I use for this booking? 👤";
+            } else if (nextMissing === 'phone number') {
+                accurateResponse = "Just one more thing! What's your phone number? This is where I'll send the payment prompt. 📱";
+            } else {
+                accurateResponse = `I need a few more details to complete your booking: ${missing.join(', ')}. Let's start with ${nextMissing} - could you provide that? 💖`;
+            }
+            
+            return { 
+                response: accurateResponse, 
+                draft, 
+                updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: accurateResponse }] 
+            };
+        }
         
         // SECURITY: Verify response doesn't claim booking is confirmed when it's not
         const isFalseConfirmation = /(confirmed booking|Everything is set|booking is confirmed|your booking.*confirmed)/i.test(response) && 

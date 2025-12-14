@@ -158,12 +158,6 @@ export class PredictiveAnalyticsService {
                 recommendedPackages.push('Platinum Package');
             }
 
-            // Additional services
-            if (!packageName.includes('outdoor')) {
-                opportunities.push('Add outdoor beach session for variety');
-                recommendedPackages.push('Beach Outdoor Package');
-            }
-
             // Newborn session
             const daysSinceBooking = (Date.now() - lastBooking.dateTime.getTime()) / (1000 * 60 * 60 * 24);
             if (daysSinceBooking > 60 && daysSinceBooking < 180) {

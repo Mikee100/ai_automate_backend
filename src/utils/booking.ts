@@ -4,6 +4,43 @@ import { DateTime } from 'luxon';
 const STUDIO_TZ = 'Africa/Nairobi';
 
 /**
+ * Formats phone number to international format (254XXXXXXXXX)
+ * Handles: 0721840961, +254721840961, 254721840961
+ * 
+ * @param phone - Phone number in any format
+ * @returns Formatted phone number in 254XXXXXXXXX format
+ */
+export function formatPhoneNumber(phone: string): string {
+  if (!phone) return phone;
+  
+  // Remove any whitespace
+  phone = phone.trim();
+  
+  // Remove + prefix if present
+  if (phone.startsWith('+')) {
+    phone = phone.substring(1);
+  }
+  
+  // If already starts with 254, return as is
+  if (phone.startsWith('254')) {
+    return phone;
+  }
+  
+  // If starts with 0, replace with 254
+  if (phone.startsWith('0')) {
+    return `254${phone.substring(1)}`;
+  }
+  
+  // If it's a 9-digit number (without leading 0), add 254
+  if (phone.length === 9 && /^\d+$/.test(phone)) {
+    return `254${phone}`;
+  }
+  
+  // Return as is if already in correct format or unknown format
+  return phone;
+}
+
+/**
  * Normalize extracted date and time strings into a structured object.
  * Handles various formats and ensures consistency.
  */

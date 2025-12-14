@@ -1,5 +1,6 @@
 import { HttpService } from '@nestjs/axios';
 import { Queue } from 'bull';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MessagesService } from '../messages/messages.service';
 import { AiService } from '../ai/ai.service';
@@ -14,6 +15,7 @@ export declare class PaymentsService {
     private messagesService;
     private notificationsService;
     private whatsappService;
+    private eventEmitter;
     private aiService;
     private bookingsService;
     private aiQueue;
@@ -27,7 +29,7 @@ export declare class PaymentsService {
     private readonly shortcode;
     private readonly passkey;
     private readonly callbackUrl;
-    constructor(prisma: PrismaService, httpService: HttpService, messagesService: MessagesService, notificationsService: NotificationsService, whatsappService: WhatsappService, aiService: AiService, bookingsService: BookingsService, aiQueue: Queue, paymentsQueue: Queue, packagesService: PackagesService, messengerSendService: MessengerSendService);
+    constructor(prisma: PrismaService, httpService: HttpService, messagesService: MessagesService, notificationsService: NotificationsService, whatsappService: WhatsappService, eventEmitter: EventEmitter2, aiService: AiService, bookingsService: BookingsService, aiQueue: Queue, paymentsQueue: Queue, packagesService: PackagesService, messengerSendService: MessengerSendService);
     getPaymentByCheckoutRequestId(checkoutRequestId: string): Promise<{
         id: string;
         status: string;
@@ -41,6 +43,7 @@ export declare class PaymentsService {
         checkoutRequestId: string | null;
     }>;
     getAccessToken(): Promise<string>;
+    private formatPhoneNumber;
     initiateSTKPush(bookingDraftId: string, phone: string, amount: number): Promise<{
         checkoutRequestId: string;
         paymentId: string;

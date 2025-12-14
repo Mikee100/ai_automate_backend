@@ -62,7 +62,7 @@ let DomainExpertiseService = DomainExpertiseService_1 = class DomainExpertiseSer
             return `Oh mama, I hear you! 💕 But let me reassure you - our photographers are absolute experts at maternity photography. They know all the most flattering angles and poses that celebrate your beautiful bump!\n\nYou're creating life - that's incredible! Our job is to capture that beauty and strength. Every mama who's had concerns has been absolutely thrilled with their photos. You're going to look STUNNING! 🌟\n\nWould you like to see some examples from our portfolio?`;
         }
         if (lower.includes('which package') || lower.includes('don\'t know which') || lower.includes('help me choose')) {
-            return `I'd love to help you choose the perfect package! 💖 Let me ask you a few quick questions:\n\n1. Do you want professional makeup included?\n2. How many outfit changes would you like?\n3. What's your budget range?\n4. Studio or outdoor shoot?\n\nOr I can recommend our most popular package - the Gold Package! It's our best value and includes everything most mamas want. Interested? 🌸`;
+            return `I'd love to help you choose the perfect package! 💖 Let me ask you a few quick questions:\n\n1. Do you want professional makeup included?\n2. How many outfit changes would you like?\n3. What's your budget range?\n4. Are there specific features you're interested in (like photobook, balloon backdrop, etc.)?\n\nOr I can recommend our most popular package - the Gold Package! It's our best value and includes everything most mamas want. Interested? 🌸`;
         }
         if (lower.includes('reschedule') || lower.includes('change') && lower.includes('date')) {
             return `Absolutely! Life with a baby bump can be unpredictable. 😊 You can reschedule your shoot as long as you give us at least 72 hours notice. Just let us know your new preferred date and we'll make it work! 💕`;
@@ -85,9 +85,9 @@ let DomainExpertiseService = DomainExpertiseService_1 = class DomainExpertiseSer
                     reasons.push('Slightly above budget but great value');
                 }
             }
-            if (criteria.preferredType && pkg.type === criteria.preferredType) {
+            if (criteria.preferredType && pkg.type === criteria.preferredType && pkg.type === 'studio') {
                 score += 20;
-                reasons.push(`${criteria.preferredType === 'studio' ? 'Studio' : 'Outdoor'} shoot as preferred`);
+                reasons.push('Studio shoot as preferred');
             }
             if (criteria.wantsMakeup && pkg.makeup) {
                 score += 15;
@@ -136,7 +136,7 @@ let DomainExpertiseService = DomainExpertiseService_1 = class DomainExpertiseSer
             return `💕 Valentine's season is here! Our romantic backdrops and couple shoots are especially popular now. Celebrate your growing love story! 🌹`;
         }
         if (currentMonth >= 6 && currentMonth <= 8) {
-            return `☀️ Summer is perfect for outdoor shoots! Our beach location packages are very popular this time of year. The natural lighting is absolutely gorgeous! 🌊`;
+            return `☀️ Summer is perfect for studio photoshoots! Our beautiful backdrops and professional lighting create stunning images any time of year. We love capturing your glow in our comfortable studio environment! ✨`;
         }
         return `We have beautiful seasonal backdrops and props available year-round. Each season brings its own special charm to your photos! 🌸`;
     }
@@ -147,7 +147,7 @@ let DomainExpertiseService = DomainExpertiseService_1 = class DomainExpertiseSer
             suggestions.push("Upgrade to Gold Package for professional makeup & styling - you'll feel like a queen! 👑", "Add a customized balloon backdrop for just 2,000 KSH more - makes photos extra special! 🎈", "Include a photobook to have physical memories you can hold forever 📖");
         }
         else if (lower.includes('gold')) {
-            suggestions.push("Upgrade to Platinum for more outfit changes and images! 📸", "Add our beach outdoor session for stunning natural backdrop photos 🌊", "Include partner/family shots to capture the whole journey together 💑");
+            suggestions.push("Upgrade to Platinum for more outfit changes and images! 📸", "Add a customized balloon backdrop for a stunning, personalized look! 🎈", "Include partner/family shots to capture the whole journey together 💑");
         }
         else if (lower.includes('executive')) {
             suggestions.push("Add a styled wig for a completely different look in your photos! 💁‍♀️", "Include an A3 mount - perfect for displaying in your home 🖼️", "Book a newborn session now and get 10% off! 👶");

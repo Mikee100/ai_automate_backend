@@ -130,10 +130,6 @@ let PredictiveAnalyticsService = PredictiveAnalyticsService_1 = class Predictive
                 opportunities.push('Try our Platinum Package for ultimate luxury');
                 recommendedPackages.push('Platinum Package');
             }
-            if (!packageName.includes('outdoor')) {
-                opportunities.push('Add outdoor beach session for variety');
-                recommendedPackages.push('Beach Outdoor Package');
-            }
             const daysSinceBooking = (Date.now() - lastBooking.dateTime.getTime()) / (1000 * 60 * 60 * 24);
             if (daysSinceBooking > 60 && daysSinceBooking < 180) {
                 opportunities.push('Book newborn session - perfect timing!');

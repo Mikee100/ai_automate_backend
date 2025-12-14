@@ -10,6 +10,8 @@ exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const bull_1 = require("@nestjs/bull");
+const throttler_1 = require("@nestjs/throttler");
+const core_1 = require("@nestjs/core");
 const event_emitter_1 = require("@nestjs/event-emitter");
 const app_controller_1 = require("./app.controller");
 const prisma_module_1 = require("./prisma/prisma.module");
@@ -39,6 +41,8 @@ const invoices_module_1 = require("./modules/invoices/invoices.module");
 const conversations_module_1 = require("./modules/conversations/conversations.module");
 const seeding_module_1 = require("./modules/seeding/seeding.module");
 const statistics_module_1 = require("./modules/statistics/statistics.module");
+const admin_module_1 = require("./modules/admin/admin.module");
+const health_module_1 = require("./modules/health/health.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -48,6 +52,23 @@ exports.AppModule = AppModule = __decorate([
             config_1.ConfigModule.forRoot({
                 isGlobal: true,
             }),
+            throttler_1.ThrottlerModule.forRoot([
+                {
+                    name: 'short',
+                    ttl: 1000,
+                    limit: 10,
+                },
+                {
+                    name: 'medium',
+                    ttl: 60000,
+                    limit: 100,
+                },
+                {
+                    name: 'long',
+                    ttl: 3600000,
+                    limit: 1000,
+                },
+            ]),
             bull_1.BullModule.forRoot({
                 redis: process.env.REDIS_URL || 'redis://localhost:6379',
             }),
@@ -79,8 +100,16 @@ exports.AppModule = AppModule = __decorate([
             conversations_module_1.ConversationsModule,
             seeding_module_1.SeedingModule,
             statistics_module_1.StatisticsModule,
+            admin_module_1.AdminModule,
+            health_module_1.HealthModule,
         ],
         controllers: [app_controller_1.AppController],
+        providers: [
+            {
+                provide: core_1.APP_GUARD,
+                useClass: throttler_1.ThrottlerGuard,
+            },
+        ],
     })
 ], AppModule);
 //# sourceMappingURL=app.module.js.map

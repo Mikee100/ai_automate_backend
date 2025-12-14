@@ -1,8 +1,27 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.formatPhoneNumber = formatPhoneNumber;
 exports.normalizeExtractedDateTime = normalizeExtractedDateTime;
 const luxon_1 = require("luxon");
 const STUDIO_TZ = 'Africa/Nairobi';
+function formatPhoneNumber(phone) {
+    if (!phone)
+        return phone;
+    phone = phone.trim();
+    if (phone.startsWith('+')) {
+        phone = phone.substring(1);
+    }
+    if (phone.startsWith('254')) {
+        return phone;
+    }
+    if (phone.startsWith('0')) {
+        return `254${phone.substring(1)}`;
+    }
+    if (phone.length === 9 && /^\d+$/.test(phone)) {
+        return `254${phone}`;
+    }
+    return phone;
+}
 function normalizeExtractedDateTime(extracted) {
     const { date, time } = extracted;
     if (!date && !time)

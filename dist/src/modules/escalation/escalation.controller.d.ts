@@ -6,8 +6,8 @@ export declare class EscalationController {
         customer: {
             id: string;
             createdAt: Date;
-            name: string;
             updatedAt: Date;
+            name: string;
             email: string | null;
             phone: string | null;
             whatsappId: string | null;
@@ -23,26 +23,26 @@ export declare class EscalationController {
         };
     } & {
         id: string;
-        metadata: import("@prisma/client/runtime/library").JsonValue | null;
-        createdAt: Date;
         customerId: string;
         status: string;
+        createdAt: Date;
         updatedAt: Date;
         sentimentScore: number | null;
-        description: string | null;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
         reason: string | null;
+        description: string | null;
         escalationType: string;
     })[]>;
     resolveEscalation(id: string): Promise<{
         id: string;
-        metadata: import("@prisma/client/runtime/library").JsonValue | null;
-        createdAt: Date;
         customerId: string;
         status: string;
+        createdAt: Date;
         updatedAt: Date;
         sentimentScore: number | null;
-        description: string | null;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
         reason: string | null;
+        description: string | null;
         escalationType: string;
     }>;
 }

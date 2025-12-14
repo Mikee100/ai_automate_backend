@@ -1,7 +1,7 @@
 import { ResponseStrategy } from './response-strategy.interface';
 
 export class PackageInquiryStrategy implements ResponseStrategy {
-    readonly priority = 50; // Run after FAQ but before Booking
+    readonly priority = 60; // Run before FAQ to handle package queries first
 
     canHandle(intent: string, context: any): boolean {
         const { message, hasDraft } = context;
@@ -67,18 +67,23 @@ export class PackageInquiryStrategy implements ResponseStrategy {
             if (allPackages && allPackages.length > 0) {
                 let packages = allPackages;
                 let packageType = '';
+                
+                // Check if user asked for outdoor packages - inform them we only offer studio now
                 if (/(outdoor)/i.test(message)) {
-                    packages = allPackages.filter((p: any) => p.type?.toLowerCase() === 'outdoor');
-                    packageType = 'outdoor ';
+                    const response = `I'm so sorry, but we're currently focusing on our beautiful studio packages only! Our studio sessions provide a comfortable, controlled environment with stunning backdrops and professional lighting. Would you like to see our studio packages? They're absolutely gorgeous! 💖`;
+                    return { response, draft: existingDraft || null, updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
                 } else if (/(studio|indoor)/i.test(message)) {
+                    packages = allPackages.filter((p: any) => p.type?.toLowerCase() === 'studio');
+                    packageType = 'studio ';
+                } else {
+                    // Default to studio packages only
                     packages = allPackages.filter((p: any) => p.type?.toLowerCase() === 'studio');
                     packageType = 'studio ';
                 }
 
-                // If filtering resulted in no packages, but user specifically asked for a type, show appropriate message
-                if (packages.length === 0 && (/(studio|indoor|outdoor)/i.test(message))) {
-                    const requestedType = /(outdoor)/i.test(message) ? 'outdoor' : 'studio';
-                    const response = `I'm so sorry, but we don't currently have any ${requestedType} packages available. However, we do have beautiful ${requestedType === 'outdoor' ? 'studio' : 'outdoor'} packages that might interest you! Would you like to see those instead? 💖`;
+                // If filtering resulted in no packages, but user specifically asked for studio
+                if (packages.length === 0 && (/(studio|indoor)/i.test(message))) {
+                    const response = `I'm so sorry, but we don't currently have any studio packages available. Please contact us for more information! 💖`;
                     return { response, draft: existingDraft || null, updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
                 }
 
@@ -132,7 +137,19 @@ export class PackageInquiryStrategy implements ResponseStrategy {
 
                     // Check for "i want that one" or similar - look at recent conversation history
                     const wantsThatOne = /(i want (that|this) (one|package)|i'll take (that|this) (one|package)|i choose (that|this) (one|package)|i'll go with (that|this) (one|package)|(that|this) one|i want it|i'll take it)/i.test(message);
-                    let specificPackage = packages.find((p: any) => matchPackage(message, p.name));
+                    
+                    // Find package - packages array is already filtered to studio packages only
+                    // Prioritize exact name matches to avoid confusion with similar names
+                    let specificPackage = packages.find((p: any) => {
+                        const lowerMsg = message.toLowerCase();
+                        const lowerPkg = p.name.toLowerCase();
+                        // Try exact match first (most reliable)
+                        if (lowerMsg.includes(` ${lowerPkg} `) || lowerMsg.endsWith(` ${lowerPkg}`) || lowerMsg.startsWith(`${lowerPkg} `) || lowerMsg === lowerPkg) {
+                            return true;
+                        }
+                        // Then try the matchPackage logic for variations
+                        return matchPackage(message, p.name);
+                    });
                     
                     // If user says "i want that one" but no package in message, check recent history
                     if (wantsThatOne && !specificPackage) {
@@ -160,7 +177,8 @@ export class PackageInquiryStrategy implements ResponseStrategy {
                         const detailedInfo = aiService.formatPackageDetails(specificPackage, true);
                         let response = `${detailedInfo}\n\n`;
                         
-                        if (existingDraft && existingDraft.service !== specificPackage.name) {
+                        // Only mention existing draft if it has a valid service name
+                        if (existingDraft && existingDraft.service && existingDraft.service.trim() && existingDraft.service !== specificPackage.name) {
                             // User is comparing packages - they have a draft for a different package
                             response += `I see you were interested in the ${existingDraft.service}. Would you like to switch to the ${specificPackage.name} instead, or would you like to continue with ${existingDraft.service}? 💖`;
                         } else {
@@ -182,15 +200,40 @@ export class PackageInquiryStrategy implements ResponseStrategy {
                             draft = await aiService.getOrCreateDraft(customerId);
                         }
 
-                        draft = await prisma.bookingDraft.update({
+                        // Update service first
+                        await prisma.bookingDraft.update({
                             where: { customerId },
                             data: { 
-                                service: specificPackage.name,
-                                step: 'date' // Move to next step
+                                service: specificPackage.name
                             },
                         });
 
-                        const response = `Perfect! I've noted you'd like the ${specificPackage.name}. When would you like to come in for the shoot? (e.g., "next Tuesday at 10am") 🗓️`;
+                        // Reload draft to get updated service
+                        draft = await prisma.bookingDraft.findUnique({ where: { customerId } });
+                        
+                        // Determine the correct next step based on what's already filled
+                        const nextStep = aiService.determineBookingStep(draft);
+                        
+                        // Update step to the correct next step
+                        draft = await prisma.bookingDraft.update({
+                            where: { customerId },
+                            data: { step: nextStep }
+                        });
+
+                        // Generate appropriate response based on next step
+                        let response = `Perfect! I've noted you'd like the ${specificPackage.name}. `;
+                        
+                        if (nextStep === 'date') {
+                            response += `When would you like to come in for the shoot? (e.g., "next Tuesday at 10am") 🗓️`;
+                        } else if (nextStep === 'time') {
+                            response += `What time would work best for you on ${draft.date}? ⏰`;
+                        } else if (nextStep === 'name') {
+                            response += `Great! I have your date and time set. What name should I use for this booking? 👤`;
+                        } else if (nextStep === 'confirm') {
+                            response += `Perfect! All your booking details are complete. Ready to proceed with the deposit payment? Just reply "confirm" to continue! 💳✨`;
+                        } else {
+                            response += `When would you like to come in for the shoot? (e.g., "next Tuesday at 10am") 🗓️`;
+                        }
 
                         return {
                             response,
@@ -202,7 +245,7 @@ export class PackageInquiryStrategy implements ResponseStrategy {
                     // List all packages (summary view)
                     const packagesList = packages.map((p: any) => aiService.formatPackageDetails(p, false)).join('\n\n');
                     // When showing all packages (no type filter), make it clear
-                    const packageTypeLabel = packageType ? `${packageType}packages` : 'packages (both studio and outdoor)';
+                    const packageTypeLabel = packageType ? `${packageType}packages` : 'studio packages';
                     const response = `Oh, my dear, I'm so delighted to share our ${packageTypeLabel} with you! Each one is thoughtfully crafted to beautifully capture this precious time in your life. Here they are:\n\n${packagesList}\n\nIf you'd like to know more about any specific package, just ask! 💖`;
 
                     return { response, draft: null, updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };

@@ -9,7 +9,11 @@ export declare class WhatsappService {
     private messageQueue;
     private phoneNumberId;
     private accessToken;
+    private apiVersion;
+    private baseUrl;
     constructor(configService: ConfigService, messagesService: MessagesService, customersService: CustomersService, messageQueue: Queue);
+    private getApiUrl;
+    private handleApiError;
     verifyWebhook(mode: string, challenge: string, token: string): string;
     handleWebhook(body: any): Promise<{
         status: string;
@@ -38,8 +42,10 @@ export declare class WhatsappService {
     getSettings(): Promise<{
         phoneNumberId: string;
         accessToken: string;
-        verifyToken: any;
+        verifyToken: string;
         webhookUrl: any;
+        apiVersion: string;
+        baseUrl: string;
     }>;
     updateSettings(settings: any): Promise<{
         success: boolean;
@@ -47,6 +53,15 @@ export declare class WhatsappService {
     testConnection(): Promise<{
         success: boolean;
         message: string;
+        phoneNumber: any;
+        verifiedName: any;
+        error?: undefined;
+    } | {
+        success: boolean;
+        message: string;
+        error: any;
+        phoneNumber?: undefined;
+        verifiedName?: undefined;
     }>;
     getWhatsAppStats(): Promise<{
         totalMessages: number;

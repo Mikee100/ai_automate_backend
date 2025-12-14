@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.PackageInquiryStrategy = void 0;
 class PackageInquiryStrategy {
     constructor() {
-        this.priority = 50;
+        this.priority = 60;
     }
     canHandle(intent, context) {
         const { message, hasDraft } = context;
@@ -50,16 +50,19 @@ class PackageInquiryStrategy {
                 let packages = allPackages;
                 let packageType = '';
                 if (/(outdoor)/i.test(message)) {
-                    packages = allPackages.filter((p) => p.type?.toLowerCase() === 'outdoor');
-                    packageType = 'outdoor ';
+                    const response = `I'm so sorry, but we're currently focusing on our beautiful studio packages only! Our studio sessions provide a comfortable, controlled environment with stunning backdrops and professional lighting. Would you like to see our studio packages? They're absolutely gorgeous! 💖`;
+                    return { response, draft: existingDraft || null, updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
                 }
                 else if (/(studio|indoor)/i.test(message)) {
                     packages = allPackages.filter((p) => p.type?.toLowerCase() === 'studio');
                     packageType = 'studio ';
                 }
-                if (packages.length === 0 && (/(studio|indoor|outdoor)/i.test(message))) {
-                    const requestedType = /(outdoor)/i.test(message) ? 'outdoor' : 'studio';
-                    const response = `I'm so sorry, but we don't currently have any ${requestedType} packages available. However, we do have beautiful ${requestedType === 'outdoor' ? 'studio' : 'outdoor'} packages that might interest you! Would you like to see those instead? 💖`;
+                else {
+                    packages = allPackages.filter((p) => p.type?.toLowerCase() === 'studio');
+                    packageType = 'studio ';
+                }
+                if (packages.length === 0 && (/(studio|indoor)/i.test(message))) {
+                    const response = `I'm so sorry, but we don't currently have any studio packages available. Please contact us for more information! 💖`;
                     return { response, draft: existingDraft || null, updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
                 }
                 if (packages.length > 0) {
@@ -93,7 +96,14 @@ class PackageInquiryStrategy {
                         return { response, draft: null, updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
                     }
                     const wantsThatOne = /(i want (that|this) (one|package)|i'll take (that|this) (one|package)|i choose (that|this) (one|package)|i'll go with (that|this) (one|package)|(that|this) one|i want it|i'll take it)/i.test(message);
-                    let specificPackage = packages.find((p) => matchPackage(message, p.name));
+                    let specificPackage = packages.find((p) => {
+                        const lowerMsg = message.toLowerCase();
+                        const lowerPkg = p.name.toLowerCase();
+                        if (lowerMsg.includes(` ${lowerPkg} `) || lowerMsg.endsWith(` ${lowerPkg}`) || lowerMsg.startsWith(`${lowerPkg} `) || lowerMsg === lowerPkg) {
+                            return true;
+                        }
+                        return matchPackage(message, p.name);
+                    });
                     if (wantsThatOne && !specificPackage) {
                         const recentMessages = history.slice(-5).filter((h) => h.role === 'assistant');
                         for (const msg of recentMessages.reverse()) {
@@ -111,7 +121,7 @@ class PackageInquiryStrategy {
                     if (specificPackage && isAskingForDetails) {
                         const detailedInfo = aiService.formatPackageDetails(specificPackage, true);
                         let response = `${detailedInfo}\n\n`;
-                        if (existingDraft && existingDraft.service !== specificPackage.name) {
+                        if (existingDraft && existingDraft.service && existingDraft.service.trim() && existingDraft.service !== specificPackage.name) {
                             response += `I see you were interested in the ${existingDraft.service}. Would you like to switch to the ${specificPackage.name} instead, or would you like to continue with ${existingDraft.service}? 💖`;
                         }
                         else {
@@ -128,14 +138,34 @@ class PackageInquiryStrategy {
                         if (!draft) {
                             draft = await aiService.getOrCreateDraft(customerId);
                         }
-                        draft = await prisma.bookingDraft.update({
+                        await prisma.bookingDraft.update({
                             where: { customerId },
                             data: {
-                                service: specificPackage.name,
-                                step: 'date'
+                                service: specificPackage.name
                             },
                         });
-                        const response = `Perfect! I've noted you'd like the ${specificPackage.name}. When would you like to come in for the shoot? (e.g., "next Tuesday at 10am") 🗓️`;
+                        draft = await prisma.bookingDraft.findUnique({ where: { customerId } });
+                        const nextStep = aiService.determineBookingStep(draft);
+                        draft = await prisma.bookingDraft.update({
+                            where: { customerId },
+                            data: { step: nextStep }
+                        });
+                        let response = `Perfect! I've noted you'd like the ${specificPackage.name}. `;
+                        if (nextStep === 'date') {
+                            response += `When would you like to come in for the shoot? (e.g., "next Tuesday at 10am") 🗓️`;
+                        }
+                        else if (nextStep === 'time') {
+                            response += `What time would work best for you on ${draft.date}? ⏰`;
+                        }
+                        else if (nextStep === 'name') {
+                            response += `Great! I have your date and time set. What name should I use for this booking? 👤`;
+                        }
+                        else if (nextStep === 'confirm') {
+                            response += `Perfect! All your booking details are complete. Ready to proceed with the deposit payment? Just reply "confirm" to continue! 💳✨`;
+                        }
+                        else {
+                            response += `When would you like to come in for the shoot? (e.g., "next Tuesday at 10am") 🗓️`;
+                        }
                         return {
                             response,
                             draft,
@@ -143,7 +173,7 @@ class PackageInquiryStrategy {
                         };
                     }
                     const packagesList = packages.map((p) => aiService.formatPackageDetails(p, false)).join('\n\n');
-                    const packageTypeLabel = packageType ? `${packageType}packages` : 'packages (both studio and outdoor)';
+                    const packageTypeLabel = packageType ? `${packageType}packages` : 'studio packages';
                     const response = `Oh, my dear, I'm so delighted to share our ${packageTypeLabel} with you! Each one is thoughtfully crafted to beautifully capture this precious time in your life. Here they are:\n\n${packagesList}\n\nIf you'd like to know more about any specific package, just ask! 💖`;
                     return { response, draft: null, updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
                 }

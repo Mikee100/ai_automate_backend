@@ -17,9 +17,13 @@ export class WebhooksController {
     return 'ERROR';
   }
 
+  /**
+   * WhatsApp webhook endpoint - PRODUCTION MODE
+   * Accepts webhooks from Meta for ALL phone numbers
+   * No phone number restrictions - all messages are processed
+   */
   @Post('whatsapp')
   handleWhatsApp(@Body() body: any) {
-
     return this.webhooksService.handleWhatsAppWebhook(body);
   }
 

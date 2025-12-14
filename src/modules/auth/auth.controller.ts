@@ -1,14 +1,19 @@
-import { Controller, Post, Body, Get, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, Get, UseGuards, Request } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { LoginDto } from './dto/login.dto';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  /**
+   * SECURITY: Login endpoint with input validation
+   * Uses LoginDto for automatic validation
+   */
   @Post('login')
-  async login(@Body() body: { email: string; password: string }) {
-    return this.authService.login(body.email, body.password);
+  async login(@Body() loginDto: LoginDto) {
+    return this.authService.login(loginDto.email, loginDto.password);
   }
 
   @Post('logout')
@@ -16,15 +21,14 @@ export class AuthController {
     return { message: 'Logged out successfully' };
   }
 
+  /**
+   * SECURITY: Get current user profile
+   * Requires valid JWT token
+   */
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  async getProfile() {
-    // For now, return a mock user. In a real app, you'd get this from the token
-    return {
-      id: '1',
-      email: 'admin@omniconnect.com',
-      name: 'Admin User',
-      role: 'admin',
-    };
+  async getProfile(@Request() req) {
+    // User is attached to request by JwtStrategy
+    return req.user;
   }
 }

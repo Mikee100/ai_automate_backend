@@ -16,23 +16,19 @@ exports.AuthController = void 0;
 const common_1 = require("@nestjs/common");
 const auth_service_1 = require("./auth.service");
 const jwt_auth_guard_1 = require("./jwt-auth.guard");
+const login_dto_1 = require("./dto/login.dto");
 let AuthController = class AuthController {
     constructor(authService) {
         this.authService = authService;
     }
-    async login(body) {
-        return this.authService.login(body.email, body.password);
+    async login(loginDto) {
+        return this.authService.login(loginDto.email, loginDto.password);
     }
     async logout() {
         return { message: 'Logged out successfully' };
     }
-    async getProfile() {
-        return {
-            id: '1',
-            email: 'admin@omniconnect.com',
-            name: 'Admin User',
-            role: 'admin',
-        };
+    async getProfile(req) {
+        return req.user;
     }
 };
 exports.AuthController = AuthController;
@@ -40,7 +36,7 @@ __decorate([
     (0, common_1.Post)('login'),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [login_dto_1.LoginDto]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "login", null);
 __decorate([
@@ -52,8 +48,9 @@ __decorate([
 __decorate([
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     (0, common_1.Get)('me'),
+    __param(0, (0, common_1.Request)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "getProfile", null);
 exports.AuthController = AuthController = __decorate([

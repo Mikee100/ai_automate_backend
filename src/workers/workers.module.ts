@@ -3,6 +3,7 @@ import { BullModule } from '@nestjs/bull';
 import { MessageQueueProcessor } from '../../workers/message-queue.processor';
 import { AiQueueProcessor } from './ai-queue.processor';
 import { BookingQueueProcessor } from '../../workers/booking-queue.processor';
+import { RemindersQueueProcessor } from './reminders-queue.processor';
 import { MessagesModule } from '../modules/messages/messages.module';
 import { AiModule } from '../modules/ai/ai.module';
 import { BookingsModule } from '../modules/bookings/bookings.module';
@@ -11,6 +12,7 @@ import { InstagramModule } from '../modules/instagram/instagram.module';
 import { MessengerModule } from '../modules/webhooks/messenger.module';
 import { CustomersModule } from '../modules/customers/customers.module';
 import { WebsocketModule } from '../websockets/websocket.module';
+import { RemindersModule } from '../modules/reminders/reminders.module';
 
 @Module({
   imports: [
@@ -23,6 +25,9 @@ import { WebsocketModule } from '../websockets/websocket.module';
     BullModule.registerQueue({
       name: 'bookingQueue',
     }),
+    BullModule.registerQueue({
+      name: 'remindersQueue',
+    }),
     MessagesModule,
     AiModule,
     BookingsModule,
@@ -31,11 +36,13 @@ import { WebsocketModule } from '../websockets/websocket.module';
     MessengerModule,
     CustomersModule,
     WebsocketModule,
+    RemindersModule,
   ],
   providers: [
     MessageQueueProcessor,
     AiQueueProcessor,
     BookingQueueProcessor,
+    RemindersQueueProcessor,
   ],
 })
 export class WorkersModule { }

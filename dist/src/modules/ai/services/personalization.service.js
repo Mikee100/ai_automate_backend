@@ -107,7 +107,7 @@ let PersonalizationService = PersonalizationService_1 = class PersonalizationSer
         const questions = [];
         if (intent === 'package_inquiry') {
             if (!context.preferredPackages || context.preferredPackages.length === 0) {
-                questions.push("What's most important to you - makeup, multiple outfits, or outdoor location?");
+                questions.push("What's most important to you - makeup, multiple outfits, or specific backdrops?");
                 questions.push("Do you have a budget range in mind?");
             }
         }
@@ -150,8 +150,9 @@ let PersonalizationService = PersonalizationService_1 = class PersonalizationSer
             preferences.preferredTimes = ['evening'];
         if (lower.includes('makeup'))
             preferences.wantsMakeup = true;
-        if (lower.includes('outdoor') || lower.includes('beach'))
-            preferences.wantsOutdoor = true;
+        if (lower.includes('outdoor') || lower.includes('beach')) {
+            preferences.wantsOutdoor = false;
+        }
         return preferences;
     }
 };

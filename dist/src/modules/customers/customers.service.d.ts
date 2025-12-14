@@ -437,8 +437,8 @@ export declare class CustomersService {
         type: string;
         bookingId: string | null;
         platform: string | null;
-        items: string[];
         description: string | null;
+        items: string[];
         adminNotes: string | null;
         reviewedBy: string | null;
         reviewedAt: Date | null;
@@ -457,8 +457,8 @@ export declare class CustomersService {
         type: string;
         bookingId: string | null;
         platform: string | null;
-        items: string[];
         description: string | null;
+        items: string[];
         adminNotes: string | null;
         reviewedBy: string | null;
         reviewedAt: Date | null;

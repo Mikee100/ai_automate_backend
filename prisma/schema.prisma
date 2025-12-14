@@ -52,6 +52,23 @@ model Customer {
   @@map("customers")
 }
 
+// ============================================
+// SECURITY: User Management
+// ============================================
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String   // Hashed password
+  name      String
+  role      String   @default("admin") // admin, agent, viewer
+  isActive  Boolean  @default(true)
+  lastLoginAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
 model Message {
   id        String   @id @default(cuid())
   content   String

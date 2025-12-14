@@ -6,10 +6,26 @@ import axios from 'axios';
 import { MessagesService } from '../messages/messages.service';
 import { CustomersService } from '../customers/customers.service';
 
+/**
+ * WhatsApp Service - PRODUCTION MODE
+ * 
+ * This service is configured for PRODUCTION use and accepts messages from ALL phone numbers.
+ * There are NO phone number restrictions or whitelists in the code.
+ * 
+ * To enable production mode in Meta's WhatsApp Business API:
+ * 1. Go to Meta Developer Console
+ * 2. Select your WhatsApp Business App
+ * 3. Navigate to WhatsApp > API Setup
+ * 4. Ensure the app is in "Production" mode (not "Development" mode)
+ * 5. In Development mode, only test numbers can send/receive messages
+ * 6. In Production mode, ALL numbers can send/receive messages
+ */
 @Injectable()
 export class WhatsappService {
   private phoneNumberId: string;
   private accessToken: string;
+  private apiVersion: string;
+  private baseUrl: string;
 
   constructor(
     private configService: ConfigService,
@@ -19,16 +35,66 @@ export class WhatsappService {
   ) {
     this.phoneNumberId = this.configService.get('WHATSAPP_PHONE_NUMBER_ID');
     this.accessToken = this.configService.get('WHATSAPP_ACCESS_TOKEN');
+    this.apiVersion = this.configService.get('WHATSAPP_API_VERSION') || 'v21.0';
+    this.baseUrl = `https://graph.facebook.com/${this.apiVersion}`;
 
     console.log(
       '📞 Initializing WhatsApp:',
       '\n phoneNumberId:', this.phoneNumberId,
       '\n accessToken present:', !!this.accessToken,
+      '\n API Version:', this.apiVersion,
     );
 
     if (!this.phoneNumberId || !this.accessToken) {
       console.error('❌ WhatsApp config missing: phoneNumberId or accessToken');
     }
+  }
+
+  // -------------------------------------------
+  // HELPER: Build API URL
+  // -------------------------------------------
+  private getApiUrl(endpoint: string): string {
+    return `${this.baseUrl}/${this.phoneNumberId}/${endpoint}`;
+  }
+
+  // -------------------------------------------
+  // HELPER: Handle API Errors
+  // -------------------------------------------
+  private handleApiError(error: any, operation: string): never {
+    if (error.response) {
+      const status = error.response.status;
+      const data = error.response.data;
+
+      // Rate limiting (429)
+      if (status === 429) {
+        const retryAfter = error.response.headers['retry-after'] || 60;
+        console.error(`❌ WhatsApp ${operation} - Rate limit exceeded. Retry after ${retryAfter}s`);
+        throw new Error(`Rate limit exceeded. Please retry after ${retryAfter} seconds.`);
+      }
+
+      // Token expiration (401)
+      if (status === 401) {
+        console.error(`❌ WhatsApp ${operation} - Unauthorized. Token may be expired or invalid.`);
+        throw new Error('WhatsApp access token expired or invalid. Please update your token.');
+      }
+
+      // Invalid phone number (400)
+      if (status === 400 && data?.error?.message) {
+        console.error(`❌ WhatsApp ${operation} - Bad Request:`, data.error.message);
+        throw new Error(`WhatsApp API error: ${data.error.message}`);
+      }
+
+      // Generic API error
+      console.error(`❌ WhatsApp ${operation} - API Error:`, {
+        status,
+        error: data?.error || data,
+      });
+      throw new Error(`WhatsApp API error (${status}): ${data?.error?.message || 'Unknown error'}`);
+    }
+
+    // Network or other errors
+    console.error(`❌ WhatsApp ${operation} - Network/Unknown Error:`, error.message);
+    throw new Error(`Failed to ${operation}: ${error.message}`);
   }
 
   // -------------------------------------------
@@ -86,10 +152,11 @@ export class WhatsappService {
 
   // -------------------------------------------
   // SEND WHATSAPP MESSAGE (OFFICIAL API)
+  // PRODUCTION MODE: Can send to ANY phone number - no restrictions
   // -------------------------------------------
   async sendMessage(to: string, message: string) {
     console.log('📤 Sending WhatsApp message to:', to);
-    console.log('Message:', message);
+    console.log('Message:', message.substring(0, 100) + (message.length > 100 ? '...' : ''));
 
     // Validation: Ensure 'to' and 'message' are provided
     if (!to || typeof to !== 'string' || !to.trim()) {
@@ -99,16 +166,22 @@ export class WhatsappService {
       throw new Error("Message body ('message') is required.");
     }
 
+    // Validate phone number format (E.164 format recommended)
+    const normalizedTo = to.trim().replace(/[^0-9+]/g, '');
+    if (!normalizedTo.startsWith('+')) {
+      console.warn(`⚠️ Phone number ${to} doesn't start with '+'. WhatsApp recommends E.164 format.`);
+    }
+
     try {
       if (!this.phoneNumberId) {
         throw new Error('phoneNumberId is undefined');
       }
 
-      const url = `https://graph.facebook.com/v21.0/${this.phoneNumberId}/messages`;
+      const url = this.getApiUrl('messages');
 
       const payload = {
         messaging_product: "whatsapp",
-        to,
+        to: normalizedTo,
         text: { body: message },
       };
 
@@ -117,17 +190,20 @@ export class WhatsappService {
           Authorization: `Bearer ${this.accessToken}`,
           'Content-Type': 'application/json',
         },
+        timeout: 30000, // 30 second timeout for production
       });
 
-      console.log('✔️ WhatsApp API response:', response.data);
+      console.log('✔️ WhatsApp API response:', {
+        messageId: response.data?.messages?.[0]?.id,
+        status: 'sent',
+      });
 
       // Note: Outbound message is saved by message-queue.processor.ts
       // to avoid duplicates. Do NOT save here.
 
       return response.data;
     } catch (error) {
-      console.error('❌ WhatsApp send error:', error.response?.data || error.message);
-      throw error;
+      this.handleApiError(error, 'send message');
     }
   }
 
@@ -142,16 +218,18 @@ export class WhatsappService {
       throw new Error("Recipient ('to') and 'imageUrl' are required.");
     }
 
+    const normalizedTo = to.trim().replace(/[^0-9+]/g, '');
+
     try {
       if (!this.phoneNumberId) {
         throw new Error('phoneNumberId is undefined');
       }
 
-      const url = `https://graph.facebook.com/v21.0/${this.phoneNumberId}/messages`;
+      const url = this.getApiUrl('messages');
 
       const payload = {
         messaging_product: "whatsapp",
-        to,
+        to: normalizedTo,
         type: "image",
         image: {
           link: imageUrl,
@@ -164,12 +242,16 @@ export class WhatsappService {
           Authorization: `Bearer ${this.accessToken}`,
           'Content-Type': 'application/json',
         },
+        timeout: 30000,
       });
 
-      console.log('✔️ WhatsApp API response (image):', response.data);
+      console.log('✔️ WhatsApp API response (image):', {
+        messageId: response.data?.messages?.[0]?.id,
+        status: 'sent',
+      });
 
       // Save outbound message (as text representation for now)
-      const customer = await this.customersService.findByWhatsappId(to);
+      const customer = await this.customersService.findByWhatsappId(normalizedTo);
       if (customer) {
         await this.messagesService.create({
           content: `[Image Sent] ${caption ? caption + ' ' : ''}${imageUrl}`,
@@ -211,20 +293,21 @@ export class WhatsappService {
       formData.append('messaging_product', 'whatsapp');
       formData.append('type', 'application/pdf');
 
-      const uploadUrl = `https://graph.facebook.com/v21.0/${this.phoneNumberId}/media`;
+      const uploadUrl = this.getApiUrl('media');
 
       const uploadResponse = await axios.post(uploadUrl, formData, {
         headers: {
           ...formData.getHeaders(),
           Authorization: `Bearer ${this.accessToken}`,
         },
+        timeout: 60000, // 60 seconds for file uploads
       });
 
       const mediaId = uploadResponse.data.id;
       console.log('✔️ Document uploaded, media ID:', mediaId);
 
       // Step 2: Send the document message
-      const messageUrl = `https://graph.facebook.com/v21.0/${this.phoneNumberId}/messages`;
+      const messageUrl = this.getApiUrl('messages');
 
       const payload = {
         messaging_product: "whatsapp",
@@ -242,12 +325,17 @@ export class WhatsappService {
           Authorization: `Bearer ${this.accessToken}`,
           'Content-Type': 'application/json',
         },
+        timeout: 30000,
       });
 
-      console.log('✔️ WhatsApp API response (document):', response.data);
+      console.log('✔️ WhatsApp API response (document):', {
+        messageId: response.data?.messages?.[0]?.id,
+        status: 'sent',
+      });
 
       // Save outbound message
-      const customer = await this.customersService.findByWhatsappId(to);
+      const normalizedTo = to.trim().replace(/[^0-9+]/g, '');
+      const customer = await this.customersService.findByWhatsappId(normalizedTo);
       if (customer) {
         await this.messagesService.create({
           content: `[Document Sent] ${filename}${caption ? ': ' + caption : ''}`,
@@ -259,8 +347,7 @@ export class WhatsappService {
 
       return response.data;
     } catch (error) {
-      console.error('❌ WhatsApp send document error:', error.response?.data || error.message);
-      throw error;
+      this.handleApiError(error, 'send document');
     }
   }
 
@@ -345,9 +432,11 @@ export class WhatsappService {
   async getSettings() {
     return {
       phoneNumberId: this.phoneNumberId,
-      accessToken: this.accessToken,
-      verifyToken: this.configService.get('WHATSAPP_VERIFY_TOKEN'),
+      accessToken: this.accessToken ? `${this.accessToken.substring(0, 10)}...` : null, // Mask token for security
+      verifyToken: this.configService.get('WHATSAPP_VERIFY_TOKEN') ? '***' : null, // Mask token
       webhookUrl: this.configService.get('WHATSAPP_WEBHOOK_URL'),
+      apiVersion: this.apiVersion,
+      baseUrl: this.baseUrl,
     };
   }
 
@@ -360,9 +449,34 @@ export class WhatsappService {
   // -------------------------------------------
   async testConnection() {
     try {
-      return { success: true, message: 'Connection OK' };
-    } catch (e) {
-      return { success: false, message: 'Connection failed' };
+      // Test by fetching phone number info (lightweight API call)
+      const url = `${this.baseUrl}/${this.phoneNumberId}`;
+      const response = await axios.get(url, {
+        headers: {
+          Authorization: `Bearer ${this.accessToken}`,
+        },
+        timeout: 10000,
+      });
+
+      return {
+        success: true,
+        message: 'Connection OK',
+        phoneNumber: response.data?.display_phone_number || 'N/A',
+        verifiedName: response.data?.verified_name || 'N/A',
+      };
+    } catch (error) {
+      if (error.response?.status === 401) {
+        return {
+          success: false,
+          message: 'Connection failed: Invalid or expired access token',
+          error: 'UNAUTHORIZED',
+        };
+      }
+      return {
+        success: false,
+        message: `Connection failed: ${error.message}`,
+        error: error.response?.status || 'UNKNOWN',
+      };
     }
   }
 

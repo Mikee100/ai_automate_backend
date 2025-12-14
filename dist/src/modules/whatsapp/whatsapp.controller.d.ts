@@ -22,8 +22,10 @@ export declare class WhatsappController {
     getSettings(): Promise<{
         phoneNumberId: string;
         accessToken: string;
-        verifyToken: any;
+        verifyToken: string;
         webhookUrl: any;
+        apiVersion: string;
+        baseUrl: string;
     }>;
     updateSettings(settings: any): Promise<{
         success: boolean;
@@ -31,6 +33,15 @@ export declare class WhatsappController {
     testConnection(): Promise<{
         success: boolean;
         message: string;
+        phoneNumber: any;
+        verifiedName: any;
+        error?: undefined;
+    } | {
+        success: boolean;
+        message: string;
+        error: any;
+        phoneNumber?: undefined;
+        verifiedName?: undefined;
     }>;
     sendMessage(data: {
         to: string;

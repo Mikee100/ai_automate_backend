@@ -12,11 +12,18 @@ var ConversationLearningService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ConversationLearningService = void 0;
 const common_1 = require("@nestjs/common");
+const config_1 = require("@nestjs/config");
+const openai_1 = require("openai");
 const prisma_service_1 = require("../../../prisma/prisma.service");
 let ConversationLearningService = ConversationLearningService_1 = class ConversationLearningService {
-    constructor(prisma) {
+    constructor(prisma, configService) {
         this.prisma = prisma;
+        this.configService = configService;
         this.logger = new common_1.Logger(ConversationLearningService_1.name);
+        this.openai = new openai_1.default({
+            apiKey: this.configService.get('OPENAI_API_KEY')
+        });
+        this.enableRealTimeLearning = this.configService.get('ENABLE_REAL_TIME_LEARNING', true);
     }
     async recordLearning(customerId, entry, conversationId) {
         const learning = await this.prisma.conversationLearning.create({
@@ -34,7 +41,125 @@ let ConversationLearningService = ConversationLearningService_1 = class Conversa
             },
         });
         this.logger.debug(`Recorded learning for customer ${customerId}, intent: ${entry.extractedIntent}`);
+        if (this.enableRealTimeLearning) {
+            this.processRealTimeLearning(learning, entry).catch(err => {
+                this.logger.error('Error in real-time learning', err);
+            });
+        }
         return learning;
+    }
+    async processRealTimeLearning(learning, entry) {
+        try {
+            if (entry.wasSuccessful && entry.extractedIntent === 'faq') {
+                await this.considerAddingToKB(learning);
+            }
+            if (!entry.wasSuccessful) {
+                await this.analyzeFailurePattern(learning, entry);
+            }
+            await this.updateResponsePatterns(entry.extractedIntent, entry);
+        }
+        catch (error) {
+            this.logger.error('Error in real-time learning processing', error);
+        }
+    }
+    async considerAddingToKB(learning) {
+        try {
+            const existing = await this.prisma.knowledgeBase.findFirst({
+                where: {
+                    question: { contains: learning.userMessage.substring(0, 50), mode: 'insensitive' },
+                },
+            });
+            if (existing) {
+                const existingScore = await this.scoreKBEntry(existing.answer, learning.userMessage);
+                const newScore = await this.scoreKBEntry(learning.aiResponse, learning.userMessage);
+                if (newScore > existingScore) {
+                    await this.prisma.knowledgeBase.update({
+                        where: { id: existing.id },
+                        data: {
+                            answer: learning.aiResponse,
+                            updatedAt: new Date(),
+                        },
+                    });
+                    this.logger.log(`Updated KB entry: "${learning.userMessage.substring(0, 50)}..."`);
+                }
+                return;
+            }
+            const similarCount = await this.prisma.conversationLearning.count({
+                where: {
+                    userMessage: { contains: learning.userMessage.substring(0, 30), mode: 'insensitive' },
+                    wasSuccessful: true,
+                    extractedIntent: 'faq',
+                },
+            });
+            if (similarCount >= 2) {
+                await this.prisma.knowledgeBase.create({
+                    data: {
+                        question: learning.userMessage,
+                        answer: learning.aiResponse,
+                        category: 'general',
+                        embedding: [],
+                    },
+                });
+                this.logger.log(`Real-time KB update: Added "${learning.userMessage.substring(0, 50)}..."`);
+            }
+        }
+        catch (error) {
+            this.logger.error('Error in real-time KB update', error);
+        }
+    }
+    async analyzeFailurePattern(learning, entry) {
+        try {
+            const failureAnalysis = await this.openai.chat.completions.create({
+                model: 'gpt-4o-mini',
+                messages: [{
+                        role: 'system',
+                        content: 'Analyze why this customer service interaction failed. Return JSON with: reason (string), pattern (string), suggestion (string)'
+                    }, {
+                        role: 'user',
+                        content: `User: ${entry.userMessage}\nAI: ${entry.aiResponse}\nOutcome: ${entry.conversationOutcome || 'failed'}`
+                    }],
+                response_format: { type: 'json_object' },
+                temperature: 0.3,
+            });
+            const analysis = JSON.parse(failureAnalysis.choices[0].message.content || '{}');
+            await this.prisma.conversationLearning.update({
+                where: { id: learning.id },
+                data: {
+                    newKnowledgeExtracted: JSON.stringify(analysis),
+                    shouldAddToKB: false,
+                },
+            });
+            this.logger.warn(`Failure pattern identified: ${analysis.reason}`);
+        }
+        catch (error) {
+            this.logger.error('Error analyzing failure pattern', error);
+        }
+    }
+    async updateResponsePatterns(intent, entry) {
+        try {
+            const recentSuccessful = await this.getSuccessfulPatterns(intent, 5);
+            if (entry.wasSuccessful && recentSuccessful.length > 0) {
+                const patternMatch = recentSuccessful.some(pattern => this.similarity(pattern.aiResponse, entry.aiResponse) > 0.8);
+                if (!patternMatch) {
+                    this.logger.debug(`New successful pattern identified for intent: ${intent}`);
+                }
+            }
+        }
+        catch (error) {
+            this.logger.error('Error updating response patterns', error);
+        }
+    }
+    async scoreKBEntry(answer, question) {
+        const lengthScore = Math.min(answer.length / 100, 1);
+        const completenessScore = answer.includes('?') ? 0.8 : 1;
+        return (lengthScore + completenessScore) / 2;
+    }
+    similarity(text1, text2) {
+        const words1 = new Set(text1.toLowerCase().split(/\s+/));
+        const words2 = new Set(text2.toLowerCase().split(/\s+/));
+        const intersection = new Set([...words1].filter(x => words2.has(x)));
+        const union = new Set([...words1, ...words2]);
+        return intersection.size / union.size;
     }
     async markForKBExtraction(learningId, category, extractedKnowledge) {
         await this.prisma.conversationLearning.update({
@@ -221,6 +346,7 @@ let ConversationLearningService = ConversationLearningService_1 = class Conversa
 exports.ConversationLearningService = ConversationLearningService;
 exports.ConversationLearningService = ConversationLearningService = ConversationLearningService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        config_1.ConfigService])
 ], ConversationLearningService);
 //# sourceMappingURL=conversation-learning.service.js.map
