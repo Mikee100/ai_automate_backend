@@ -1,5 +1,5 @@
 
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
 
 @Controller('analytics')
@@ -102,6 +102,11 @@ export class AnalyticsController {
   @Get('ai-performance-metrics')
   aiPerformanceMetrics() {
     return this.analyticsService.aiPerformanceMetrics();
+  }
+
+  @Get('ai-observability')
+  aiObservability(@Query('period') period?: '24h' | '7d') {
+    return this.analyticsService.getAiObservability(period === '7d' ? '7d' : '24h');
   }
 
   /* ========================================

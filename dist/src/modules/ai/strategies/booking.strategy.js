@@ -7,6 +7,10 @@ class BookingStrategy {
     }
     canHandle(intent, context) {
         const { hasDraft, message } = context;
+        const platform = context.enrichedContext?.platform;
+        if (platform === 'instagram' || platform === 'messenger') {
+            return false;
+        }
         const wantsToRetryPayment = /^(resend|retry|try.*again|send.*again)$/i.test(message.trim()) ||
             /(resend|retry|try.*again|try.*payment|retry.*payment|lets.*retry|let.*retry|want.*retry|need.*retry|can.*retry).*(payment|prompt|mpesa)/i.test(message) ||
             /(payment|prompt|mpesa).*(resend|retry|try.*again)/i.test(message);

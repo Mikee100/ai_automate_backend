@@ -12,28 +12,28 @@ export declare class RemindersService {
     scheduleRemindersForBooking(bookingId: string): Promise<any[]>;
     createReminder(data: CreateReminderDto): Promise<{
         id: string;
-        type: string;
-        scheduledFor: Date;
-        status: string;
-        messageContent: string | null;
-        sentAt: Date | null;
+        bookingId: string;
         createdAt: Date;
         updatedAt: Date;
-        bookingId: string;
+        status: string;
+        type: string;
+        sentAt: Date | null;
+        scheduledFor: Date;
+        messageContent: string | null;
     }>;
     getReminders(filters: ReminderFilterDto): Promise<{
         reminders: ({
             booking: {
                 customer: {
                     id: string;
+                    name: string;
                     createdAt: Date;
                     updatedAt: Date;
-                    name: string;
                     email: string | null;
-                    phone: string | null;
                     whatsappId: string | null;
                     instagramId: string | null;
                     messengerId: string | null;
+                    phone: string | null;
                     aiEnabled: boolean;
                     isAiPaused: boolean;
                     lastInstagramMessageAt: Date | null;
@@ -44,27 +44,27 @@ export declare class RemindersService {
                 };
             } & {
                 id: string;
-                status: string;
-                createdAt: Date;
-                updatedAt: Date;
                 customerId: string;
                 service: string;
-                dateTime: Date;
-                durationMinutes: number | null;
                 recipientName: string | null;
                 recipientPhone: string | null;
+                createdAt: Date;
+                updatedAt: Date;
+                status: string;
+                dateTime: Date;
+                durationMinutes: number | null;
                 googleEventId: string | null;
             };
         } & {
             id: string;
-            type: string;
-            scheduledFor: Date;
-            status: string;
-            messageContent: string | null;
-            sentAt: Date | null;
+            bookingId: string;
             createdAt: Date;
             updatedAt: Date;
-            bookingId: string;
+            status: string;
+            type: string;
+            sentAt: Date | null;
+            scheduledFor: Date;
+            messageContent: string | null;
         })[];
         total: number;
     }>;
@@ -72,14 +72,14 @@ export declare class RemindersService {
         booking: {
             customer: {
                 id: string;
+                name: string;
                 createdAt: Date;
                 updatedAt: Date;
-                name: string;
                 email: string | null;
-                phone: string | null;
                 whatsappId: string | null;
                 instagramId: string | null;
                 messengerId: string | null;
+                phone: string | null;
                 aiEnabled: boolean;
                 isAiPaused: boolean;
                 lastInstagramMessageAt: Date | null;
@@ -90,38 +90,38 @@ export declare class RemindersService {
             };
         } & {
             id: string;
-            status: string;
-            createdAt: Date;
-            updatedAt: Date;
             customerId: string;
             service: string;
-            dateTime: Date;
-            durationMinutes: number | null;
             recipientName: string | null;
             recipientPhone: string | null;
+            createdAt: Date;
+            updatedAt: Date;
+            status: string;
+            dateTime: Date;
+            durationMinutes: number | null;
             googleEventId: string | null;
         };
     } & {
         id: string;
-        type: string;
-        scheduledFor: Date;
-        status: string;
-        messageContent: string | null;
-        sentAt: Date | null;
+        bookingId: string;
         createdAt: Date;
         updatedAt: Date;
-        bookingId: string;
+        status: string;
+        type: string;
+        sentAt: Date | null;
+        scheduledFor: Date;
+        messageContent: string | null;
     }>;
     updateReminder(id: string, data: UpdateReminderDto): Promise<{
         id: string;
-        type: string;
-        scheduledFor: Date;
-        status: string;
-        messageContent: string | null;
-        sentAt: Date | null;
+        bookingId: string;
         createdAt: Date;
         updatedAt: Date;
-        bookingId: string;
+        status: string;
+        type: string;
+        sentAt: Date | null;
+        scheduledFor: Date;
+        messageContent: string | null;
     }>;
     cancelRemindersForBooking(bookingId: string): Promise<import(".prisma/client").Prisma.BatchPayload>;
     rescheduleRemindersForBooking(bookingId: string, newDateTime: Date): Promise<any[]>;
@@ -129,14 +129,14 @@ export declare class RemindersService {
         booking: {
             customer: {
                 id: string;
+                name: string;
                 createdAt: Date;
                 updatedAt: Date;
-                name: string;
                 email: string | null;
-                phone: string | null;
                 whatsappId: string | null;
                 instagramId: string | null;
                 messengerId: string | null;
+                phone: string | null;
                 aiEnabled: boolean;
                 isAiPaused: boolean;
                 lastInstagramMessageAt: Date | null;
@@ -147,41 +147,41 @@ export declare class RemindersService {
             };
         } & {
             id: string;
-            status: string;
-            createdAt: Date;
-            updatedAt: Date;
             customerId: string;
             service: string;
-            dateTime: Date;
-            durationMinutes: number | null;
             recipientName: string | null;
             recipientPhone: string | null;
+            createdAt: Date;
+            updatedAt: Date;
+            status: string;
+            dateTime: Date;
+            durationMinutes: number | null;
             googleEventId: string | null;
         };
     } & {
         id: string;
-        type: string;
-        scheduledFor: Date;
-        status: string;
-        messageContent: string | null;
-        sentAt: Date | null;
+        bookingId: string;
         createdAt: Date;
         updatedAt: Date;
-        bookingId: string;
+        status: string;
+        type: string;
+        sentAt: Date | null;
+        scheduledFor: Date;
+        messageContent: string | null;
     }>;
     private generateReminderMessage;
     getUpcomingReminders(limit?: number): Promise<({
         booking: {
             customer: {
                 id: string;
+                name: string;
                 createdAt: Date;
                 updatedAt: Date;
-                name: string;
                 email: string | null;
-                phone: string | null;
                 whatsappId: string | null;
                 instagramId: string | null;
                 messengerId: string | null;
+                phone: string | null;
                 aiEnabled: boolean;
                 isAiPaused: boolean;
                 lastInstagramMessageAt: Date | null;
@@ -192,26 +192,26 @@ export declare class RemindersService {
             };
         } & {
             id: string;
-            status: string;
-            createdAt: Date;
-            updatedAt: Date;
             customerId: string;
             service: string;
-            dateTime: Date;
-            durationMinutes: number | null;
             recipientName: string | null;
             recipientPhone: string | null;
+            createdAt: Date;
+            updatedAt: Date;
+            status: string;
+            dateTime: Date;
+            durationMinutes: number | null;
             googleEventId: string | null;
         };
     } & {
         id: string;
-        type: string;
-        scheduledFor: Date;
-        status: string;
-        messageContent: string | null;
-        sentAt: Date | null;
+        bookingId: string;
         createdAt: Date;
         updatedAt: Date;
-        bookingId: string;
+        status: string;
+        type: string;
+        sentAt: Date | null;
+        scheduledFor: Date;
+        messageContent: string | null;
     })[]>;
 }

@@ -46,6 +46,7 @@ export declare class WhatsappController {
     sendMessage(data: {
         to: string;
         message: string;
+        customerId?: string;
     }): Promise<any>;
     getStats(): Promise<{
         totalMessages: number;

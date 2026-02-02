@@ -20,7 +20,7 @@ let CircuitBreakerService = CircuitBreakerService_1 = class CircuitBreakerServic
     }
     async checkAndBreak(customerId, recentMessages) {
         const repetition = this.detectRepetition(recentMessages);
-        if (repetition.count >= 3) {
+        if (repetition.count >= 4) {
             this.logger.warn(`[CIRCUIT_BREAKER] Detected ${repetition.count} repetitions for customer ${customerId}: "${repetition.pattern}"`);
             return {
                 shouldBreak: true,
@@ -71,6 +71,10 @@ let CircuitBreakerService = CircuitBreakerService_1 = class CircuitBreakerServic
             .trim();
         const n1 = normalize(msg1);
         const n2 = normalize(msg2);
+        const lenRatio = Math.min(n1.length, n2.length) / Math.max(n1.length, n2.length);
+        if (lenRatio < 0.4) {
+            return false;
+        }
         const getFirstWords = (s, count = 5) => s.split(' ').slice(0, count).join(' ');
         const firstWords1 = getFirstWords(n1);
         const firstWords2 = getFirstWords(n2);
@@ -82,7 +86,7 @@ let CircuitBreakerService = CircuitBreakerService_1 = class CircuitBreakerServic
             const longer = n1.length > n2.length ? n1 : n2;
             const shorter = n1.length <= n2.length ? n1 : n2;
             const similarity = shorter.split(' ').filter(word => word.length > 3 && longer.includes(word)).length / shorter.split(' ').length;
-            if (similarity > 0.7) {
+            if (similarity > 0.85) {
                 return true;
             }
         }

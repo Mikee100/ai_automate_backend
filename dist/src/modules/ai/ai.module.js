@@ -27,6 +27,7 @@ const conversation_learning_service_1 = require("./services/conversation-learnin
 const domain_expertise_service_1 = require("./services/domain-expertise.service");
 const advanced_intent_service_1 = require("./services/advanced-intent.service");
 const personalization_service_1 = require("./services/personalization.service");
+const response_humanizer_service_1 = require("./services/response-humanizer.service");
 const feedback_loop_service_1 = require("./services/feedback-loop.service");
 const predictive_analytics_service_1 = require("./services/predictive-analytics.service");
 const response_quality_service_1 = require("./services/response-quality.service");
@@ -64,6 +65,7 @@ exports.AiModule = AiModule = __decorate([
             domain_expertise_service_1.DomainExpertiseService,
             advanced_intent_service_1.AdvancedIntentService,
             personalization_service_1.PersonalizationService,
+            response_humanizer_service_1.ResponseHumanizerService,
             feedback_loop_service_1.FeedbackLoopService,
             predictive_analytics_service_1.PredictiveAnalyticsService,
             response_quality_service_1.ResponseQualityService,
@@ -79,6 +81,7 @@ exports.AiModule = AiModule = __decorate([
             domain_expertise_service_1.DomainExpertiseService,
             advanced_intent_service_1.AdvancedIntentService,
             personalization_service_1.PersonalizationService,
+            response_humanizer_service_1.ResponseHumanizerService,
             feedback_loop_service_1.FeedbackLoopService,
             predictive_analytics_service_1.PredictiveAnalyticsService,
             response_quality_service_1.ResponseQualityService,

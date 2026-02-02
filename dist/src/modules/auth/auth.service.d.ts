@@ -17,8 +17,8 @@ export declare class AuthService {
         id: string;
         name: string;
         email: string;
-        isActive: boolean;
         role: string;
+        isActive: boolean;
     }>;
     createUser(email: string, password: string, name: string, role?: string): Promise<{
         id: string;

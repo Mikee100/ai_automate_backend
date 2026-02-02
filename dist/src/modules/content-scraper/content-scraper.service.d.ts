@@ -21,27 +21,27 @@ export declare class ContentScraperService {
     }>;
     getMediaByCategory(category: string, limit?: number): Promise<{
         id: string;
-        url: string;
+        createdAt: Date;
+        updatedAt: Date;
         title: string | null;
         description: string | null;
         category: string;
         subcategory: string | null;
+        url: string;
         mediaType: string;
         source: string;
-        createdAt: Date;
-        updatedAt: Date;
     }[]>;
     getBackdropImages(limit?: number): Promise<{
         id: string;
-        url: string;
+        createdAt: Date;
+        updatedAt: Date;
         title: string | null;
         description: string | null;
         category: string;
         subcategory: string | null;
+        url: string;
         mediaType: string;
         source: string;
-        createdAt: Date;
-        updatedAt: Date;
     }[]>;
     private scrapePageContent;
     private saveKnowledgeContent;

@@ -5,26 +5,26 @@ export declare class MediaService {
     getCategories(): Promise<string[]>;
     getByCategory(category: string, limit?: number): Promise<{
         id: string;
-        url: string;
+        createdAt: Date;
+        updatedAt: Date;
         title: string | null;
         description: string | null;
         category: string;
         subcategory: string | null;
+        url: string;
         mediaType: string;
         source: string;
-        createdAt: Date;
-        updatedAt: Date;
     }[]>;
     getBackdrops(limit?: number): Promise<{
         id: string;
-        url: string;
+        createdAt: Date;
+        updatedAt: Date;
         title: string | null;
         description: string | null;
         category: string;
         subcategory: string | null;
+        url: string;
         mediaType: string;
         source: string;
-        createdAt: Date;
-        updatedAt: Date;
     }[]>;
 }

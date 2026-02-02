@@ -105,7 +105,7 @@ let WhatsappService = class WhatsappService {
             });
         }
     }
-    async sendMessage(to, message) {
+    async sendMessage(to, message, customerId) {
         console.log('📤 Sending WhatsApp message to:', to);
         console.log('Message:', message.substring(0, 100) + (message.length > 100 ? '...' : ''));
         if (!to || typeof to !== 'string' || !to.trim()) {
@@ -139,6 +139,37 @@ let WhatsappService = class WhatsappService {
                 messageId: response.data?.messages?.[0]?.id,
                 status: 'sent',
             });
+            let customer;
+            if (customerId) {
+                customer = await this.customersService.findOne(customerId);
+            }
+            else {
+                customer = await this.customersService.findByWhatsappId(normalizedTo);
+                if (!customer && normalizedTo.startsWith('+')) {
+                    const withoutPlus = normalizedTo.substring(1);
+                    customer = await this.customersService.findByWhatsappId(withoutPlus);
+                    console.log(`Tried finding customer by WhatsApp ID without +: ${withoutPlus}`);
+                }
+                if (!customer) {
+                    const phoneNumber = normalizedTo.startsWith('+') ? normalizedTo.substring(1) : normalizedTo;
+                    customer = await this.customersService.findByPhoneOrWhatsappId(phoneNumber);
+                    if (customer) {
+                        console.log(`Found customer by phone/whatsappId: ${phoneNumber}`);
+                    }
+                }
+            }
+            if (customer) {
+                await this.messagesService.create({
+                    content: message,
+                    platform: 'whatsapp',
+                    direction: 'outbound',
+                    customerId: customer.id,
+                });
+                console.log(`✔️ Outbound message saved to database for customer: ${customer.id} (${customer.name})`);
+            }
+            else {
+                console.warn(`⚠️ Customer not found for ${normalizedTo}, message sent but not saved to database. CustomerId was: ${customerId || 'not provided'}`);
+            }
             return response.data;
         }
         catch (error) {

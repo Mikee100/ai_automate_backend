@@ -14,14 +14,62 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AnalyticsService = void 0;
 const common_1 = require("@nestjs/common");
+const bull_1 = require("@nestjs/bull");
 const prisma_service_1 = require("../../prisma/prisma.service");
 const sentiment_util_1 = require("./sentiment.util");
 const messages_service_1 = require("../messages/messages.service");
 const keyword_extractor = require('keyword-extractor');
 let AnalyticsService = class AnalyticsService {
-    constructor(prisma, messagesService) {
+    constructor(prisma, messagesService, aiQueue) {
         this.prisma = prisma;
         this.messagesService = messagesService;
+        this.aiQueue = aiQueue;
+    }
+    async getAiObservability(period = '24h') {
+        const hours = period === '24h' ? 24 : 24 * 7;
+        const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+        const metrics = await this.prisma.aiJobMetric.findMany({
+            where: { createdAt: { gte: since } },
+            orderBy: { createdAt: 'desc' },
+        });
+        const totalJobs = metrics.length;
+        const successful = metrics.filter((m) => m.success);
+        const failedJobs = totalJobs - successful.length;
+        const latencies = successful.filter((m) => m.latencyMs != null).map((m) => m.latencyMs);
+        latencies.sort((a, b) => a - b);
+        const p50LatencyMs = latencies.length ? latencies[Math.floor(latencies.length * 0.5)] : null;
+        const p95LatencyMs = latencies.length ? latencies[Math.floor(latencies.length * 0.95)] : null;
+        const strategyCounts = { faq: 0, package_inquiry: 0, booking: 0, fallback: 0 };
+        let fallbackCount = 0;
+        let circuitBreakerCount = 0;
+        for (const m of metrics) {
+            if (m.strategyUsed && strategyCounts[m.strategyUsed] !== undefined)
+                strategyCounts[m.strategyUsed]++;
+            if (m.isFallback)
+                fallbackCount++;
+            if (m.circuitBreakerTrip)
+                circuitBreakerCount++;
+        }
+        let queueWaitingCount = null;
+        try {
+            const counts = await this.aiQueue.getJobCounts();
+            queueWaitingCount = counts.waiting ?? null;
+        }
+        catch {
+        }
+        return {
+            period,
+            since: since.toISOString(),
+            totalJobs,
+            failedJobs,
+            successRate: totalJobs ? ((totalJobs - failedJobs) / totalJobs) * 100 : 0,
+            p50LatencyMs,
+            p95LatencyMs,
+            strategyCounts,
+            fallbackCount,
+            circuitBreakerCount,
+            queueWaitingCount,
+        };
     }
     async whatsappSentimentByTopic() {
         const messages = await this.prisma.message.findMany({
@@ -634,7 +682,8 @@ exports.AnalyticsService = AnalyticsService;
 exports.AnalyticsService = AnalyticsService = __decorate([
     (0, common_1.Injectable)(),
     __param(1, (0, common_1.Inject)((0, common_1.forwardRef)(() => messages_service_1.MessagesService))),
+    __param(2, (0, bull_1.InjectQueue)('aiQueue')),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
-        messages_service_1.MessagesService])
+        messages_service_1.MessagesService, Object])
 ], AnalyticsService);
 //# sourceMappingURL=analytics.service.js.map

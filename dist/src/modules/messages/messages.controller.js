@@ -26,6 +26,9 @@ let MessagesController = class MessagesController {
     findAll() {
         return this.messagesService.findAll();
     }
+    findByExternalId(externalId) {
+        return this.messagesService.findByExternalId(externalId);
+    }
     findByCustomer(customerId) {
         return this.messagesService.findByCustomer(customerId);
     }
@@ -44,6 +47,13 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], MessagesController.prototype, "findAll", null);
+__decorate([
+    (0, common_1.Get)('external/:externalId'),
+    __param(0, (0, common_1.Param)('externalId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], MessagesController.prototype, "findByExternalId", null);
 __decorate([
     (0, common_1.Get)(':customerId'),
     __param(0, (0, common_1.Param)('customerId')),

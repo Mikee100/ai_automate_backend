@@ -283,6 +283,27 @@ model ConversationMetrics {
   @@index([intent])
 }
 
+// AI observability: one row per AI queue job (Tier 1 + strategy + fallback + circuit breaker)
+model AiJobMetric {
+  id                  String   @id @default(cuid())
+  createdAt           DateTime @default(now())
+  customerId          String?
+  platform            String?   // whatsapp, instagram, messenger
+  latencyMs           Int?      // job start to response ready
+  success             Boolean  // false = timeout, exception, or send failure
+  failureReason       String?  // short reason if success=false
+  strategyUsed        String?  // faq, package_inquiry, booking, fallback
+  isFallback          Boolean  @default(false) // recovery / "connect you with our team"
+  circuitBreakerTrip  Boolean  @default(false)
+  circuitBreakerReason String?
+  queueWaitingCount   Int?     // waiting count when this job started
+
+  @@map("ai_job_metrics")
+  @@index([createdAt])
+  @@index([success])
+  @@index([strategyUsed])
+}
+
 model PhotoLink {
   id         String   @id @default(cuid())
   link       String

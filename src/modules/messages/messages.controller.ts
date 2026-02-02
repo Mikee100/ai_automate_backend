@@ -16,6 +16,11 @@ export class MessagesController {
     return this.messagesService.findAll();
   }
 
+  @Get('external/:externalId')
+  findByExternalId(@Param('externalId') externalId: string) {
+    return this.messagesService.findByExternalId(externalId);
+  }
+
   @Get(':customerId')
   findByCustomer(@Param('customerId') customerId: string) {
     return this.messagesService.findByCustomer(customerId);

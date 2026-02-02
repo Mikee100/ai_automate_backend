@@ -9,6 +9,7 @@ import { MessagesService } from '../modules/messages/messages.service';
 import { CustomersService } from '../modules/customers/customers.service';
 import { BookingsService } from '../modules/bookings/bookings.service';
 import { WebsocketGateway } from '../websockets/websocket.gateway';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Processor('aiQueue')
 @Injectable()
@@ -25,6 +26,7 @@ export class AiQueueProcessor implements OnModuleInit {
     private readonly customersService: CustomersService,
     private readonly bookingsService: BookingsService,
     private readonly websocketGateway: WebsocketGateway,
+    private readonly prisma: PrismaService,
   ) {
     this.logger.log('[AI QUEUE] Constructor called - AiQueueProcessor being created');
   }
@@ -54,6 +56,32 @@ export class AiQueueProcessor implements OnModuleInit {
     this.logger.log('[AI QUEUE] Queue resumed');
   }
 
+  @Process('sendReminder')
+  async handleSendReminder(job: Job) {
+    const { customerId, bookingId, date, time, recipientName, daysBefore } = job.data || {};
+    if (!customerId) {
+      this.logger.warn('[AI QUEUE] sendReminder job missing customerId');
+      return;
+    }
+    const dayText =
+      daysBefore === '2' ? 'in *2 days*' : daysBefore === '1' ? 'tomorrow' : 'soon';
+    const reminderMessage =
+      `Hi ${recipientName || 'there'}! 💖\n\n` +
+      `Just a sweet reminder that your maternity photoshoot ` +
+      `is coming up ${dayText} — on *${date || 'your booking'} at ${time || 'the scheduled time'}*. ` +
+      `We're excited to capture your beautiful moments! ✨📸`;
+    await this.messagesService.sendOutboundMessage(customerId, reminderMessage, 'whatsapp');
+    const customer = await this.customersService.findOne(customerId);
+    const phone = customer?.whatsappId || customer?.phone;
+    if (phone) {
+      await this.whatsappService.sendMessage(phone, reminderMessage);
+      this.logger.log(`[AI QUEUE] sendReminder sent for customer ${customerId}`);
+    } else {
+      this.logger.warn(`[AI QUEUE] sendReminder: no WhatsApp/phone for customer ${customerId}`);
+    }
+    return { sent: !!phone };
+  }
+
   @Process('handleAiJob')
   async handleAiJob(job: Job) {
     try {
@@ -71,36 +99,42 @@ export class AiQueueProcessor implements OnModuleInit {
       const { customerId, message, platform } = job.data;
       this.logger.log(`[AI QUEUE] Processing centralized AI job: customerId=${customerId}, platform=${platform}, message=${message}, jobId=${job.id}`);
 
-      // Explicit log to verify we are about to call the service
-      this.logger.log(`[AI QUEUE] Calling aiService.handleConversation for job ${job.id}...`);
+      const jobStartedAt = Date.now();
+      let queueWaitingCount: number | null = null;
+      try {
+        const counts = await this.aiQueue.getJobCounts();
+        queueWaitingCount = counts.waiting ?? null;
+      } catch {
+        // ignore
+      }
 
       let aiResponse = "Sorry, I couldn't process your request.";
+      let aiResult: any = null;
+      let aiSuccess = false;
+      let aiFailureReason: string | undefined;
 
       try {
         // Get conversation history for context
         const history = await this.messagesService.getConversationHistory(customerId, 10);
 
-        // Generate AI response with timeout
-        // Pass bookingsService so booking strategy can work properly
-        const aiPromise = this.aiService.handleConversation(message, customerId, history, this.bookingsService);
+        // Generate AI response with timeout (pass platform for humanizer)
+        const enrichedContext = { platform };
+        const aiPromise = this.aiService.handleConversation(message, customerId, history, this.bookingsService, 0, enrichedContext);
 
-        // Add catch handler to prevent unhandled rejections if timeout fires first
         aiPromise.catch((err) => {
-          // This catch handler prevents unhandled rejections if the promise rejects
-          // after Promise.race has already completed (e.g., due to timeout)
           this.logger.debug(`[AI QUEUE] AI promise rejected (may be after timeout): ${err.message}`);
         });
 
         let timeoutId: NodeJS.Timeout;
         const timeoutPromise = new Promise<never>((_, reject) => {
-          timeoutId = setTimeout(() => reject(new Error('AI processing timeout forced after 30s')), 30000); // 30 second timeout
+          timeoutId = setTimeout(() => reject(new Error('AI processing timeout forced after 30s')), 30000);
         });
 
         this.logger.log(`[AI QUEUE] Awaiting AI response for job ${job.id}...`);
-        const aiResult: any = await Promise.race([aiPromise, timeoutPromise]);
-        clearTimeout(timeoutId); // Clear timeout if aiPromise wins
+        aiResult = await Promise.race([aiPromise, timeoutPromise]);
+        clearTimeout(timeoutId);
         this.logger.log(`[AI QUEUE] AI response received for job ${job.id}.`);
-        this.logger.debug(`AI result: ${JSON.stringify(aiResult)}`);
+        aiSuccess = true;
 
         if (aiResult?.response) {
           if (typeof aiResult.response === 'string') {
@@ -123,7 +157,30 @@ export class AiQueueProcessor implements OnModuleInit {
       } catch (error) {
         this.logger.error('AI processing failed, using fallback response', error);
         this.logger.error('Error details:', error instanceof Error ? error.stack : error);
-        // aiResponse is already set to fallback
+        aiSuccess = false;
+        aiFailureReason = error instanceof Error ? (error.message?.includes('timeout') ? 'timeout' : error.message?.slice(0, 200) || 'exception') : 'exception';
+      }
+
+      // Record observability metric (Tier 1 + strategy + fallback + circuit breaker)
+      const latencyMs = Date.now() - jobStartedAt;
+      try {
+        const m = aiResult?.metrics;
+        await this.prisma.aiJobMetric.create({
+          data: {
+            customerId: customerId ?? undefined,
+            platform: platform ?? undefined,
+            latencyMs,
+            success: aiSuccess,
+            failureReason: aiSuccess ? undefined : aiFailureReason,
+            strategyUsed: m?.strategyUsed ?? undefined,
+            isFallback: m?.isFallback ?? false,
+            circuitBreakerTrip: m?.circuitBreakerTrip ?? false,
+            circuitBreakerReason: m?.circuitBreakerReason ?? undefined,
+            queueWaitingCount: queueWaitingCount ?? undefined,
+          },
+        });
+      } catch (metricErr) {
+        this.logger.warn(`[AI QUEUE] Failed to record AiJobMetric: ${(metricErr as Error).message}`);
       }
 
       // Send response based on platform - wrap in try-catch to prevent job crashes

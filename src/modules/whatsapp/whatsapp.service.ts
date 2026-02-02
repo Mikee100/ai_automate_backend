@@ -167,7 +167,7 @@ export class WhatsappService {
   // SEND WHATSAPP MESSAGE (OFFICIAL API)
   // PRODUCTION MODE: Can send to ANY phone number - no restrictions
   // -------------------------------------------
-  async sendMessage(to: string, message: string) {
+  async sendMessage(to: string, message: string, customerId?: string) {
     console.log('📤 Sending WhatsApp message to:', to);
     console.log('Message:', message.substring(0, 100) + (message.length > 100 ? '...' : ''));
 
@@ -212,8 +212,44 @@ export class WhatsappService {
         status: 'sent',
       });
 
-      // Note: Outbound message is saved by message-queue.processor.ts
-      // to avoid duplicates. Do NOT save here.
+      // Save outbound message to database for direct sends (not via queue)
+      // Find customer by ID if provided, otherwise find by WhatsApp ID (try multiple formats)
+      let customer;
+      if (customerId) {
+        customer = await this.customersService.findOne(customerId);
+      } else {
+        // Try multiple formats since WhatsApp IDs can be stored with or without + prefix
+        // First try with + prefix (normalized format)
+        customer = await this.customersService.findByWhatsappId(normalizedTo);
+        
+        // If not found, try without + prefix (how it's stored when created from incoming messages)
+        if (!customer && normalizedTo.startsWith('+')) {
+          const withoutPlus = normalizedTo.substring(1);
+          customer = await this.customersService.findByWhatsappId(withoutPlus);
+          console.log(`Tried finding customer by WhatsApp ID without +: ${withoutPlus}`);
+        }
+        
+        // If still not found, try by phone number using Prisma findFirst
+        if (!customer) {
+          const phoneNumber = normalizedTo.startsWith('+') ? normalizedTo.substring(1) : normalizedTo;
+          customer = await this.customersService.findByPhoneOrWhatsappId(phoneNumber);
+          if (customer) {
+            console.log(`Found customer by phone/whatsappId: ${phoneNumber}`);
+          }
+        }
+      }
+
+      if (customer) {
+        await this.messagesService.create({
+          content: message,
+          platform: 'whatsapp',
+          direction: 'outbound',
+          customerId: customer.id,
+        });
+        console.log(`✔️ Outbound message saved to database for customer: ${customer.id} (${customer.name})`);
+      } else {
+        console.warn(`⚠️ Customer not found for ${normalizedTo}, message sent but not saved to database. CustomerId was: ${customerId || 'not provided'}`);
+      }
 
       return response.data;
     } catch (error) {

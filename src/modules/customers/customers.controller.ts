@@ -16,6 +16,11 @@ export class CustomersController {
     return this.customersService.findAll();
   }
 
+  @Get('whatsapp/:whatsappId')
+  findByWhatsappId(@Param('whatsappId') whatsappId: string) {
+    return this.customersService.findByWhatsappId(whatsappId);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.customersService.findOne(id);

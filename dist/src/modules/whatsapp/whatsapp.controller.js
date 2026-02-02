@@ -35,7 +35,7 @@ let WhatsappController = class WhatsappController {
         return this.whatsappService.testConnection();
     }
     async sendMessage(data) {
-        return this.whatsappService.sendMessage(data.to, data.message);
+        return this.whatsappService.sendMessage(data.to, data.message, data.customerId);
     }
     async getStats() {
         return this.whatsappService.getWhatsAppStats();

@@ -153,6 +153,7 @@ export class WebhooksService {
       if (bookings.length > 1) {
         await this.whatsappService.sendMessage(from, `You have multiple active bookings. Please reply with the date or service of the booking you want to reschedule.`);
         await this.bookingsService.setAwaitingRescheduleSelection(customer.id, true);
+        await this.bookingsService.updateBookingDraft(customer.id, { step: 'reschedule', bookingId: null });
         return;
       }
       // Step 3: Check eligibility
@@ -451,6 +452,7 @@ Just let me know! 💖`
         if (bookings.length > 1) {
           await this.instagramService.sendMessage(from, `You have multiple active bookings. Please reply with the date or service of the booking you want to reschedule.`);
           await this.bookingsService.setAwaitingRescheduleSelection(customer.id, true);
+          await this.bookingsService.updateBookingDraft(customer.id, { step: 'reschedule', bookingId: null });
           return;
         }
         // Step 3: Check eligibility
@@ -636,6 +638,7 @@ Just let me know! 💖`
           if (bookings.length > 1) {
             await this.messengerSendService.sendMessage(senderId, `You have multiple active bookings. Please reply with the date or service of the booking you want to reschedule.`);
             await this.bookingsService.setAwaitingRescheduleSelection(customer.id, true);
+            await this.bookingsService.updateBookingDraft(customer.id, { step: 'reschedule', bookingId: null });
             return;
           }
           // Step 3: Check eligibility

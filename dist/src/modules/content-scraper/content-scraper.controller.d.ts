@@ -25,15 +25,15 @@ export declare class ContentScraperController {
         count: number;
         backdrops: {
             id: string;
-            url: string;
+            createdAt: Date;
+            updatedAt: Date;
             title: string | null;
             description: string | null;
             category: string;
             subcategory: string | null;
+            url: string;
             mediaType: string;
             source: string;
-            createdAt: Date;
-            updatedAt: Date;
         }[];
     }>;
     getAssetsByCategory(category: string): Promise<{
@@ -41,15 +41,15 @@ export declare class ContentScraperController {
         count: number;
         assets: {
             id: string;
-            url: string;
+            createdAt: Date;
+            updatedAt: Date;
             title: string | null;
             description: string | null;
             category: string;
             subcategory: string | null;
+            url: string;
             mediaType: string;
             source: string;
-            createdAt: Date;
-            updatedAt: Date;
         }[];
     }>;
 }

@@ -16,6 +16,7 @@ import { ConversationLearningService } from './services/conversation-learning.se
 import { DomainExpertiseService } from './services/domain-expertise.service';
 import { AdvancedIntentService } from './services/advanced-intent.service';
 import { PersonalizationService } from './services/personalization.service';
+import { ResponseHumanizerService } from './services/response-humanizer.service';
 import { FeedbackLoopService } from './services/feedback-loop.service';
 import { PredictiveAnalyticsService } from './services/predictive-analytics.service';
 import { ResponseQualityService } from './services/response-quality.service';
@@ -28,6 +29,7 @@ export declare class AiService {
     private domainExpertise;
     private advancedIntent;
     private personalization;
+    private responseHumanizer;
     private feedbackLoop;
     private predictiveAnalytics;
     private responseQuality;
@@ -68,9 +70,11 @@ export declare class AiService {
     private readonly businessWebsite;
     private readonly customerCarePhone;
     private readonly customerCareEmail;
+    private readonly whatsappBookingLink;
+    private getWhatsAppOnlyRedirectMessage;
     private readonly businessHours;
     private readonly businessDescription;
-    constructor(configService: ConfigService, prisma: PrismaService, circuitBreaker: CircuitBreakerService, customerMemory: CustomerMemoryService, conversationLearning: ConversationLearningService, domainExpertise: DomainExpertiseService, advancedIntent: AdvancedIntentService, personalization: PersonalizationService, feedbackLoop: FeedbackLoopService, predictiveAnalytics: PredictiveAnalyticsService, responseQuality: ResponseQualityService, bookingsService?: BookingsService, messagesService?: MessagesService, escalationService?: EscalationService, aiQueue?: Queue, notificationsService?: NotificationsService, websocketGateway?: WebsocketGateway);
+    constructor(configService: ConfigService, prisma: PrismaService, circuitBreaker: CircuitBreakerService, customerMemory: CustomerMemoryService, conversationLearning: ConversationLearningService, domainExpertise: DomainExpertiseService, advancedIntent: AdvancedIntentService, personalization: PersonalizationService, responseHumanizer: ResponseHumanizerService, feedbackLoop: FeedbackLoopService, predictiveAnalytics: PredictiveAnalyticsService, responseQuality: ResponseQualityService, bookingsService?: BookingsService, messagesService?: MessagesService, escalationService?: EscalationService, aiQueue?: Queue, notificationsService?: NotificationsService, websocketGateway?: WebsocketGateway);
     private initializeTokenEncoding;
     private checkAndEscalateIfHandoffMentioned;
     createEscalationAlert(customerId: string, type: 'reschedule_request' | 'ai_escalation', title: string, message: string, metadata?: any): Promise<void>;

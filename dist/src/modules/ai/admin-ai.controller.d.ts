@@ -247,12 +247,12 @@ export declare class AdminAiController {
             createdAt: Date;
             updatedAt: Date;
             status: string;
+            metadata: import("@prisma/client/runtime/library").JsonValue | null;
             type: string;
             sentAt: Date | null;
             scheduledFor: Date;
-            messageContent: string;
-            metadata: import("@prisma/client/runtime/library").JsonValue | null;
             deliveredAt: Date | null;
+            messageContent: string;
             channel: string;
             campaignId: string | null;
             responseReceived: boolean;

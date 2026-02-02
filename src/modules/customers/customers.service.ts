@@ -62,6 +62,18 @@ export class CustomersService {
     });
   }
 
+  async findByPhoneOrWhatsappId(phoneOrWhatsappId: string) {
+    // Try to find customer by phone or whatsappId (flexible lookup)
+    return this.prisma.customer.findFirst({
+      where: {
+        OR: [
+          { phone: phoneOrWhatsappId },
+          { whatsappId: phoneOrWhatsappId },
+        ],
+      },
+    });
+  }
+
   async findOne(id: string) {
     return this.prisma.customer.findUnique({
       where: { id },

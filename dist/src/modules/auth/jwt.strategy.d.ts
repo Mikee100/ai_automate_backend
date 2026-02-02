@@ -9,8 +9,8 @@ export declare class JwtStrategy extends JwtStrategy_base {
         id: string;
         name: string;
         email: string;
-        isActive: boolean;
         role: string;
+        isActive: boolean;
     }>;
 }
 export {};

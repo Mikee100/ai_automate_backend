@@ -15,8 +15,8 @@ export declare class PaymentsController {
             updatedAt: Date;
             amount: number;
             status: string;
-            bookingDraftId: string | null;
             phone: string;
+            bookingDraftId: string | null;
             mpesaReceipt: string | null;
             checkoutRequestId: string | null;
         };

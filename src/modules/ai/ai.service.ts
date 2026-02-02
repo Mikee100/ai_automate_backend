@@ -78,6 +78,7 @@ import { DomainExpertiseService } from './services/domain-expertise.service';
 import { AdvancedIntentService } from './services/advanced-intent.service';
 
 import { PersonalizationService } from './services/personalization.service';
+import { ResponseHumanizerService, HumanizerContext } from './services/response-humanizer.service';
 import { FeedbackLoopService } from './services/feedback-loop.service';
 import { PredictiveAnalyticsService } from './services/predictive-analytics.service';
 import { ResponseQualityService } from './services/response-quality.service';
@@ -202,8 +203,21 @@ export class AiService {
   private readonly businessName = 'Fiesta House Attire maternity photoshoot studio';
   private readonly businessLocation = 'Our studio is located at 4th Avenue Parklands, Diamond Plaza Annex, 2nd Floor. We look forward to welcoming you! 💖';
   private readonly businessWebsite = 'https://fiestahouseattire.com/';
-  private readonly customerCarePhone = '0720 111928';
+  /** For testing use 0721840961; official is 0720 111928 — switch via env or change here. */
+  private readonly customerCarePhone = '0721840961';
   private readonly customerCareEmail = 'info@fiestahouseattire.com';
+  /** WhatsApp link for directing Instagram/Messenger users to book (bookings/appointments are WhatsApp-only). */
+  private readonly whatsappBookingLink = 'https://wa.me/254721840961';
+
+  /** Message for Instagram/Messenger when user asks about booking/appointment — give number and link, no booking flow. */
+  private getWhatsAppOnlyRedirectMessage(): string {
+    return (
+      `Bookings and appointments are done on WhatsApp. 📱\n\n` +
+      `📞 Call or WhatsApp us: *${this.customerCarePhone}*\n` +
+      `💬 Or open chat: ${this.whatsappBookingLink}\n\n` +
+      `Here I can answer any other questions—packages, pricing, location, what to bring, etc.! 💖`
+    );
+  }
   private readonly businessHours = 'Monday-Saturday: 9:00 AM - 6:00 PM';
   private readonly businessDescription = 'We specialize in professional maternity photography services, offering elegant and memorable photoshoot experiences. Our studio provides beautiful indoor sessions with professional makeup, styling, and a variety of stunning backdrops. We offer multiple packages ranging from intimate sessions to full VIP experiences, all designed to celebrate your pregnancy journey. Our goal is to make your maternity experience as elegant and memorable as possible!';
 
@@ -217,6 +231,7 @@ export class AiService {
     private domainExpertise: DomainExpertiseService,
     private advancedIntent: AdvancedIntentService,
     private personalization: PersonalizationService,
+    private responseHumanizer: ResponseHumanizerService,
     private feedbackLoop: FeedbackLoopService,
     private predictiveAnalytics: PredictiveAnalyticsService,
     private responseQuality: ResponseQualityService,
@@ -1640,10 +1655,21 @@ ${conversationText.substring(0, 2000)}...`;
     try {
       const questionLower = question.toLowerCase();
 
-      // Handle family/partner questions with specific, warm response
+      // Handle "bring my/own photographer/videographer" separately (different from family/partner)
+      const isOwnPhotographerQuestion = /\b(bring|have|brings|bringing)\b.*\b(my|own|personal|a)\b.*\b(photographer|videographer|photography|videography)\b/i.test(question) ||
+        /\b(photographer|videographer)\b.*\b(bring|have|join|come)\b/i.test(question);
+      if (isOwnPhotographerQuestion) {
+        prediction = "Our packages include a professional photographer for your shoot. If you'd like to have your own photographer or videographer present as well, please let us know in advance and we'll check with the studio — we want to make sure everything runs smoothly for you! 💖";
+        confidence = 1.0;
+        this.logger.debug(`[AiService] Own photographer/videographer question detected. Using direct response.`);
+        return { text: prediction, mediaUrls };
+      }
+
+      // Handle family/partner questions with specific, warm response (not own photographer)
       const familyPartnerKeywords = ['family', 'partner', 'husband', 'wife', 'spouse', 'children', 'kids', 'come with', 'bring', 'accompany', 'join'];
       const isFamilyQuestion = familyPartnerKeywords.some(kw => questionLower.includes(kw)) &&
-        (questionLower.includes('can') || questionLower.includes('may') || questionLower.includes('allowed') || questionLower.includes('welcome'));
+        (questionLower.includes('can') || questionLower.includes('may') || questionLower.includes('allowed') || questionLower.includes('welcome')) &&
+        !/\bphotographer\b|\bvideographer\b/i.test(question);
       if (isFamilyQuestion) {
         prediction = "Yes, absolutely! Partners and family members are always welcome to join your photoshoot. Many of our packages include couple and family shots - it's a beautiful way to celebrate this journey together! 💖";
         confidence = 1.0;
@@ -2694,6 +2720,51 @@ DO NOT repeat your previous question. Instead:
             } else if (typeof result.response === 'object' && result.response !== null && 'text' in result.response) {
               result.response.text = personalizedResponse;
             }
+
+            // Response Humanizer (expression layer: tone, emoji, variation)
+            try {
+              const style = personalizationContext?.communicationStyle ?? 'friendly';
+              const userState: HumanizerContext['userState'] =
+                result.draft?.step === 'confirm' || (result.draft && intentAnalysis?.primaryIntent === 'booking')
+                  ? 'booking'
+                  : personalizationContext?.isReturning
+                    ? 'returning'
+                    : history.length === 0
+                      ? 'new'
+                      : 'general';
+              const humanizerContext: HumanizerContext = {
+                intent: {
+                  primaryIntent: intentAnalysis?.primaryIntent,
+                  emotionalTone: intentAnalysis?.emotionalTone,
+                  requiresHumanHandoff: intentAnalysis?.requiresHumanHandoff,
+                },
+                emotionalTone: intentAnalysis?.emotionalTone,
+                urgency: intentAnalysis?.urgencyLevel,
+                platform: (enrichedContext?.platform as 'whatsapp' | 'instagram' | 'messenger') ?? 'whatsapp',
+                brandTone: 'WARM_PROFESSIONAL',
+                isFirstMessage: history.length === 0,
+                isEscalation: intentAnalysis?.requiresHumanHandoff === true,
+                isBookingFlow: !!result.draft || intentAnalysis?.primaryIntent === 'booking',
+                lastAiResponses: history
+                  .filter((m) => m.role === 'assistant')
+                  .slice(-3)
+                  .map((m) => m.content),
+                customerProfile: {
+                  formalityLevel: style === 'brief' ? 'high' : style === 'friendly' ? 'low' : 'medium',
+                  emojiTolerance: style === 'brief' ? 'low' : 'medium',
+                  verbosity: style,
+                },
+                userState,
+              };
+              const humanized = this.responseHumanizer.humanizeResponse(personalizedResponse, humanizerContext);
+              if (typeof result.response === 'string') {
+                result.response = humanized;
+              } else if (typeof result.response === 'object' && result.response !== null && 'text' in result.response) {
+                result.response.text = humanized;
+              }
+            } catch (err) {
+              this.logger.warn('[HUMANIZER] Response humanization failed', err);
+            }
           }
         } catch (err) {
           this.logger.warn('[LEARNING] Personalization failed', err);
@@ -2796,11 +2867,45 @@ DO NOT repeat your previous question. Instead:
             history,
           });
 
-          // If quality check failed but we have an improved response, use it
+          // If quality check failed but we have an improved response, use it — then re-humanize so we don't send template phrasing
           if (!qualityCheck.passed && qualityCheck.improvedResponse) {
             this.logger.log(`[QUALITY] Response improved: ${qualityCheck.score.overall.toFixed(1)}/10`);
-            result.response = qualityCheck.improvedResponse;
-            finalResponseText = qualityCheck.improvedResponse;
+            const style = personalizationContext?.communicationStyle ?? 'friendly';
+            const userState: HumanizerContext['userState'] =
+              result.draft?.step === 'confirm' || (result.draft && intentAnalysis?.primaryIntent === 'booking')
+                ? 'booking'
+                : personalizationContext?.isReturning
+                  ? 'returning'
+                  : history.length === 0
+                    ? 'new'
+                    : 'general';
+            const humanizerContext: HumanizerContext = {
+              intent: {
+                primaryIntent: intentAnalysis?.primaryIntent,
+                emotionalTone: intentAnalysis?.emotionalTone,
+                requiresHumanHandoff: intentAnalysis?.requiresHumanHandoff,
+              },
+              emotionalTone: intentAnalysis?.emotionalTone,
+              urgency: intentAnalysis?.urgencyLevel,
+              platform: (enrichedContext?.platform as 'whatsapp' | 'instagram' | 'messenger') ?? 'whatsapp',
+              brandTone: 'WARM_PROFESSIONAL',
+              isFirstMessage: history.length === 0,
+              isEscalation: intentAnalysis?.requiresHumanHandoff === true,
+              isBookingFlow: !!result.draft || intentAnalysis?.primaryIntent === 'booking',
+              lastAiResponses: history
+                .filter((m) => m.role === 'assistant')
+                .slice(-3)
+                .map((m) => m.content),
+              customerProfile: {
+                formalityLevel: style === 'brief' ? 'high' : style === 'friendly' ? 'low' : 'medium',
+                emojiTolerance: style === 'brief' ? 'low' : 'medium',
+                verbosity: style,
+              },
+              userState,
+            };
+            const reHumanized = this.responseHumanizer.humanizeResponse(qualityCheck.improvedResponse, humanizerContext);
+            result.response = reHumanized;
+            finalResponseText = reHumanized;
           } else if (!qualityCheck.passed) {
             this.logger.warn(`[QUALITY] Response quality low: ${qualityCheck.score.overall.toFixed(1)}/10 - ${qualityCheck.reason}`);
             // If quality is very low, consider escalating
@@ -3034,7 +3139,8 @@ DO NOT repeat your previous question. Instead:
         updatedHistory: [...history.slice(-this.historyLimit),
         { role: 'user', content: message },
         { role: 'assistant', content: recoveryMessage }
-        ]
+        ],
+        metrics: { isFallback: true, circuitBreakerTrip: true, circuitBreakerReason: breakerCheck.reason }
       };
     }
 
@@ -3072,17 +3178,34 @@ DO NOT repeat your previous question. Instead:
     let draft = earlyDraft || await this.prisma.bookingDraft.findUnique({ where: { customerId } });
     let hasDraft = !!draft;
 
+    // ------------------------------------
+    // BOOKINGS & PAYMENTS: WhatsApp only (Instagram/Messenger get redirect)
+    // ------------------------------------
+    const currentPlatform = (enrichedContext?.platform as string) || 'whatsapp';
+    const isBookingIntent = intentAnalysis?.primaryIntent === 'booking' || intentAnalysis?.primaryIntent === 'reschedule' || intentAnalysis?.primaryIntent === 'availability';
+    const isOnlyQuestion = intentAnalysis?.primaryIntent === 'faq' || intentAnalysis?.primaryIntent === 'package_inquiry' || intentAnalysis?.primaryIntent === 'price_inquiry';
+    if (currentPlatform !== 'whatsapp' && !isOnlyQuestion && (hasDraft || wantsToStartBooking || isBookingIntent)) {
+      this.logger.log(`[PLATFORM] Customer on ${currentPlatform} requested booking/appointment - directing to WhatsApp`);
+      const redirectMsg = this.getWhatsAppOnlyRedirectMessage();
+      return {
+        response: redirectMsg,
+        draft: null,
+        updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: redirectMsg }],
+        metrics: { strategyUsed: 'redirect_to_whatsapp', platform: currentPlatform }
+      };
+    }
 
     // ------------------------------------
-
 
     const lower = (message || '').toLowerCase();
 
     // --- GREETING DETECTION ---
     const greetingKeywords = ['hi', 'hello', 'hey', 'greetings', 'hallo', 'habari', 'good morning', 'good afternoon', 'good evening'];
-    // Check if message is essentially just a greeting (allow some punctuation/emojis)
+    // Check if message is essentially just a greeting (allow variants like Helloo, hii, heyy)
     const cleanMsg = lower.replace(/[^\w\s]/g, '').trim();
-    const isGreeting = greetingKeywords.some(kw => cleanMsg === kw || cleanMsg.startsWith(kw + ' '));
+    const isExactGreeting = greetingKeywords.some(kw => cleanMsg === kw || cleanMsg.startsWith(kw + ' '));
+    const isGreetingVariant = /^(hello+|hi+|hey+|hii+|heyy+)$/i.test(cleanMsg) || /^(good\s+(morning|afternoon|evening))$/i.test(cleanMsg);
+    const isGreeting = isExactGreeting || (cleanMsg.split(/\s+/).length <= 2 && isGreetingVariant);
 
     // Only send the special greeting if it's a start of conversation or explicit greeting
     // We allow this even if a draft exists, so a user saying "Hello" gets the proper welcome.
@@ -3112,6 +3235,17 @@ DO NOT repeat your previous question. Instead:
     const slotIntentDetected = slotIntent || slotIntentRegex.test(message) || anotherSlotPattern.test(message);
 
     if (slotIntentDetected) {
+      // Slots/availability are part of booking — only on WhatsApp; Instagram/Messenger get number + link
+      if (currentPlatform !== 'whatsapp') {
+        this.logger.log(`[PLATFORM] Customer on ${currentPlatform} asked about slots/availability - directing to WhatsApp`);
+        const redirectMsg = this.getWhatsAppOnlyRedirectMessage();
+        return {
+          response: redirectMsg,
+          draft: null,
+          updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: redirectMsg }],
+          metrics: { strategyUsed: 'redirect_to_whatsapp', platform: currentPlatform }
+        };
+      }
       // For "another slot" queries, use draft date/service if available
       const isAnotherSlotQuery = anotherSlotPattern.test(message);
 
@@ -3553,7 +3687,9 @@ DO NOT repeat your previous question. Instead:
       .join(' ');
     const isRespondingToBookingSelection =
       /Which one would you like to reschedule/i.test(recentRescheduleMsgs) ||
-      /upcoming bookings/i.test(recentRescheduleMsgs);
+      /upcoming bookings/i.test(recentRescheduleMsgs) ||
+      /reply with the date or service of the booking you want to reschedule/i.test(recentRescheduleMsgs) ||
+      /multiple active bookings/i.test(recentRescheduleMsgs);
 
     if (isRescheduleIntent || (draft && draft.step === 'reschedule') || isRespondingToBookingSelection) {
       this.logger.log(`[RESCHEDULE] Detected intent or active flow for customer ${customerId}, draft step: ${draft?.step}, bookingId: ${draft?.bookingId}`);
@@ -4005,6 +4141,95 @@ DO NOT repeat your previous question. Instead:
 
       // --- Handle Rescheduling Flow (draft.step === 'reschedule') ---
 
+      // 0. If we're awaiting WHICH booking to reschedule (draft has no bookingId yet), treat message as selection
+      if (!draft.bookingId) {
+        const allBookings = await this.prisma.booking.findMany({
+          where: { customerId, status: 'confirmed', dateTime: { gte: new Date() } },
+          orderBy: { dateTime: 'asc' },
+        });
+        if (allBookings.length === 0) {
+          const msg = "I can't find a current booking to reschedule. Would you like to make a new one? 💖";
+          return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+        }
+        let targetBooking = allBookings[0];
+        let matchedSelection = allBookings.length === 1;
+        const monthMap: Record<string, number> = {
+          jan: 0, january: 0, feb: 1, february: 1, mar: 2, march: 2,
+          apr: 3, april: 3, may: 4, jun: 5, june: 5, jul: 6, july: 6,
+          aug: 7, august: 7, sep: 8, september: 8, oct: 9, october: 9,
+          nov: 10, november: 10, dec: 11, december: 11,
+        };
+        const monthNames = '(dec|december|jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|september|oct|october|nov|november)';
+        const dateMatchDayFirst = message.match(new RegExp(`(\\d{1,2})(st|nd|rd|th)?\\s*${monthNames}`, 'i'));
+        const dateMatchMonthFirst = message.match(new RegExp(`(?:the one on |on )?${monthNames}\\s*(\\d{1,2})(?:st|nd|rd|th)?`, 'i'));
+        let day: number | undefined;
+        let monthStr: string | undefined;
+        if (dateMatchDayFirst) {
+          day = parseInt(dateMatchDayFirst[1]);
+          monthStr = dateMatchDayFirst[3].toLowerCase();
+        } else if (dateMatchMonthFirst) {
+          day = parseInt(dateMatchMonthFirst[2]);
+          monthStr = dateMatchMonthFirst[1].toLowerCase();
+        }
+        const dateMatch = dateMatchDayFirst || dateMatchMonthFirst;
+        if (dateMatch && allBookings.length > 1 && day !== undefined && monthStr) {
+          const month = monthMap[monthStr];
+          const matched = allBookings.find(b => {
+            const dt = DateTime.fromJSDate(b.dateTime).setZone(this.studioTz);
+            return dt.month === month + 1 && dt.day === day;
+          });
+          if (matched) {
+            targetBooking = matched;
+            matchedSelection = true;
+          }
+        } else if (allBookings.length > 1) {
+          const dayOnlyMatch = message.match(/(?:the one on |on )?(\d{1,2})(?:st|nd|rd|th)?/i);
+          if (dayOnlyMatch) {
+            const day = parseInt(dayOnlyMatch[1]);
+            const matchedBookings = allBookings.filter(b => {
+              const dt = DateTime.fromJSDate(b.dateTime).setZone(this.studioTz);
+              return dt.day === day;
+            });
+            if (matchedBookings.length === 1) {
+              targetBooking = matchedBookings[0];
+              matchedSelection = true;
+            } else if (matchedBookings.length > 1) {
+              const bookingsList = matchedBookings.map((b, idx) => {
+                const dt = DateTime.fromJSDate(b.dateTime).setZone(this.studioTz);
+                return `${idx + 1}️⃣ ${b.service} on ${dt.toFormat('MMM dd, yyyy')} at ${dt.toFormat('h:mm a')}`;
+              }).join('\n');
+              const msg = `I found ${matchedBookings.length} bookings on the ${day}${this.getOrdinalSuffix(day)}:\n\n${bookingsList}\n\nWhich one would you like to reschedule? Please specify the time or service name. 🗓️`;
+              return { response: msg, draft, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+            }
+          }
+          const serviceMatch = allBookings.find(b => b.service && message.toLowerCase().includes(b.service.toLowerCase()));
+          if (serviceMatch) {
+            targetBooking = serviceMatch;
+            matchedSelection = true;
+          }
+        }
+        if (allBookings.length > 1 && !matchedSelection) {
+          const bookingsList = allBookings.map((b, idx) => {
+            const dt = DateTime.fromJSDate(b.dateTime).setZone(this.studioTz);
+            return `${idx + 1}️⃣ ${b.service} on ${dt.toFormat('MMM dd, yyyy')} at ${dt.toFormat('h:mm a')}`;
+          }).join('\n');
+          const msg = `You have ${allBookings.length} upcoming bookings:\n\n${bookingsList}\n\nWhich one would you like to reschedule? Just tell me the date (e.g., "the one on 5th February") 🗓️`;
+          return { response: msg, draft, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+        }
+        const bookingDt = DateTime.fromJSDate(targetBooking.dateTime).setZone(this.studioTz);
+        draft = await this.prisma.bookingDraft.update({
+          where: { customerId },
+          data: {
+            step: 'reschedule',
+            bookingId: targetBooking.id,
+            service: targetBooking.service,
+            name: targetBooking.recipientName || undefined,
+          },
+        });
+        const msg = `Got it! I'll help you reschedule your ${targetBooking.service} appointment on ${bookingDt.toFormat('MMM dd')}. 🗓️ When would you like to move it to? (e.g. "12th Dec, 3pm")`;
+        return { response: msg, draft, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+      }
+
       // 1. Extract details from current message
       const extraction = await this.extractBookingDetails(message, history);
       draft = await this.mergeIntoDraft(customerId, extraction);
@@ -4034,7 +4259,17 @@ DO NOT repeat your previous question. Instead:
             return { response: msg, draft, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
           }
 
-          // Time is available - update draft to confirmation state and ask for explicit confirmation
+          // Time is available - update the booking immediately (user gave full date+time in one message = implicit confirmation)
+          const bookingIdToUpdate = draft.bookingId;
+          if (bookingIdToUpdate) {
+            await this.bookingsService.updateBooking(bookingIdToUpdate, { dateTime: newDateObj });
+            await this.prisma.bookingDraft.delete({ where: { customerId } }).catch(() => {});
+            const prettyDate = DateTime.fromJSDate(newDateObj).setZone(this.studioTz).toFormat('ccc, LLL dd, yyyy \'at\' h:mm a');
+            const msg = `Done! Your appointment has been rescheduled to *${prettyDate}*. See you then! 💖`;
+            return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+          }
+
+          // Fallback: no bookingId (shouldn't happen) - ask for confirmation
           await this.prisma.bookingDraft.update({
             where: { customerId },
             data: {
@@ -4042,15 +4277,26 @@ DO NOT repeat your previous question. Instead:
               dateTimeIso: normalized.isoUtc
             }
           });
-
-          // Present the slot and ask to confirm
           const prettyDate = DateTime.fromJSDate(newDateObj).setZone(this.studioTz).toFormat('ccc, LLL dd, yyyy \'at\' h:mm a');
           const msg = `Great! I found an available slot on *${prettyDate}*. 🎉\n\nTo confirm this reschedule, please reply with "YES" or "CONFIRM". If you'd like a different time, just let me know! 💖`;
           return { response: msg, draft, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
         }
       }
 
-      // If we are here, we are in reschedule mode but don't have a full date/time yet, or extraction failed
+      // If we have a date but no time, acknowledge the date and ask only for time
+      if (draft.date && !draft.time) {
+        const dateObj = this.normalizeDateTime(draft.date, '09:00'); // dummy time just to format
+        let prettyDate = draft.date;
+        if (dateObj) {
+          prettyDate = DateTime.fromISO(dateObj.isoUtc).setZone(this.studioTz).toFormat('EEEE, MMM d');
+        } else if (/^\d{4}-\d{2}-\d{2}$/.test(draft.date)) {
+          prettyDate = DateTime.fromISO(draft.date).setZone(this.studioTz).toFormat('EEEE, MMM d');
+        }
+        const msg = `Got it, ${prettyDate}. What time would work for you? (e.g. 2pm or 3pm) 🗓️`;
+        return { response: msg, draft, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+      }
+
+      // No date yet (or extraction failed)
       const msg = "Please let me know the new date and time you'd like. (e.g., 'Next Friday at 2pm') 🗓️";
       return { response: msg, draft, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
     }
@@ -4143,6 +4389,32 @@ DO NOT repeat your previous question. Instead:
       return { response: nameResponse, draft: null, updatedHistory };
     }
 
+    // "My appointment" / "my booking" / "coming up appointment" — fetch customer's upcoming bookings
+    const isMyAppointmentQuery = /\b(my|upcoming|coming up|next|upcoming)\b.*\b(appointment|booking|session|shoot)\b/i.test(message) ||
+      /\b(tell me about|what is|when is|details of)\b.*\b(my )?(appointment|booking|session|shoot)\b/i.test(message) ||
+      /\b(appointment|booking|session)\b.*\b(coming up|upcoming|next)\b/i.test(message);
+    if (isMyAppointmentQuery && bookingsService) {
+      const allConfirmed = await bookingsService.getActiveBookings(customerId);
+      const now = new Date();
+      const upcoming = (allConfirmed || [])
+        .filter((b: { dateTime: Date }) => new Date(b.dateTime) >= now)
+        .sort((a: { dateTime: Date }, b: { dateTime: Date }) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
+      if (upcoming.length === 0) {
+        const noBookingResponse = "I don't see any upcoming appointments for you. Would you like to book a session? 💖";
+        const updatedHistory = [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: noBookingResponse }];
+        return { response: noBookingResponse, draft: null, updatedHistory };
+      }
+      const lines = upcoming.slice(0, 5).map((b: { service: string; dateTime: Date }, idx: number) => {
+        const dt = DateTime.fromJSDate(b.dateTime).setZone(this.studioTz);
+        return `${idx + 1}. *${b.service}* — ${dt.toFormat('EEE, MMM d, yyyy')} at ${dt.toFormat('h:mm a')}`;
+      });
+      const myBookingResponse = upcoming.length === 1
+        ? `Your next appointment:\n\n*${upcoming[0].service}* on ${DateTime.fromJSDate(upcoming[0].dateTime).setZone(this.studioTz).toFormat('EEEE, MMMM d, yyyy')} at ${DateTime.fromJSDate(upcoming[0].dateTime).setZone(this.studioTz).toFormat('h:mm a')}. See you then! 💖`
+        : `Here are your upcoming appointments:\n\n${lines.join('\n')}\n\nNeed to reschedule or have questions? Just ask! 💖`;
+      const updatedHistory = [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: myBookingResponse }];
+      return { response: myBookingResponse, draft: null, updatedHistory };
+    }
+
     // Business description query detection - "what does your business do"
     const businessDescriptionPatterns = [
       /what.*business.*do/i,
@@ -4161,10 +4433,20 @@ DO NOT repeat your previous question. Instead:
       return { response: businessResponse, draft: null, updatedHistory };
     }
 
-    // Family/partner question detection
+    // "Bring my/own photographer/videographer" — different from family/partner
+    const isOwnPhotographerQuestion = /\b(bring|have|brings|bringing)\b.*\b(my|own|personal|a)\b.*\b(photographer|videographer|photography|videography)\b/i.test(message) ||
+      /\b(photographer|videographer)\b.*\b(bring|have|join|come)\b/i.test(message);
+    if (isOwnPhotographerQuestion) {
+      const photographerResponse = "Our packages include a professional photographer for your shoot. If you'd like to have your own photographer or videographer present as well, please let us know in advance and we'll check with the studio — we want to make sure everything runs smoothly for you! 💖";
+      const updatedHistory = [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: photographerResponse }];
+      return { response: photographerResponse, draft: null, updatedHistory };
+    }
+
+    // Family/partner question detection (not own photographer)
     const familyPartnerKeywords = ['family', 'partner', 'husband', 'wife', 'spouse', 'children', 'kids', 'come with', 'bring', 'accompany', 'join'];
     const isFamilyQuestion = familyPartnerKeywords.some(kw => lower.includes(kw)) &&
-      (lower.includes('can') || lower.includes('may') || lower.includes('allowed') || lower.includes('welcome'));
+      (lower.includes('can') || lower.includes('may') || lower.includes('allowed') || lower.includes('welcome')) &&
+      !/\bphotographer\b|\bvideographer\b/i.test(message);
     if (isFamilyQuestion) {
       const familyResponse = "Yes, absolutely! Partners and family members are always welcome to join your photoshoot. Many of our packages include couple and family shots - it's a beautiful way to celebrate this journey together! 💖";
       const updatedHistory = [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: familyResponse }];
@@ -4305,6 +4587,9 @@ DO NOT repeat your previous question. Instead:
           const responseStr = typeof responseText === 'string' ? responseText : JSON.stringify(responseText);
           await this.checkAndEscalateIfHandoffMentioned(responseStr, customerId, message, history);
 
+          const strategyName = strategy.constructor.name;
+          const strategyUsed = strategyName === 'FaqStrategy' ? 'faq' : strategyName === 'PackageInquiryStrategy' ? 'package_inquiry' : strategyName === 'BookingStrategy' ? 'booking' : 'fallback';
+
           return {
             ...result,
             response: responseText,
@@ -4313,7 +4598,8 @@ DO NOT repeat your previous question. Instead:
                 ...msg,
                 content: typeof msg.content === 'object' && msg.content !== null && 'text' in msg.content ? msg.content.text : msg.content
               }))
-              : undefined
+              : undefined,
+            metrics: { strategyUsed }
           };
         }
       }
@@ -4344,7 +4630,8 @@ DO NOT repeat your previous question. Instead:
               ...history.slice(-this.historyLimit),
               { role: 'user', content: message },
               { role: 'assistant', content: clarifyingQuestion }
-            ]
+            ],
+            metrics: { strategyUsed: 'fallback', isFallback: true }
           };
         }
       }
@@ -4423,23 +4710,24 @@ DO NOT repeat your previous question. Instead:
     if (intent === 'faq' || intent === 'other') {
       const reply = await this.answerFaq(message, history, undefined, customerId, enrichedContext);
       const replyText = typeof reply === 'object' && 'text' in reply ? reply.text : reply;
-      return { response: reply, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: replyText as string }] };
+      return { response: reply, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: replyText as string }], metrics: { strategyUsed: 'faq' } };
     }
 
-    // Booking flow (Delegated to BookingStrategy)
+    // Booking flow (Delegated to BookingStrategy) — only on WhatsApp
+    const platformForBooking = (enrichedContext?.platform as string) || 'whatsapp';
+    if (platformForBooking !== 'whatsapp') {
+      const redirectMsg = this.getWhatsAppOnlyRedirectMessage();
+      return {
+        response: redirectMsg,
+        draft: null,
+        updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: redirectMsg }],
+        metrics: { strategyUsed: 'redirect_to_whatsapp', platform: platformForBooking }
+      };
+    }
     const bookingStrategy = this.strategies.find(s => s instanceof BookingStrategy);
     if (bookingStrategy) {
-      // Re-create context if needed, or use the one defined above if in scope.
-      // Since we are in the same function scope, 'context' defined above is available?
-      // No, 'context' was defined inside a block or I need to check scope.
-      // I defined it with 'const context =' at top level of function? No, I inserted it at line 1489.
-      // If I inserted it with 'const', it's block scoped if inside 'if' or just function scoped?
-      // It was inserted at line 1489 which is inside processConversationLogic but NOT inside an 'if'.
-      // So it should be available here.
-      // But wait, I inserted it REPLACING the package query block.
-      // The package query block was inside processConversationLogic.
-      // So 'context' should be available.
-      return bookingStrategy.generateResponse(message, { ...context, intent: 'booking' });
+      const bookingResult = await bookingStrategy.generateResponse(message, { ...context, intent: 'booking' });
+      if (bookingResult) return { ...bookingResult, metrics: { strategyUsed: 'booking' } };
     }
 
     // --- FINAL FALLBACK: FAQ / GENERAL ---
@@ -4455,7 +4743,8 @@ DO NOT repeat your previous question. Instead:
       resolved: true
     });
 
-    return { response: faqResponse, draft: hasDraft ? draft : null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: faqResponse }] };
+    const faqText = typeof faqResponse === 'object' && faqResponse !== null && 'text' in faqResponse ? faqResponse.text : faqResponse;
+    return { response: faqResponse, draft: hasDraft ? draft : null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: faqText as string }], metrics: { strategyUsed: 'fallback', isFallback: true } };
   }
 
   // Legacy / helper methods

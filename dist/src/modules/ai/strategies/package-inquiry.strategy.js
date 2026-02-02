@@ -26,6 +26,7 @@ class PackageInquiryStrategy {
                     return true;
                 const variations = {
                     'standard package': ['standard one', 'standard', 'basic package', 'basic one'],
+                    'economy package': ['economy one', 'economy'],
                     'executive package': ['executive one', 'executive'],
                     'gold package': ['gold one', 'gold'],
                     'platinum package': ['platinum one', 'platinum'],

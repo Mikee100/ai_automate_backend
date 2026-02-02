@@ -1,9 +1,24 @@
+import { Queue } from 'bull';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MessagesService } from '../messages/messages.service';
 export declare class AnalyticsService {
     private prisma;
     private messagesService;
-    constructor(prisma: PrismaService, messagesService: MessagesService);
+    private aiQueue;
+    constructor(prisma: PrismaService, messagesService: MessagesService, aiQueue: Queue);
+    getAiObservability(period?: '24h' | '7d'): Promise<{
+        period: "24h" | "7d";
+        since: string;
+        totalJobs: number;
+        failedJobs: number;
+        successRate: number;
+        p50LatencyMs: number;
+        p95LatencyMs: number;
+        strategyCounts: Record<string, number>;
+        fallbackCount: number;
+        circuitBreakerCount: number;
+        queueWaitingCount: number;
+    }>;
     whatsappSentimentByTopic(): Promise<{
         positive: number;
         negative: number;

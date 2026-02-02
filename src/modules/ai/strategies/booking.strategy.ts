@@ -6,6 +6,12 @@ export class BookingStrategy implements ResponseStrategy {
     canHandle(intent: string, context: any): boolean {
         const { hasDraft, message } = context;
 
+        // Bookings and payments are WhatsApp-only; never handle on Instagram or Messenger
+        const platform = context.enrichedContext?.platform as string | undefined;
+        if (platform === 'instagram' || platform === 'messenger') {
+            return false;
+        }
+
         // CRITICAL: Check for payment resend FIRST, even if intent is reschedule
         // "resend" alone should always trigger payment resend, not reschedule
         const wantsToRetryPayment = /^(resend|retry|try.*again|send.*again)$/i.test(message.trim()) ||

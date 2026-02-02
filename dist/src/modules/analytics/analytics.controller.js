@@ -8,6 +8,9 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AnalyticsController = void 0;
 const common_1 = require("@nestjs/common");
@@ -75,6 +78,9 @@ let AnalyticsController = class AnalyticsController {
     }
     aiPerformanceMetrics() {
         return this.analyticsService.aiPerformanceMetrics();
+    }
+    aiObservability(period) {
+        return this.analyticsService.getAiObservability(period === '7d' ? '7d' : '24h');
     }
     async getBusinessKPIs() {
         return this.analyticsService.getBusinessKPIs();
@@ -231,6 +237,13 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], AnalyticsController.prototype, "aiPerformanceMetrics", null);
+__decorate([
+    (0, common_1.Get)('ai-observability'),
+    __param(0, (0, common_1.Query)('period')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], AnalyticsController.prototype, "aiObservability", null);
 __decorate([
     (0, common_1.Get)('business-kpis'),
     __metadata("design:type", Function),

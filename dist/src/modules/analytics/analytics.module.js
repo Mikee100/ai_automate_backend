@@ -8,6 +8,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AnalyticsModule = void 0;
 const common_1 = require("@nestjs/common");
+const bull_1 = require("@nestjs/bull");
 const analytics_service_1 = require("./analytics.service");
 const analytics_controller_1 = require("./analytics.controller");
 const prisma_module_1 = require("../../prisma/prisma.module");
@@ -17,7 +18,11 @@ let AnalyticsModule = class AnalyticsModule {
 exports.AnalyticsModule = AnalyticsModule;
 exports.AnalyticsModule = AnalyticsModule = __decorate([
     (0, common_1.Module)({
-        imports: [prisma_module_1.PrismaModule, (0, common_1.forwardRef)(() => messages_module_1.MessagesModule)],
+        imports: [
+            prisma_module_1.PrismaModule,
+            (0, common_1.forwardRef)(() => messages_module_1.MessagesModule),
+            bull_1.BullModule.registerQueue({ name: 'aiQueue' }),
+        ],
         controllers: [analytics_controller_1.AnalyticsController],
         providers: [analytics_service_1.AnalyticsService],
     })

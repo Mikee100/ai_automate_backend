@@ -24,8 +24,9 @@ const messages_service_1 = require("../modules/messages/messages.service");
 const customers_service_1 = require("../modules/customers/customers.service");
 const bookings_service_1 = require("../modules/bookings/bookings.service");
 const websocket_gateway_1 = require("../websockets/websocket.gateway");
+const prisma_service_1 = require("../prisma/prisma.service");
 let AiQueueProcessor = AiQueueProcessor_1 = class AiQueueProcessor {
-    constructor(aiQueue, aiService, messengerSendService, whatsappService, instagramService, messagesService, customersService, bookingsService, websocketGateway) {
+    constructor(aiQueue, aiService, messengerSendService, whatsappService, instagramService, messagesService, customersService, bookingsService, websocketGateway, prisma) {
         this.aiQueue = aiQueue;
         this.aiService = aiService;
         this.messengerSendService = messengerSendService;
@@ -35,6 +36,7 @@ let AiQueueProcessor = AiQueueProcessor_1 = class AiQueueProcessor {
         this.customersService = customersService;
         this.bookingsService = bookingsService;
         this.websocketGateway = websocketGateway;
+        this.prisma = prisma;
         this.logger = new common_1.Logger(AiQueueProcessor_1.name);
         this.logger.log('[AI QUEUE] Constructor called - AiQueueProcessor being created');
     }
@@ -54,6 +56,29 @@ let AiQueueProcessor = AiQueueProcessor_1 = class AiQueueProcessor {
     onResumed() {
         this.logger.log('[AI QUEUE] Queue resumed');
     }
+    async handleSendReminder(job) {
+        const { customerId, bookingId, date, time, recipientName, daysBefore } = job.data || {};
+        if (!customerId) {
+            this.logger.warn('[AI QUEUE] sendReminder job missing customerId');
+            return;
+        }
+        const dayText = daysBefore === '2' ? 'in *2 days*' : daysBefore === '1' ? 'tomorrow' : 'soon';
+        const reminderMessage = `Hi ${recipientName || 'there'}! 💖\n\n` +
+            `Just a sweet reminder that your maternity photoshoot ` +
+            `is coming up ${dayText} — on *${date || 'your booking'} at ${time || 'the scheduled time'}*. ` +
+            `We're excited to capture your beautiful moments! ✨📸`;
+        await this.messagesService.sendOutboundMessage(customerId, reminderMessage, 'whatsapp');
+        const customer = await this.customersService.findOne(customerId);
+        const phone = customer?.whatsappId || customer?.phone;
+        if (phone) {
+            await this.whatsappService.sendMessage(phone, reminderMessage);
+            this.logger.log(`[AI QUEUE] sendReminder sent for customer ${customerId}`);
+        }
+        else {
+            this.logger.warn(`[AI QUEUE] sendReminder: no WhatsApp/phone for customer ${customerId}`);
+        }
+        return { sent: !!phone };
+    }
     async handleAiJob(job) {
         try {
             this.logger.log(`[AI QUEUE] ===== JOB RECEIVED =====`);
@@ -67,11 +92,22 @@ let AiQueueProcessor = AiQueueProcessor_1 = class AiQueueProcessor {
             }
             const { customerId, message, platform } = job.data;
             this.logger.log(`[AI QUEUE] Processing centralized AI job: customerId=${customerId}, platform=${platform}, message=${message}, jobId=${job.id}`);
-            this.logger.log(`[AI QUEUE] Calling aiService.handleConversation for job ${job.id}...`);
+            const jobStartedAt = Date.now();
+            let queueWaitingCount = null;
+            try {
+                const counts = await this.aiQueue.getJobCounts();
+                queueWaitingCount = counts.waiting ?? null;
+            }
+            catch {
+            }
             let aiResponse = "Sorry, I couldn't process your request.";
+            let aiResult = null;
+            let aiSuccess = false;
+            let aiFailureReason;
             try {
                 const history = await this.messagesService.getConversationHistory(customerId, 10);
-                const aiPromise = this.aiService.handleConversation(message, customerId, history, this.bookingsService);
+                const enrichedContext = { platform };
+                const aiPromise = this.aiService.handleConversation(message, customerId, history, this.bookingsService, 0, enrichedContext);
                 aiPromise.catch((err) => {
                     this.logger.debug(`[AI QUEUE] AI promise rejected (may be after timeout): ${err.message}`);
                 });
@@ -80,10 +116,10 @@ let AiQueueProcessor = AiQueueProcessor_1 = class AiQueueProcessor {
                     timeoutId = setTimeout(() => reject(new Error('AI processing timeout forced after 30s')), 30000);
                 });
                 this.logger.log(`[AI QUEUE] Awaiting AI response for job ${job.id}...`);
-                const aiResult = await Promise.race([aiPromise, timeoutPromise]);
+                aiResult = await Promise.race([aiPromise, timeoutPromise]);
                 clearTimeout(timeoutId);
                 this.logger.log(`[AI QUEUE] AI response received for job ${job.id}.`);
-                this.logger.debug(`AI result: ${JSON.stringify(aiResult)}`);
+                aiSuccess = true;
                 if (aiResult?.response) {
                     if (typeof aiResult.response === 'string') {
                         aiResponse = aiResult.response;
@@ -110,6 +146,29 @@ let AiQueueProcessor = AiQueueProcessor_1 = class AiQueueProcessor {
             catch (error) {
                 this.logger.error('AI processing failed, using fallback response', error);
                 this.logger.error('Error details:', error instanceof Error ? error.stack : error);
+                aiSuccess = false;
+                aiFailureReason = error instanceof Error ? (error.message?.includes('timeout') ? 'timeout' : error.message?.slice(0, 200) || 'exception') : 'exception';
+            }
+            const latencyMs = Date.now() - jobStartedAt;
+            try {
+                const m = aiResult?.metrics;
+                await this.prisma.aiJobMetric.create({
+                    data: {
+                        customerId: customerId ?? undefined,
+                        platform: platform ?? undefined,
+                        latencyMs,
+                        success: aiSuccess,
+                        failureReason: aiSuccess ? undefined : aiFailureReason,
+                        strategyUsed: m?.strategyUsed ?? undefined,
+                        isFallback: m?.isFallback ?? false,
+                        circuitBreakerTrip: m?.circuitBreakerTrip ?? false,
+                        circuitBreakerReason: m?.circuitBreakerReason ?? undefined,
+                        queueWaitingCount: queueWaitingCount ?? undefined,
+                    },
+                });
+            }
+            catch (metricErr) {
+                this.logger.warn(`[AI QUEUE] Failed to record AiJobMetric: ${metricErr.message}`);
             }
             try {
                 this.logger.log(`[AI QUEUE] Attempting to send ${platform} response to customer ${customerId}...`);
@@ -210,6 +269,12 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], AiQueueProcessor.prototype, "onResumed", null);
 __decorate([
+    (0, bull_1.Process)('sendReminder'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], AiQueueProcessor.prototype, "handleSendReminder", null);
+__decorate([
     (0, bull_1.Process)('handleAiJob'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -226,6 +291,7 @@ exports.AiQueueProcessor = AiQueueProcessor = AiQueueProcessor_1 = __decorate([
         messages_service_1.MessagesService,
         customers_service_1.CustomersService,
         bookings_service_1.BookingsService,
-        websocket_gateway_1.WebsocketGateway])
+        websocket_gateway_1.WebsocketGateway,
+        prisma_service_1.PrismaService])
 ], AiQueueProcessor);
 //# sourceMappingURL=ai-queue.processor.js.map

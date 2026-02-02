@@ -29,7 +29,8 @@ export class CircuitBreakerService {
         // Detect repetition in assistant responses
         const repetition = this.detectRepetition(recentMessages);
 
-        if (repetition.count >= 3) {
+        // Require 4+ similar messages to avoid tripping on normal flows (intro → offerings → package list)
+        if (repetition.count >= 4) {
             this.logger.warn(
                 `[CIRCUIT_BREAKER] Detected ${repetition.count} repetitions for customer ${customerId}: "${repetition.pattern}"`
             );
@@ -108,6 +109,12 @@ export class CircuitBreakerService {
         const n1 = normalize(msg1);
         const n2 = normalize(msg2);
 
+        // Don't treat as similar if lengths differ a lot (e.g. short intro vs long package list)
+        const lenRatio = Math.min(n1.length, n2.length) / Math.max(n1.length, n2.length);
+        if (lenRatio < 0.4) {
+            return false;
+        }
+
         // Check if messages start with same phrase (first 5-7 words)
         const getFirstWords = (s: string, count: number = 5) =>
             s.split(' ').slice(0, count).join(' ');
@@ -120,18 +127,17 @@ export class CircuitBreakerService {
             return true;
         }
 
-        // Also check if one contains significant portion of the other
+        // Also check if one contains significant portion of the other (stricter: 85% to avoid intro/offerings/list overlap)
         const shorterLength = Math.min(n1.length, n2.length);
         if (shorterLength > 30) {
             const longer = n1.length > n2.length ? n1 : n2;
             const shorter = n1.length <= n2.length ? n1 : n2;
 
-            // If 70% of shorter message is in longer message, they're similar
             const similarity = shorter.split(' ').filter(word =>
                 word.length > 3 && longer.includes(word)
             ).length / shorter.split(' ').length;
 
-            if (similarity > 0.7) {
+            if (similarity > 0.85) {
                 return true;
             }
         }

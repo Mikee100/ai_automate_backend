@@ -19,7 +19,7 @@ export declare class WhatsappService {
         status: string;
     }>;
     processMessage(value: any): Promise<void>;
-    sendMessage(to: string, message: string): Promise<any>;
+    sendMessage(to: string, message: string, customerId?: string): Promise<any>;
     sendImage(to: string, imageUrl: string, caption?: string): Promise<any>;
     sendDocument(to: string, filePath: string, filename: string, caption?: string): Promise<any>;
     getMessages(customerId?: string): Promise<{

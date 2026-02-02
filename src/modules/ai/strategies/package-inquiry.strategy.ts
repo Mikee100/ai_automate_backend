@@ -37,9 +37,10 @@ export class PackageInquiryStrategy implements ResponseStrategy {
                 // Exact match or contains
                 if (lowerMsg.includes(lowerPkg)) return true;
 
-                // Handle common variations
+                // Handle common variations (include economy if present in DB)
                 const variations: { [key: string]: string[] } = {
                     'standard package': ['standard one', 'standard', 'basic package', 'basic one'],
+                    'economy package': ['economy one', 'economy'],
                     'executive package': ['executive one', 'executive'],
                     'gold package': ['gold one', 'gold'],
                     'platinum package': ['platinum one', 'platinum'],

@@ -26,6 +26,9 @@ let CustomersController = class CustomersController {
     findAll() {
         return this.customersService.findAll();
     }
+    findByWhatsappId(whatsappId) {
+        return this.customersService.findByWhatsappId(whatsappId);
+    }
     findOne(id) {
         return this.customersService.findOne(id);
     }
@@ -65,6 +68,13 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], CustomersController.prototype, "findAll", null);
+__decorate([
+    (0, common_1.Get)('whatsapp/:whatsappId'),
+    __param(0, (0, common_1.Param)('whatsappId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], CustomersController.prototype, "findByWhatsappId", null);
 __decorate([
     (0, common_1.Get)(':id'),
     __param(0, (0, common_1.Param)('id')),

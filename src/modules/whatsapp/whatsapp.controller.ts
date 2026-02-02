@@ -31,8 +31,8 @@ export class WhatsappController {
   }
 
   @Post('send')
-  async sendMessage(@Body() data: { to: string; message: string }) {
-    return this.whatsappService.sendMessage(data.to, data.message);
+  async sendMessage(@Body() data: { to: string; message: string; customerId?: string }) {
+    return this.whatsappService.sendMessage(data.to, data.message, data.customerId);
   }
 
   @Get('stats')

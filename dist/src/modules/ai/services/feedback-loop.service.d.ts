@@ -15,7 +15,6 @@ export declare class FeedbackLoopService {
     }): Promise<{
         id: string;
         createdAt: Date;
-        predictionId: number;
         thumbsUp: boolean | null;
         rating: number | null;
         comment: string | null;
@@ -23,6 +22,7 @@ export declare class FeedbackLoopService {
         wasAccurate: boolean | null;
         wasEmpathetic: boolean | null;
         improvementSuggestion: string | null;
+        predictionId: number;
     }>;
     private processFeedbackRealTime;
     private considerAddingSuccessfulResponseToKB;

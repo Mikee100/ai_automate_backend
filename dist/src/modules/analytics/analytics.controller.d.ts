@@ -113,6 +113,19 @@ export declare class AnalyticsController {
         periodDays: number;
         lastUpdated: string;
     }>;
+    aiObservability(period?: '24h' | '7d'): Promise<{
+        period: "24h" | "7d";
+        since: string;
+        totalJobs: number;
+        failedJobs: number;
+        successRate: number;
+        p50LatencyMs: number;
+        p95LatencyMs: number;
+        strategyCounts: Record<string, number>;
+        fallbackCount: number;
+        circuitBreakerCount: number;
+        queueWaitingCount: number;
+    }>;
     getBusinessKPIs(): Promise<{
         revenue: {
             total: number;

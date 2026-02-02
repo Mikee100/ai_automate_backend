@@ -61,6 +61,16 @@ let CustomersService = class CustomersService {
             where: { email },
         });
     }
+    async findByPhoneOrWhatsappId(phoneOrWhatsappId) {
+        return this.prisma.customer.findFirst({
+            where: {
+                OR: [
+                    { phone: phoneOrWhatsappId },
+                    { whatsappId: phoneOrWhatsappId },
+                ],
+            },
+        });
+    }
     async findOne(id) {
         return this.prisma.customer.findUnique({
             where: { id },

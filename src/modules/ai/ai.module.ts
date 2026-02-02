@@ -20,6 +20,7 @@ import { ConversationLearningService } from './services/conversation-learning.se
 import { DomainExpertiseService } from './services/domain-expertise.service';
 import { AdvancedIntentService } from './services/advanced-intent.service';
 import { PersonalizationService } from './services/personalization.service';
+import { ResponseHumanizerService } from './services/response-humanizer.service';
 import { FeedbackLoopService } from './services/feedback-loop.service';
 import { PredictiveAnalyticsService } from './services/predictive-analytics.service';
 import { ResponseQualityService } from './services/response-quality.service';
@@ -57,6 +58,7 @@ import { OutreachScheduler } from './schedulers/outreach.scheduler';
     DomainExpertiseService,
     AdvancedIntentService,
     PersonalizationService,
+    ResponseHumanizerService,
     FeedbackLoopService,
     PredictiveAnalyticsService,
     ResponseQualityService,
@@ -74,6 +76,7 @@ import { OutreachScheduler } from './schedulers/outreach.scheduler';
     DomainExpertiseService,
     AdvancedIntentService,
     PersonalizationService,
+    ResponseHumanizerService,
     FeedbackLoopService,
     PredictiveAnalyticsService,
     ResponseQualityService,

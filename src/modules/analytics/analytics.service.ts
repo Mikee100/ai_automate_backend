@@ -1,5 +1,7 @@
 
 import { Injectable, Inject, forwardRef } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bull';
+import { Queue } from 'bull';
 import { PrismaService } from '../../prisma/prisma.service';
 import { analyzeSentiment } from './sentiment.util';
 import { MessagesService } from '../messages/messages.service';
@@ -9,7 +11,58 @@ export class AnalyticsService {
   constructor(
     private prisma: PrismaService,
     @Inject(forwardRef(() => MessagesService)) private messagesService: MessagesService,
+    @InjectQueue('aiQueue') private aiQueue: Queue,
   ) { }
+
+  /** AI observability: Tier 1 + strategy + fallback + circuit breaker (DB-only) */
+  async getAiObservability(period: '24h' | '7d' = '24h') {
+    const hours = period === '24h' ? 24 : 24 * 7;
+    const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+
+    const metrics = await this.prisma.aiJobMetric.findMany({
+      where: { createdAt: { gte: since } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const totalJobs = metrics.length;
+    const successful = metrics.filter((m) => m.success);
+    const failedJobs = totalJobs - successful.length;
+    const latencies = successful.filter((m) => m.latencyMs != null).map((m) => m.latencyMs!);
+    latencies.sort((a, b) => a - b);
+    const p50LatencyMs = latencies.length ? latencies[Math.floor(latencies.length * 0.5)] : null;
+    const p95LatencyMs = latencies.length ? latencies[Math.floor(latencies.length * 0.95)] : null;
+
+    const strategyCounts: Record<string, number> = { faq: 0, package_inquiry: 0, booking: 0, fallback: 0 };
+    let fallbackCount = 0;
+    let circuitBreakerCount = 0;
+    for (const m of metrics) {
+      if (m.strategyUsed && strategyCounts[m.strategyUsed] !== undefined) strategyCounts[m.strategyUsed]++;
+      if (m.isFallback) fallbackCount++;
+      if (m.circuitBreakerTrip) circuitBreakerCount++;
+    }
+
+    let queueWaitingCount: number | null = null;
+    try {
+      const counts = await this.aiQueue.getJobCounts();
+      queueWaitingCount = counts.waiting ?? null;
+    } catch {
+      // ignore
+    }
+
+    return {
+      period,
+      since: since.toISOString(),
+      totalJobs,
+      failedJobs,
+      successRate: totalJobs ? ((totalJobs - failedJobs) / totalJobs) * 100 : 0,
+      p50LatencyMs,
+      p95LatencyMs,
+      strategyCounts,
+      fallbackCount,
+      circuitBreakerCount,
+      queueWaitingCount,
+    };
+  }
   // WhatsApp Sentiment by Topic/Intent
   async whatsappSentimentByTopic() {
     // Get recent WhatsApp inbound messages

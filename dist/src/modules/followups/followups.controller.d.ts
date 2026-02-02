@@ -11,11 +11,11 @@ export declare class FollowupsController {
                     name: string;
                     createdAt: Date;
                     updatedAt: Date;
-                    phone: string | null;
                     email: string | null;
                     whatsappId: string | null;
                     instagramId: string | null;
                     messengerId: string | null;
+                    phone: string | null;
                     aiEnabled: boolean;
                     isAiPaused: boolean;
                     lastInstagramMessageAt: Date | null;
@@ -43,11 +43,11 @@ export declare class FollowupsController {
             createdAt: Date;
             updatedAt: Date;
             status: string;
+            metadata: import("@prisma/client/runtime/library").JsonValue | null;
             type: string;
             sentAt: Date | null;
             scheduledFor: Date;
             messageContent: string | null;
-            metadata: import("@prisma/client/runtime/library").JsonValue | null;
         })[];
         total: number;
     }>;
@@ -68,11 +68,11 @@ export declare class FollowupsController {
                     name: string;
                     createdAt: Date;
                     updatedAt: Date;
-                    phone: string | null;
                     email: string | null;
                     whatsappId: string | null;
                     instagramId: string | null;
                     messengerId: string | null;
+                    phone: string | null;
                     aiEnabled: boolean;
                     isAiPaused: boolean;
                     lastInstagramMessageAt: Date | null;
@@ -100,11 +100,11 @@ export declare class FollowupsController {
             createdAt: Date;
             updatedAt: Date;
             status: string;
+            metadata: import("@prisma/client/runtime/library").JsonValue | null;
             type: string;
             sentAt: Date | null;
             scheduledFor: Date;
             messageContent: string | null;
-            metadata: import("@prisma/client/runtime/library").JsonValue | null;
         })[];
         total: number;
     }>;
@@ -115,11 +115,11 @@ export declare class FollowupsController {
                 name: string;
                 createdAt: Date;
                 updatedAt: Date;
-                phone: string | null;
                 email: string | null;
                 whatsappId: string | null;
                 instagramId: string | null;
                 messengerId: string | null;
+                phone: string | null;
                 aiEnabled: boolean;
                 isAiPaused: boolean;
                 lastInstagramMessageAt: Date | null;
@@ -147,11 +147,11 @@ export declare class FollowupsController {
         createdAt: Date;
         updatedAt: Date;
         status: string;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
         type: string;
         sentAt: Date | null;
         scheduledFor: Date;
         messageContent: string | null;
-        metadata: import("@prisma/client/runtime/library").JsonValue | null;
     })[]>;
     getFollowup(id: string): Promise<{
         booking: {
@@ -160,11 +160,11 @@ export declare class FollowupsController {
                 name: string;
                 createdAt: Date;
                 updatedAt: Date;
-                phone: string | null;
                 email: string | null;
                 whatsappId: string | null;
                 instagramId: string | null;
                 messengerId: string | null;
+                phone: string | null;
                 aiEnabled: boolean;
                 isAiPaused: boolean;
                 lastInstagramMessageAt: Date | null;
@@ -192,11 +192,11 @@ export declare class FollowupsController {
         createdAt: Date;
         updatedAt: Date;
         status: string;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
         type: string;
         sentAt: Date | null;
         scheduledFor: Date;
         messageContent: string | null;
-        metadata: import("@prisma/client/runtime/library").JsonValue | null;
     }>;
     sendFollowup(id: string): Promise<{
         booking: {
@@ -205,11 +205,11 @@ export declare class FollowupsController {
                 name: string;
                 createdAt: Date;
                 updatedAt: Date;
-                phone: string | null;
                 email: string | null;
                 whatsappId: string | null;
                 instagramId: string | null;
                 messengerId: string | null;
+                phone: string | null;
                 aiEnabled: boolean;
                 isAiPaused: boolean;
                 lastInstagramMessageAt: Date | null;
@@ -237,11 +237,11 @@ export declare class FollowupsController {
         createdAt: Date;
         updatedAt: Date;
         status: string;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
         type: string;
         sentAt: Date | null;
         scheduledFor: Date;
         messageContent: string | null;
-        metadata: import("@prisma/client/runtime/library").JsonValue | null;
     }>;
     recordResponse(id: string, response: RecordFollowupResponseDto): Promise<{
         id: string;
@@ -249,11 +249,11 @@ export declare class FollowupsController {
         createdAt: Date;
         updatedAt: Date;
         status: string;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
         type: string;
         sentAt: Date | null;
         scheduledFor: Date;
         messageContent: string | null;
-        metadata: import("@prisma/client/runtime/library").JsonValue | null;
     }>;
     updateFollowup(id: string, data: UpdateFollowupDto): Promise<{
         id: string;
@@ -261,11 +261,11 @@ export declare class FollowupsController {
         createdAt: Date;
         updatedAt: Date;
         status: string;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
         type: string;
         sentAt: Date | null;
         scheduledFor: Date;
         messageContent: string | null;
-        metadata: import("@prisma/client/runtime/library").JsonValue | null;
     }>;
     cancelFollowup(id: string): Promise<{
         id: string;
@@ -273,10 +273,10 @@ export declare class FollowupsController {
         createdAt: Date;
         updatedAt: Date;
         status: string;
+        metadata: import("@prisma/client/runtime/library").JsonValue | null;
         type: string;
         sentAt: Date | null;
         scheduledFor: Date;
         messageContent: string | null;
-        metadata: import("@prisma/client/runtime/library").JsonValue | null;
     }>;
 }

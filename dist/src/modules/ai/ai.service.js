@@ -53,6 +53,7 @@ const conversation_learning_service_1 = require("./services/conversation-learnin
 const domain_expertise_service_1 = require("./services/domain-expertise.service");
 const advanced_intent_service_1 = require("./services/advanced-intent.service");
 const personalization_service_1 = require("./services/personalization.service");
+const response_humanizer_service_1 = require("./services/response-humanizer.service");
 const feedback_loop_service_1 = require("./services/feedback-loop.service");
 const predictive_analytics_service_1 = require("./services/predictive-analytics.service");
 const response_quality_service_1 = require("./services/response-quality.service");
@@ -113,7 +114,13 @@ let AiService = AiService_1 = class AiService {
         }
         return details;
     }
-    constructor(configService, prisma, circuitBreaker, customerMemory, conversationLearning, domainExpertise, advancedIntent, personalization, feedbackLoop, predictiveAnalytics, responseQuality, bookingsService, messagesService, escalationService, aiQueue, notificationsService, websocketGateway) {
+    getWhatsAppOnlyRedirectMessage() {
+        return (`Bookings and appointments are done on WhatsApp. 📱\n\n` +
+            `📞 Call or WhatsApp us: *${this.customerCarePhone}*\n` +
+            `💬 Or open chat: ${this.whatsappBookingLink}\n\n` +
+            `Here I can answer any other questions—packages, pricing, location, what to bring, etc.! 💖`);
+    }
+    constructor(configService, prisma, circuitBreaker, customerMemory, conversationLearning, domainExpertise, advancedIntent, personalization, responseHumanizer, feedbackLoop, predictiveAnalytics, responseQuality, bookingsService, messagesService, escalationService, aiQueue, notificationsService, websocketGateway) {
         this.configService = configService;
         this.prisma = prisma;
         this.circuitBreaker = circuitBreaker;
@@ -122,6 +129,7 @@ let AiService = AiService_1 = class AiService {
         this.domainExpertise = domainExpertise;
         this.advancedIntent = advancedIntent;
         this.personalization = personalization;
+        this.responseHumanizer = responseHumanizer;
         this.feedbackLoop = feedbackLoop;
         this.predictiveAnalytics = predictiveAnalytics;
         this.responseQuality = responseQuality;
@@ -153,8 +161,9 @@ let AiService = AiService_1 = class AiService {
         this.businessName = 'Fiesta House Attire maternity photoshoot studio';
         this.businessLocation = 'Our studio is located at 4th Avenue Parklands, Diamond Plaza Annex, 2nd Floor. We look forward to welcoming you! 💖';
         this.businessWebsite = 'https://fiestahouseattire.com/';
-        this.customerCarePhone = '0720 111928';
+        this.customerCarePhone = '0721840961';
         this.customerCareEmail = 'info@fiestahouseattire.com';
+        this.whatsappBookingLink = 'https://wa.me/254721840961';
         this.businessHours = 'Monday-Saturday: 9:00 AM - 6:00 PM';
         this.businessDescription = 'We specialize in professional maternity photography services, offering elegant and memorable photoshoot experiences. Our studio provides beautiful indoor sessions with professional makeup, styling, and a variety of stunning backdrops. We offer multiple packages ranging from intimate sessions to full VIP experiences, all designed to celebrate your pregnancy journey. Our goal is to make your maternity experience as elegant and memorable as possible!';
         this.openai = new openai_1.default({ apiKey: this.configService.get('OPENAI_API_KEY') });
@@ -1140,9 +1149,18 @@ ${conversationText.substring(0, 2000)}...`;
         let mediaUrls = [];
         try {
             const questionLower = question.toLowerCase();
+            const isOwnPhotographerQuestion = /\b(bring|have|brings|bringing)\b.*\b(my|own|personal|a)\b.*\b(photographer|videographer|photography|videography)\b/i.test(question) ||
+                /\b(photographer|videographer)\b.*\b(bring|have|join|come)\b/i.test(question);
+            if (isOwnPhotographerQuestion) {
+                prediction = "Our packages include a professional photographer for your shoot. If you'd like to have your own photographer or videographer present as well, please let us know in advance and we'll check with the studio — we want to make sure everything runs smoothly for you! 💖";
+                confidence = 1.0;
+                this.logger.debug(`[AiService] Own photographer/videographer question detected. Using direct response.`);
+                return { text: prediction, mediaUrls };
+            }
             const familyPartnerKeywords = ['family', 'partner', 'husband', 'wife', 'spouse', 'children', 'kids', 'come with', 'bring', 'accompany', 'join'];
             const isFamilyQuestion = familyPartnerKeywords.some(kw => questionLower.includes(kw)) &&
-                (questionLower.includes('can') || questionLower.includes('may') || questionLower.includes('allowed') || questionLower.includes('welcome'));
+                (questionLower.includes('can') || questionLower.includes('may') || questionLower.includes('allowed') || questionLower.includes('welcome')) &&
+                !/\bphotographer\b|\bvideographer\b/i.test(question);
             if (isFamilyQuestion) {
                 prediction = "Yes, absolutely! Partners and family members are always welcome to join your photoshoot. Many of our packages include couple and family shots - it's a beautiful way to celebrate this journey together! 💖";
                 confidence = 1.0;
@@ -1990,6 +2008,50 @@ DO NOT repeat your previous question. Instead:
                         else if (typeof result.response === 'object' && result.response !== null && 'text' in result.response) {
                             result.response.text = personalizedResponse;
                         }
+                        try {
+                            const style = personalizationContext?.communicationStyle ?? 'friendly';
+                            const userState = result.draft?.step === 'confirm' || (result.draft && intentAnalysis?.primaryIntent === 'booking')
+                                ? 'booking'
+                                : personalizationContext?.isReturning
+                                    ? 'returning'
+                                    : history.length === 0
+                                        ? 'new'
+                                        : 'general';
+                            const humanizerContext = {
+                                intent: {
+                                    primaryIntent: intentAnalysis?.primaryIntent,
+                                    emotionalTone: intentAnalysis?.emotionalTone,
+                                    requiresHumanHandoff: intentAnalysis?.requiresHumanHandoff,
+                                },
+                                emotionalTone: intentAnalysis?.emotionalTone,
+                                urgency: intentAnalysis?.urgencyLevel,
+                                platform: enrichedContext?.platform ?? 'whatsapp',
+                                brandTone: 'WARM_PROFESSIONAL',
+                                isFirstMessage: history.length === 0,
+                                isEscalation: intentAnalysis?.requiresHumanHandoff === true,
+                                isBookingFlow: !!result.draft || intentAnalysis?.primaryIntent === 'booking',
+                                lastAiResponses: history
+                                    .filter((m) => m.role === 'assistant')
+                                    .slice(-3)
+                                    .map((m) => m.content),
+                                customerProfile: {
+                                    formalityLevel: style === 'brief' ? 'high' : style === 'friendly' ? 'low' : 'medium',
+                                    emojiTolerance: style === 'brief' ? 'low' : 'medium',
+                                    verbosity: style,
+                                },
+                                userState,
+                            };
+                            const humanized = this.responseHumanizer.humanizeResponse(personalizedResponse, humanizerContext);
+                            if (typeof result.response === 'string') {
+                                result.response = humanized;
+                            }
+                            else if (typeof result.response === 'object' && result.response !== null && 'text' in result.response) {
+                                result.response.text = humanized;
+                            }
+                        }
+                        catch (err) {
+                            this.logger.warn('[HUMANIZER] Response humanization failed', err);
+                        }
                     }
                 }
                 catch (err) {
@@ -2076,8 +2138,41 @@ DO NOT repeat your previous question. Instead:
                     });
                     if (!qualityCheck.passed && qualityCheck.improvedResponse) {
                         this.logger.log(`[QUALITY] Response improved: ${qualityCheck.score.overall.toFixed(1)}/10`);
-                        result.response = qualityCheck.improvedResponse;
-                        finalResponseText = qualityCheck.improvedResponse;
+                        const style = personalizationContext?.communicationStyle ?? 'friendly';
+                        const userState = result.draft?.step === 'confirm' || (result.draft && intentAnalysis?.primaryIntent === 'booking')
+                            ? 'booking'
+                            : personalizationContext?.isReturning
+                                ? 'returning'
+                                : history.length === 0
+                                    ? 'new'
+                                    : 'general';
+                        const humanizerContext = {
+                            intent: {
+                                primaryIntent: intentAnalysis?.primaryIntent,
+                                emotionalTone: intentAnalysis?.emotionalTone,
+                                requiresHumanHandoff: intentAnalysis?.requiresHumanHandoff,
+                            },
+                            emotionalTone: intentAnalysis?.emotionalTone,
+                            urgency: intentAnalysis?.urgencyLevel,
+                            platform: enrichedContext?.platform ?? 'whatsapp',
+                            brandTone: 'WARM_PROFESSIONAL',
+                            isFirstMessage: history.length === 0,
+                            isEscalation: intentAnalysis?.requiresHumanHandoff === true,
+                            isBookingFlow: !!result.draft || intentAnalysis?.primaryIntent === 'booking',
+                            lastAiResponses: history
+                                .filter((m) => m.role === 'assistant')
+                                .slice(-3)
+                                .map((m) => m.content),
+                            customerProfile: {
+                                formalityLevel: style === 'brief' ? 'high' : style === 'friendly' ? 'low' : 'medium',
+                                emojiTolerance: style === 'brief' ? 'low' : 'medium',
+                                verbosity: style,
+                            },
+                            userState,
+                        };
+                        const reHumanized = this.responseHumanizer.humanizeResponse(qualityCheck.improvedResponse, humanizerContext);
+                        result.response = reHumanized;
+                        finalResponseText = reHumanized;
                     }
                     else if (!qualityCheck.passed) {
                         this.logger.warn(`[QUALITY] Response quality low: ${qualityCheck.score.overall.toFixed(1)}/10 - ${qualityCheck.reason}`);
@@ -2232,7 +2327,8 @@ DO NOT repeat your previous question. Instead:
                 updatedHistory: [...history.slice(-this.historyLimit),
                     { role: 'user', content: message },
                     { role: 'assistant', content: recoveryMessage }
-                ]
+                ],
+                metrics: { isFallback: true, circuitBreakerTrip: true, circuitBreakerReason: breakerCheck.reason }
             };
         }
         message = this.sanitizeInput(message);
@@ -2252,10 +2348,25 @@ DO NOT repeat your previous question. Instead:
         }
         let draft = earlyDraft || await this.prisma.bookingDraft.findUnique({ where: { customerId } });
         let hasDraft = !!draft;
+        const currentPlatform = enrichedContext?.platform || 'whatsapp';
+        const isBookingIntent = intentAnalysis?.primaryIntent === 'booking' || intentAnalysis?.primaryIntent === 'reschedule' || intentAnalysis?.primaryIntent === 'availability';
+        const isOnlyQuestion = intentAnalysis?.primaryIntent === 'faq' || intentAnalysis?.primaryIntent === 'package_inquiry' || intentAnalysis?.primaryIntent === 'price_inquiry';
+        if (currentPlatform !== 'whatsapp' && !isOnlyQuestion && (hasDraft || wantsToStartBooking || isBookingIntent)) {
+            this.logger.log(`[PLATFORM] Customer on ${currentPlatform} requested booking/appointment - directing to WhatsApp`);
+            const redirectMsg = this.getWhatsAppOnlyRedirectMessage();
+            return {
+                response: redirectMsg,
+                draft: null,
+                updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: redirectMsg }],
+                metrics: { strategyUsed: 'redirect_to_whatsapp', platform: currentPlatform }
+            };
+        }
         const lower = (message || '').toLowerCase();
         const greetingKeywords = ['hi', 'hello', 'hey', 'greetings', 'hallo', 'habari', 'good morning', 'good afternoon', 'good evening'];
         const cleanMsg = lower.replace(/[^\w\s]/g, '').trim();
-        const isGreeting = greetingKeywords.some(kw => cleanMsg === kw || cleanMsg.startsWith(kw + ' '));
+        const isExactGreeting = greetingKeywords.some(kw => cleanMsg === kw || cleanMsg.startsWith(kw + ' '));
+        const isGreetingVariant = /^(hello+|hi+|hey+|hii+|heyy+)$/i.test(cleanMsg) || /^(good\s+(morning|afternoon|evening))$/i.test(cleanMsg);
+        const isGreeting = isExactGreeting || (cleanMsg.split(/\s+/).length <= 2 && isGreetingVariant);
         if (isGreeting) {
             const greetingResponse = `Thank you for contacting Fiesta House Maternity, Kenya’s leading luxury photo studio specializing in maternity photography. We provide an all-inclusive experience in a world-class luxury studio, featuring world-class sets, professional makeup, and a curated selection of luxury gowns. We’re here to ensure your maternity shoot is an elegant, memorable, and stress-free experience.`;
             return {
@@ -2277,6 +2388,16 @@ DO NOT repeat your previous question. Instead:
         const slotIntentRegex = /(available|free|open)\s+(hours|times|slots)(\s+(on|for|tomorrow|today|\d{4}-\d{2}-\d{2}))?/i;
         const slotIntentDetected = slotIntent || slotIntentRegex.test(message) || anotherSlotPattern.test(message);
         if (slotIntentDetected) {
+            if (currentPlatform !== 'whatsapp') {
+                this.logger.log(`[PLATFORM] Customer on ${currentPlatform} asked about slots/availability - directing to WhatsApp`);
+                const redirectMsg = this.getWhatsAppOnlyRedirectMessage();
+                return {
+                    response: redirectMsg,
+                    draft: null,
+                    updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: redirectMsg }],
+                    metrics: { strategyUsed: 'redirect_to_whatsapp', platform: currentPlatform }
+                };
+            }
             const isAnotherSlotQuery = anotherSlotPattern.test(message);
             let dateStr;
             if (isAnotherSlotQuery && draft?.date) {
@@ -2636,7 +2757,9 @@ DO NOT repeat your previous question. Instead:
             .map(msg => msg.content)
             .join(' ');
         const isRespondingToBookingSelection = /Which one would you like to reschedule/i.test(recentRescheduleMsgs) ||
-            /upcoming bookings/i.test(recentRescheduleMsgs);
+            /upcoming bookings/i.test(recentRescheduleMsgs) ||
+            /reply with the date or service of the booking you want to reschedule/i.test(recentRescheduleMsgs) ||
+            /multiple active bookings/i.test(recentRescheduleMsgs);
         if (isRescheduleIntent || (draft && draft.step === 'reschedule') || isRespondingToBookingSelection) {
             this.logger.log(`[RESCHEDULE] Detected intent or active flow for customer ${customerId}, draft step: ${draft?.step}, bookingId: ${draft?.bookingId}`);
             let currentDraft = await this.prisma.bookingDraft.findUnique({ where: { customerId } });
@@ -2976,6 +3099,96 @@ DO NOT repeat your previous question. Instead:
                 const responseText = typeof faqResponse === 'object' && 'text' in faqResponse ? faqResponse.text : faqResponse;
                 return { response: responseText, draft, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: responseText }] };
             }
+            if (!draft.bookingId) {
+                const allBookings = await this.prisma.booking.findMany({
+                    where: { customerId, status: 'confirmed', dateTime: { gte: new Date() } },
+                    orderBy: { dateTime: 'asc' },
+                });
+                if (allBookings.length === 0) {
+                    const msg = "I can't find a current booking to reschedule. Would you like to make a new one? 💖";
+                    return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+                }
+                let targetBooking = allBookings[0];
+                let matchedSelection = allBookings.length === 1;
+                const monthMap = {
+                    jan: 0, january: 0, feb: 1, february: 1, mar: 2, march: 2,
+                    apr: 3, april: 3, may: 4, jun: 5, june: 5, jul: 6, july: 6,
+                    aug: 7, august: 7, sep: 8, september: 8, oct: 9, october: 9,
+                    nov: 10, november: 10, dec: 11, december: 11,
+                };
+                const monthNames = '(dec|december|jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|september|oct|october|nov|november)';
+                const dateMatchDayFirst = message.match(new RegExp(`(\\d{1,2})(st|nd|rd|th)?\\s*${monthNames}`, 'i'));
+                const dateMatchMonthFirst = message.match(new RegExp(`(?:the one on |on )?${monthNames}\\s*(\\d{1,2})(?:st|nd|rd|th)?`, 'i'));
+                let day;
+                let monthStr;
+                if (dateMatchDayFirst) {
+                    day = parseInt(dateMatchDayFirst[1]);
+                    monthStr = dateMatchDayFirst[3].toLowerCase();
+                }
+                else if (dateMatchMonthFirst) {
+                    day = parseInt(dateMatchMonthFirst[2]);
+                    monthStr = dateMatchMonthFirst[1].toLowerCase();
+                }
+                const dateMatch = dateMatchDayFirst || dateMatchMonthFirst;
+                if (dateMatch && allBookings.length > 1 && day !== undefined && monthStr) {
+                    const month = monthMap[monthStr];
+                    const matched = allBookings.find(b => {
+                        const dt = luxon_1.DateTime.fromJSDate(b.dateTime).setZone(this.studioTz);
+                        return dt.month === month + 1 && dt.day === day;
+                    });
+                    if (matched) {
+                        targetBooking = matched;
+                        matchedSelection = true;
+                    }
+                }
+                else if (allBookings.length > 1) {
+                    const dayOnlyMatch = message.match(/(?:the one on |on )?(\d{1,2})(?:st|nd|rd|th)?/i);
+                    if (dayOnlyMatch) {
+                        const day = parseInt(dayOnlyMatch[1]);
+                        const matchedBookings = allBookings.filter(b => {
+                            const dt = luxon_1.DateTime.fromJSDate(b.dateTime).setZone(this.studioTz);
+                            return dt.day === day;
+                        });
+                        if (matchedBookings.length === 1) {
+                            targetBooking = matchedBookings[0];
+                            matchedSelection = true;
+                        }
+                        else if (matchedBookings.length > 1) {
+                            const bookingsList = matchedBookings.map((b, idx) => {
+                                const dt = luxon_1.DateTime.fromJSDate(b.dateTime).setZone(this.studioTz);
+                                return `${idx + 1}️⃣ ${b.service} on ${dt.toFormat('MMM dd, yyyy')} at ${dt.toFormat('h:mm a')}`;
+                            }).join('\n');
+                            const msg = `I found ${matchedBookings.length} bookings on the ${day}${this.getOrdinalSuffix(day)}:\n\n${bookingsList}\n\nWhich one would you like to reschedule? Please specify the time or service name. 🗓️`;
+                            return { response: msg, draft, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+                        }
+                    }
+                    const serviceMatch = allBookings.find(b => b.service && message.toLowerCase().includes(b.service.toLowerCase()));
+                    if (serviceMatch) {
+                        targetBooking = serviceMatch;
+                        matchedSelection = true;
+                    }
+                }
+                if (allBookings.length > 1 && !matchedSelection) {
+                    const bookingsList = allBookings.map((b, idx) => {
+                        const dt = luxon_1.DateTime.fromJSDate(b.dateTime).setZone(this.studioTz);
+                        return `${idx + 1}️⃣ ${b.service} on ${dt.toFormat('MMM dd, yyyy')} at ${dt.toFormat('h:mm a')}`;
+                    }).join('\n');
+                    const msg = `You have ${allBookings.length} upcoming bookings:\n\n${bookingsList}\n\nWhich one would you like to reschedule? Just tell me the date (e.g., "the one on 5th February") 🗓️`;
+                    return { response: msg, draft, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+                }
+                const bookingDt = luxon_1.DateTime.fromJSDate(targetBooking.dateTime).setZone(this.studioTz);
+                draft = await this.prisma.bookingDraft.update({
+                    where: { customerId },
+                    data: {
+                        step: 'reschedule',
+                        bookingId: targetBooking.id,
+                        service: targetBooking.service,
+                        name: targetBooking.recipientName || undefined,
+                    },
+                });
+                const msg = `Got it! I'll help you reschedule your ${targetBooking.service} appointment on ${bookingDt.toFormat('MMM dd')}. 🗓️ When would you like to move it to? (e.g. "12th Dec, 3pm")`;
+                return { response: msg, draft, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+            }
             const extraction = await this.extractBookingDetails(message, history);
             draft = await this.mergeIntoDraft(customerId, extraction);
             if (draft.date && draft.time) {
@@ -2997,6 +3210,14 @@ DO NOT repeat your previous question. Instead:
                         const msg = `I checked that time, but it's currently unavailable. 😔\nHere are some nearby times that are open: ${suggestions.join(', ')}.\nDo any of those work for you?`;
                         return { response: msg, draft, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
                     }
+                    const bookingIdToUpdate = draft.bookingId;
+                    if (bookingIdToUpdate) {
+                        await this.bookingsService.updateBooking(bookingIdToUpdate, { dateTime: newDateObj });
+                        await this.prisma.bookingDraft.delete({ where: { customerId } }).catch(() => { });
+                        const prettyDate = luxon_1.DateTime.fromJSDate(newDateObj).setZone(this.studioTz).toFormat('ccc, LLL dd, yyyy \'at\' h:mm a');
+                        const msg = `Done! Your appointment has been rescheduled to *${prettyDate}*. See you then! 💖`;
+                        return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
+                    }
                     await this.prisma.bookingDraft.update({
                         where: { customerId },
                         data: {
@@ -3008,6 +3229,18 @@ DO NOT repeat your previous question. Instead:
                     const msg = `Great! I found an available slot on *${prettyDate}*. 🎉\n\nTo confirm this reschedule, please reply with "YES" or "CONFIRM". If you'd like a different time, just let me know! 💖`;
                     return { response: msg, draft, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
                 }
+            }
+            if (draft.date && !draft.time) {
+                const dateObj = this.normalizeDateTime(draft.date, '09:00');
+                let prettyDate = draft.date;
+                if (dateObj) {
+                    prettyDate = luxon_1.DateTime.fromISO(dateObj.isoUtc).setZone(this.studioTz).toFormat('EEEE, MMM d');
+                }
+                else if (/^\d{4}-\d{2}-\d{2}$/.test(draft.date)) {
+                    prettyDate = luxon_1.DateTime.fromISO(draft.date).setZone(this.studioTz).toFormat('EEEE, MMM d');
+                }
+                const msg = `Got it, ${prettyDate}. What time would work for you? (e.g. 2pm or 3pm) 🗓️`;
+                return { response: msg, draft, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
             }
             const msg = "Please let me know the new date and time you'd like. (e.g., 'Next Friday at 2pm') 🗓️";
             return { response: msg, draft, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
@@ -3076,6 +3309,30 @@ DO NOT repeat your previous question. Instead:
             const updatedHistory = [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: nameResponse }];
             return { response: nameResponse, draft: null, updatedHistory };
         }
+        const isMyAppointmentQuery = /\b(my|upcoming|coming up|next|upcoming)\b.*\b(appointment|booking|session|shoot)\b/i.test(message) ||
+            /\b(tell me about|what is|when is|details of)\b.*\b(my )?(appointment|booking|session|shoot)\b/i.test(message) ||
+            /\b(appointment|booking|session)\b.*\b(coming up|upcoming|next)\b/i.test(message);
+        if (isMyAppointmentQuery && bookingsService) {
+            const allConfirmed = await bookingsService.getActiveBookings(customerId);
+            const now = new Date();
+            const upcoming = (allConfirmed || [])
+                .filter((b) => new Date(b.dateTime) >= now)
+                .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
+            if (upcoming.length === 0) {
+                const noBookingResponse = "I don't see any upcoming appointments for you. Would you like to book a session? 💖";
+                const updatedHistory = [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: noBookingResponse }];
+                return { response: noBookingResponse, draft: null, updatedHistory };
+            }
+            const lines = upcoming.slice(0, 5).map((b, idx) => {
+                const dt = luxon_1.DateTime.fromJSDate(b.dateTime).setZone(this.studioTz);
+                return `${idx + 1}. *${b.service}* — ${dt.toFormat('EEE, MMM d, yyyy')} at ${dt.toFormat('h:mm a')}`;
+            });
+            const myBookingResponse = upcoming.length === 1
+                ? `Your next appointment:\n\n*${upcoming[0].service}* on ${luxon_1.DateTime.fromJSDate(upcoming[0].dateTime).setZone(this.studioTz).toFormat('EEEE, MMMM d, yyyy')} at ${luxon_1.DateTime.fromJSDate(upcoming[0].dateTime).setZone(this.studioTz).toFormat('h:mm a')}. See you then! 💖`
+                : `Here are your upcoming appointments:\n\n${lines.join('\n')}\n\nNeed to reschedule or have questions? Just ask! 💖`;
+            const updatedHistory = [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: myBookingResponse }];
+            return { response: myBookingResponse, draft: null, updatedHistory };
+        }
         const businessDescriptionPatterns = [
             /what.*business.*do/i,
             /what.*you.*do/i,
@@ -3092,9 +3349,17 @@ DO NOT repeat your previous question. Instead:
             const updatedHistory = [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: businessResponse }];
             return { response: businessResponse, draft: null, updatedHistory };
         }
+        const isOwnPhotographerQuestion = /\b(bring|have|brings|bringing)\b.*\b(my|own|personal|a)\b.*\b(photographer|videographer|photography|videography)\b/i.test(message) ||
+            /\b(photographer|videographer)\b.*\b(bring|have|join|come)\b/i.test(message);
+        if (isOwnPhotographerQuestion) {
+            const photographerResponse = "Our packages include a professional photographer for your shoot. If you'd like to have your own photographer or videographer present as well, please let us know in advance and we'll check with the studio — we want to make sure everything runs smoothly for you! 💖";
+            const updatedHistory = [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: photographerResponse }];
+            return { response: photographerResponse, draft: null, updatedHistory };
+        }
         const familyPartnerKeywords = ['family', 'partner', 'husband', 'wife', 'spouse', 'children', 'kids', 'come with', 'bring', 'accompany', 'join'];
         const isFamilyQuestion = familyPartnerKeywords.some(kw => lower.includes(kw)) &&
-            (lower.includes('can') || lower.includes('may') || lower.includes('allowed') || lower.includes('welcome'));
+            (lower.includes('can') || lower.includes('may') || lower.includes('allowed') || lower.includes('welcome')) &&
+            !/\bphotographer\b|\bvideographer\b/i.test(message);
         if (isFamilyQuestion) {
             const familyResponse = "Yes, absolutely! Partners and family members are always welcome to join your photoshoot. Many of our packages include couple and family shots - it's a beautiful way to celebrate this journey together! 💖";
             const updatedHistory = [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: familyResponse }];
@@ -3201,6 +3466,8 @@ DO NOT repeat your previous question. Instead:
                     }
                     const responseStr = typeof responseText === 'string' ? responseText : JSON.stringify(responseText);
                     await this.checkAndEscalateIfHandoffMentioned(responseStr, customerId, message, history);
+                    const strategyName = strategy.constructor.name;
+                    const strategyUsed = strategyName === 'FaqStrategy' ? 'faq' : strategyName === 'PackageInquiryStrategy' ? 'package_inquiry' : strategyName === 'BookingStrategy' ? 'booking' : 'fallback';
                     return {
                         ...result,
                         response: responseText,
@@ -3209,7 +3476,8 @@ DO NOT repeat your previous question. Instead:
                                 ...msg,
                                 content: typeof msg.content === 'object' && msg.content !== null && 'text' in msg.content ? msg.content.text : msg.content
                             }))
-                            : undefined
+                            : undefined,
+                        metrics: { strategyUsed }
                     };
                 }
             }
@@ -3231,7 +3499,8 @@ DO NOT repeat your previous question. Instead:
                             ...history.slice(-this.historyLimit),
                             { role: 'user', content: message },
                             { role: 'assistant', content: clarifyingQuestion }
-                        ]
+                        ],
+                        metrics: { strategyUsed: 'fallback', isFallback: true }
                     };
                 }
             }
@@ -3298,11 +3567,23 @@ DO NOT repeat your previous question. Instead:
         if (intent === 'faq' || intent === 'other') {
             const reply = await this.answerFaq(message, history, undefined, customerId, enrichedContext);
             const replyText = typeof reply === 'object' && 'text' in reply ? reply.text : reply;
-            return { response: reply, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: replyText }] };
+            return { response: reply, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: replyText }], metrics: { strategyUsed: 'faq' } };
+        }
+        const platformForBooking = enrichedContext?.platform || 'whatsapp';
+        if (platformForBooking !== 'whatsapp') {
+            const redirectMsg = this.getWhatsAppOnlyRedirectMessage();
+            return {
+                response: redirectMsg,
+                draft: null,
+                updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: redirectMsg }],
+                metrics: { strategyUsed: 'redirect_to_whatsapp', platform: platformForBooking }
+            };
         }
         const bookingStrategy = this.strategies.find(s => s instanceof booking_strategy_1.BookingStrategy);
         if (bookingStrategy) {
-            return bookingStrategy.generateResponse(message, { ...context, intent: 'booking' });
+            const bookingResult = await bookingStrategy.generateResponse(message, { ...context, intent: 'booking' });
+            if (bookingResult)
+                return { ...bookingResult, metrics: { strategyUsed: 'booking' } };
         }
         this.logger.log(`[INTENT] Defaulting to FAQ/General for message: "${message}"`);
         const faqResponse = await this.answerFaq(message, history, undefined, customerId);
@@ -3312,7 +3593,8 @@ DO NOT repeat your previous question. Instead:
             messagesCount: history.length + 1,
             resolved: true
         });
-        return { response: faqResponse, draft: hasDraft ? draft : null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: faqResponse }] };
+        const faqText = typeof faqResponse === 'object' && faqResponse !== null && 'text' in faqResponse ? faqResponse.text : faqResponse;
+        return { response: faqResponse, draft: hasDraft ? draft : null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: faqText }], metrics: { strategyUsed: 'fallback', isFallback: true } };
     }
     async addKnowledge(question, answer, category = 'general') {
         try {
@@ -3439,14 +3721,14 @@ DO NOT repeat your previous question. Instead:
 exports.AiService = AiService;
 exports.AiService = AiService = AiService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __param(11, (0, common_1.Inject)((0, common_1.forwardRef)(() => bookings_service_1.BookingsService))),
-    __param(11, (0, common_1.Optional)()),
+    __param(12, (0, common_1.Inject)((0, common_1.forwardRef)(() => bookings_service_1.BookingsService))),
     __param(12, (0, common_1.Optional)()),
     __param(13, (0, common_1.Optional)()),
-    __param(14, (0, bull_1.InjectQueue)('aiQueue')),
-    __param(15, (0, common_1.Optional)()),
-    __param(16, (0, common_1.Inject)((0, common_1.forwardRef)(() => websocket_gateway_1.WebsocketGateway))),
+    __param(14, (0, common_1.Optional)()),
+    __param(15, (0, bull_1.InjectQueue)('aiQueue')),
     __param(16, (0, common_1.Optional)()),
+    __param(17, (0, common_1.Inject)((0, common_1.forwardRef)(() => websocket_gateway_1.WebsocketGateway))),
+    __param(17, (0, common_1.Optional)()),
     __metadata("design:paramtypes", [config_1.ConfigService,
         prisma_service_1.PrismaService,
         circuit_breaker_service_1.CircuitBreakerService,
@@ -3455,6 +3737,7 @@ exports.AiService = AiService = AiService_1 = __decorate([
         domain_expertise_service_1.DomainExpertiseService,
         advanced_intent_service_1.AdvancedIntentService,
         personalization_service_1.PersonalizationService,
+        response_humanizer_service_1.ResponseHumanizerService,
         feedback_loop_service_1.FeedbackLoopService,
         predictive_analytics_service_1.PredictiveAnalyticsService,
         response_quality_service_1.ResponseQualityService,

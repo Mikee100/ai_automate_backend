@@ -23,26 +23,26 @@ export declare class EscalationController {
         };
     } & {
         id: string;
-        description: string | null;
-        createdAt: Date;
-        updatedAt: Date;
         customerId: string;
         status: string;
+        createdAt: Date;
+        updatedAt: Date;
         sentimentScore: number | null;
         metadata: import("@prisma/client/runtime/library").JsonValue | null;
         reason: string | null;
+        description: string | null;
         escalationType: string;
     })[]>;
     resolveEscalation(id: string): Promise<{
         id: string;
-        description: string | null;
-        createdAt: Date;
-        updatedAt: Date;
         customerId: string;
         status: string;
+        createdAt: Date;
+        updatedAt: Date;
         sentimentScore: number | null;
         metadata: import("@prisma/client/runtime/library").JsonValue | null;
         reason: string | null;
+        description: string | null;
         escalationType: string;
     }>;
 }

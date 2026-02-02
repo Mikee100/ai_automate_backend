@@ -18,13 +18,15 @@ export class MessagesService {
    */
   static classifyIntentSimple(content: string): string {
     const lower = content.toLowerCase();
-    // Greeting intent
-    if (lower.includes('hello') || lower.includes('hi') || lower.includes('hey') || lower.includes('good morning') || lower.includes('good afternoon') || lower.includes('good evening')) {
+    // Greeting intent (\bhi\b and \bhey\b so "thing"/"they" don't match)
+    if (lower.includes('hello') || /\bhi\b/.test(lower) || /\bhey\b/.test(lower) || lower.includes('good morning') || lower.includes('good afternoon') || lower.includes('good evening')) {
       return 'greeting';
     }
     // Reschedule intent
     if (/(reschedul\w*|change|move|shift|postpone|adjust|modify|update).*(date|time|booking|appointment|slot)/i.test(lower) ||
         /can i reschedul\w*/i.test(lower) ||
+        /(can we|could we|can i|could i)\s+.*reschedule/i.test(lower) ||
+        /(make|do|request)\s+(a\s+)?reschedule/i.test(lower) ||
         /i want to (change|move|shift|postpone|adjust|modify|update) (my|the)? (date|time|booking|appointment|slot)/i.test(lower)) {
       return 'reschedule';
     }
@@ -144,13 +146,15 @@ Respond with only the intent (e.g., booking_details).`;
 
     // Fallback to enhanced keyword-based classification
     const lower = content.toLowerCase();
-    if (lower.includes('hello') || lower.includes('hi') || lower.includes('hey') || lower.includes('good morning') || lower.includes('good afternoon') || lower.includes('good evening')) {
+    if (lower.includes('hello') || /\bhi\b/.test(lower) || /\bhey\b/.test(lower) || lower.includes('good morning') || lower.includes('good afternoon') || lower.includes('good evening')) {
       console.log('Classified as greeting');
       return 'greeting';
     }
     // Reschedule intent
     if (/(reschedul\w*|change|move|shift|postpone|adjust|modify|update).*(date|time|booking|appointment|slot)/i.test(lower) ||
         /can i reschedul\w*/i.test(lower) ||
+        /(can we|could we|can i|could i)\s+.*reschedule/i.test(lower) ||
+        /(make|do|request)\s+(a\s+)?reschedule/i.test(lower) ||
         /i want to (change|move|shift|postpone|adjust|modify|update) (my|the)? (date|time|booking|appointment|slot)/i.test(lower)) {
       console.log('Classified as reschedule');
       return 'reschedule';

@@ -8,11 +8,11 @@ export declare class CustomersController {
         name: string;
         createdAt: Date;
         updatedAt: Date;
-        phone: string | null;
         email: string | null;
         whatsappId: string | null;
         instagramId: string | null;
         messengerId: string | null;
+        phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
         lastInstagramMessageAt: Date | null;
@@ -52,11 +52,11 @@ export declare class CustomersController {
         name: string;
         createdAt: Date;
         updatedAt: Date;
-        phone: string | null;
         email: string | null;
         whatsappId: string | null;
         instagramId: string | null;
         messengerId: string | null;
+        phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
         lastInstagramMessageAt: Date | null;
@@ -65,6 +65,24 @@ export declare class CustomersController {
         tokenResetDate: Date | null;
         totalTokensUsed: number;
     }[]>;
+    findByWhatsappId(whatsappId: string): Promise<{
+        id: string;
+        name: string;
+        createdAt: Date;
+        updatedAt: Date;
+        email: string | null;
+        whatsappId: string | null;
+        instagramId: string | null;
+        messengerId: string | null;
+        phone: string | null;
+        aiEnabled: boolean;
+        isAiPaused: boolean;
+        lastInstagramMessageAt: Date | null;
+        lastMessengerMessageAt: Date | null;
+        dailyTokenUsage: number;
+        tokenResetDate: Date | null;
+        totalTokensUsed: number;
+    }>;
     findOne(id: string): Promise<{
         messages: {
             id: string;
@@ -96,11 +114,11 @@ export declare class CustomersController {
         name: string;
         createdAt: Date;
         updatedAt: Date;
-        phone: string | null;
         email: string | null;
         whatsappId: string | null;
         instagramId: string | null;
         messengerId: string | null;
+        phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
         lastInstagramMessageAt: Date | null;
@@ -114,11 +132,11 @@ export declare class CustomersController {
         name: string;
         createdAt: Date;
         updatedAt: Date;
-        phone: string | null;
         email: string | null;
         whatsappId: string | null;
         instagramId: string | null;
         messengerId: string | null;
+        phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
         lastInstagramMessageAt: Date | null;
@@ -133,11 +151,11 @@ export declare class CustomersController {
         name: string;
         createdAt: Date;
         updatedAt: Date;
-        phone: string | null;
         email: string | null;
         whatsappId: string | null;
         instagramId: string | null;
         messengerId: string | null;
+        phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
         lastInstagramMessageAt: Date | null;
@@ -151,11 +169,11 @@ export declare class CustomersController {
         name: string;
         createdAt: Date;
         updatedAt: Date;
-        phone: string | null;
         email: string | null;
         whatsappId: string | null;
         instagramId: string | null;
         messengerId: string | null;
+        phone: string | null;
         aiEnabled: boolean;
         isAiPaused: boolean;
         lastInstagramMessageAt: Date | null;
@@ -185,8 +203,8 @@ export declare class CustomersController {
         updatedAt: Date;
         status: string;
         platform: string | null;
-        type: string;
         description: string | null;
+        type: string;
         items: string[];
         adminNotes: string | null;
         reviewedBy: string | null;
@@ -205,8 +223,8 @@ export declare class CustomersController {
         updatedAt: Date;
         status: string;
         platform: string | null;
-        type: string;
         description: string | null;
+        type: string;
         items: string[];
         adminNotes: string | null;
         reviewedBy: string | null;
