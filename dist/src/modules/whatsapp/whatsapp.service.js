@@ -419,6 +419,127 @@ let WhatsappService = class WhatsappService {
             activeConversations,
         };
     }
+    async sendInteractiveButtons(to, bodyText, buttons) {
+        console.log('📤 Sending WhatsApp interactive buttons to:', to);
+        if (!to || !bodyText || !buttons || buttons.length === 0) {
+            throw new Error("Recipient ('to'), 'bodyText', and at least one button are required.");
+        }
+        if (buttons.length > 3) {
+            throw new Error("WhatsApp allows a maximum of 3 buttons.");
+        }
+        const normalizedTo = to.trim().replace(/[^0-9+]/g, '');
+        try {
+            if (!this.phoneNumberId) {
+                throw new Error('phoneNumberId is undefined');
+            }
+            const url = this.getApiUrl('messages');
+            const payload = {
+                messaging_product: "whatsapp",
+                to: normalizedTo,
+                type: "interactive",
+                interactive: {
+                    type: "button",
+                    body: {
+                        text: bodyText
+                    },
+                    action: {
+                        buttons: buttons.map(btn => ({
+                            type: "reply",
+                            reply: {
+                                id: btn.id,
+                                title: btn.title.substring(0, 20)
+                            }
+                        }))
+                    }
+                }
+            };
+            const response = await axios_1.default.post(url, payload, {
+                headers: {
+                    Authorization: `Bearer ${this.accessToken}`,
+                    'Content-Type': 'application/json',
+                },
+                timeout: 30000,
+            });
+            console.log('✔️ WhatsApp API response (buttons):', {
+                messageId: response.data?.messages?.[0]?.id,
+                status: 'sent',
+            });
+            const customer = await this.customersService.findByWhatsappId(normalizedTo);
+            if (customer) {
+                const buttonTitles = buttons.map(b => `[${b.title}]`).join(' ');
+                await this.messagesService.create({
+                    content: `${bodyText}\n${buttonTitles}`,
+                    platform: 'whatsapp',
+                    direction: 'outbound',
+                    customerId: customer.id,
+                });
+            }
+            return response.data;
+        }
+        catch (error) {
+            this.handleApiError(error, 'send interactive buttons');
+        }
+    }
+    async sendInteractiveList(to, bodyText, buttonText, sections) {
+        console.log('📤 Sending WhatsApp interactive list to:', to);
+        if (!to || !bodyText || !buttonText || !sections || sections.length === 0) {
+            throw new Error("Recipient ('to'), 'bodyText', 'buttonText', and 'sections' are required.");
+        }
+        const normalizedTo = to.trim().replace(/[^0-9+]/g, '');
+        try {
+            if (!this.phoneNumberId) {
+                throw new Error('phoneNumberId is undefined');
+            }
+            const url = this.getApiUrl('messages');
+            const payload = {
+                messaging_product: "whatsapp",
+                to: normalizedTo,
+                type: "interactive",
+                interactive: {
+                    type: "list",
+                    body: {
+                        text: bodyText
+                    },
+                    action: {
+                        button: buttonText.substring(0, 20),
+                        sections: sections.map(sec => ({
+                            title: sec.title.substring(0, 24),
+                            rows: sec.rows.map(row => ({
+                                id: row.id,
+                                title: row.title.substring(0, 24),
+                                description: row.description ? row.description.substring(0, 72) : undefined
+                            }))
+                        }))
+                    }
+                }
+            };
+            const response = await axios_1.default.post(url, payload, {
+                headers: {
+                    Authorization: `Bearer ${this.accessToken}`,
+                    'Content-Type': 'application/json',
+                },
+                timeout: 30000,
+            });
+            console.log('✔️ WhatsApp API response (list):', {
+                messageId: response.data?.messages?.[0]?.id,
+                status: 'sent',
+            });
+            const customer = await this.customersService.findByWhatsappId(normalizedTo);
+            if (customer) {
+                const listItems = sections.flatMap(s => s.rows.map(r => `* ${r.title}`)).join('\n');
+                await this.messagesService.create({
+                    content: `${bodyText}\n(List options available)\n${listItems}`,
+                    platform: 'whatsapp',
+                    direction: 'outbound',
+                    customerId: customer.id,
+                });
+            }
+            return response.data;
+        }
+        catch (error) {
+            this.handleApiError(error, 'send interactive list');
+        }
+    }
 };
 exports.WhatsappService = WhatsappService;
 exports.WhatsappService = WhatsappService = __decorate([

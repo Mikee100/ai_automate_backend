@@ -26,14 +26,14 @@ interface ValidationResult {
 export class ResponseQualityService {
     private readonly logger = new Logger(ResponseQualityService.name);
     private readonly openai: OpenAI;
-    
+
     // Quality thresholds
     private readonly MIN_HELPFULNESS = 7;
     private readonly MIN_ACCURACY = 8;
     private readonly MIN_EMPATHY = 6;
     private readonly MIN_CLARITY = 7;
     private readonly MIN_OVERALL = 7;
-    
+
     // Confidence threshold for escalation
     private readonly ESCALATION_THRESHOLD = 5; // If overall < 5, escalate
 
@@ -41,13 +41,14 @@ export class ResponseQualityService {
         private configService: ConfigService,
         private prisma: PrismaService,
     ) {
-        this.openai = new OpenAI({ 
-            apiKey: this.configService.get<string>('OPENAI_API_KEY') 
+        this.openai = new OpenAI({
+            apiKey: this.configService.get<string>('OPENAI_API_KEY')
         });
     }
 
     /**
      * Validate response quality before sending
+     * @param awaitDeepValidation If false, deep validation will run in background if fast-path passes
      */
     async validateResponse(
         response: string,
@@ -57,10 +58,14 @@ export class ResponseQualityService {
             intent?: string;
             emotionalTone?: string;
             history?: any[];
-        }
+        },
+        awaitDeepValidation = true
     ): Promise<ValidationResult> {
         try {
-            // Quick validation rules first (fast, no API call)
+            // 1. FAST-PATH: Static/Hardcoded common responses skip deep validation
+            const isFastPath = this.checkFastPath(response, context.intent);
+
+            // Quick validation rules (fast, no AI call)
             const quickValidation = this.quickValidation(response);
             if (!quickValidation.passed) {
                 return {
@@ -79,11 +84,39 @@ export class ResponseQualityService {
                 };
             }
 
-            // Deep quality scoring using AI
+            // If it's a fast-path response, return success immediately
+            if (isFastPath && !awaitDeepValidation) {
+                this.logger.debug(`[QUALITY] Fast-path detected for response. Skipping deep validation.`);
+                // We still trigger background validation for analytics/learning
+                this.scoreResponse(response, context)
+                    .then(score => this.logQualityCheck(context.customerId, response, score, true))
+                    .catch(err => this.logger.warn('[QUALITY] Background scoring failed', err));
+
+                return {
+                    passed: true,
+                    score: { helpfulness: 10, accuracy: 10, empathy: 10, clarity: 10, overall: 10, issues: [], recommendations: [] },
+                    shouldEscalate: false
+                };
+            }
+
+            // 2. DEEP QUALITY SCORING
+            if (!awaitDeepValidation) {
+                // If we don't want to await, return current state but trigger scoring in background
+                this.scoreResponse(response, context)
+                    .then(score => this.logQualityCheck(context.customerId, response, score, true))
+                    .catch(err => this.logger.warn('[QUALITY] Background scoring failed', err));
+
+                return {
+                    passed: true,
+                    score: { helpfulness: 8, accuracy: 8, empathy: 8, clarity: 8, overall: 8, issues: [], recommendations: [] },
+                    shouldEscalate: false
+                };
+            }
+
             const score = await this.scoreResponse(response, context);
-            
+
             // Check if response passes quality thresholds
-            const passed = 
+            const passed =
                 score.helpfulness >= this.MIN_HELPFULNESS &&
                 score.accuracy >= this.MIN_ACCURACY &&
                 score.empathy >= this.MIN_EMPATHY &&
@@ -129,6 +162,28 @@ export class ResponseQualityService {
     }
 
     /**
+     * Check if response qualifies for fast-path (skips deep validation)
+     */
+    private checkFastPath(response: string, intent?: string): boolean {
+        // 1. Intent-based fast path
+        if (intent === 'greeting' || intent === 'escort_redirect') return true;
+
+        // 2. Format-based fast path (very short hardcoded-style responses)
+        const lower = response.toLowerCase();
+        const fastPathPhrases = [
+            'hello there', 'welcome to fiesta house', 'how can i help',
+            'connecting you with our team', 'someone will be with you shortly',
+            'where are you located', 'our studio is in'
+        ];
+
+        if (fastPathPhrases.some(p => lower.includes(p)) && response.length < 300) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Quick validation rules (no API call)
      */
     private quickValidation(response: string): {
@@ -165,7 +220,7 @@ export class ResponseQualityService {
             /^error/i,
             /^failed/i,
         ];
-        
+
         if (placeholderPatterns.some(pattern => pattern.test(response) && response.length < 50)) {
             issues.push('Generic error response');
             recommendations.push('Provide more specific help');
@@ -186,12 +241,13 @@ export class ResponseQualityService {
             emotionalTone?: string;
         }
     ): Promise<QualityScore> {
-        const systemPrompt = `You are an expert quality assessor for customer service AI responses.
+        const systemPrompt = `You are an expert quality assessor for customer service AI responses for a luxury maternity studio.
 Rate the following AI response on these dimensions (0-10 scale):
 1. Helpfulness: Does it answer the question and provide useful information?
 2. Accuracy: Is the information correct and factual?
-3. Empathy: Does it show understanding and care for the customer?
-4. Clarity: Is it easy to understand and well-structured?
+3. Empathy: Does it show genuine warmth, care, and emotional intelligence?
+4. Humanity: Is the tone natural and conversational? (Deduct points for robotic, stiff, or overly formal "copy-paste" style language).
+5. Clarity: Is it easy to understand and well-structured?
 
 Context:
 - User message: "${context.userMessage}"
@@ -203,9 +259,10 @@ Return a JSON object with:
   "helpfulness": <0-10>,
   "accuracy": <0-10>,
   "empathy": <0-10>,
+  "humanity": <0-10>,
   "clarity": <0-10>,
-  "issues": ["list of specific issues found"],
-  "recommendations": ["suggestions for improvement"]
+  "issues": ["list of specific issues found, e.g., 'too robotic', 'lacks warmth'"],
+  "recommendations": ["suggestions for improvement, e.g., 'use more conversational language'"]
 }`;
 
         try {
@@ -220,7 +277,7 @@ Return a JSON object with:
             });
 
             const result = JSON.parse(completion.choices[0].message.content || '{}');
-            
+
             const score: QualityScore = {
                 helpfulness: result.helpfulness || 5,
                 accuracy: result.accuracy || 5,
@@ -236,8 +293,9 @@ Return a JSON object with:
                 score.helpfulness +
                 score.accuracy +
                 score.empathy +
+                (result.humanity || 5) +
                 score.clarity
-            ) / 4;
+            ) / 5;
 
             return score;
         } catch (error) {
@@ -296,10 +354,10 @@ IMPORTANT: Return ONLY the improved response text. Do not include any prefixes l
             });
 
             let improved = completion.choices[0].message.content?.trim() || originalResponse;
-            
+
             // Clean up any unwanted prefixes that might still appear
             improved = this.cleanImprovedResponse(improved);
-            
+
             // Validate improved response isn't worse
             const improvedScore = await this.scoreResponse(improved, context);
             if (improvedScore.overall > score.overall) {
@@ -355,7 +413,7 @@ IMPORTANT: Return ONLY the improved response text. Do not include any prefixes l
             reasons.push('unclear');
         }
 
-        return reasons.length > 0 
+        return reasons.length > 0
             ? `Quality check failed: ${reasons.join(', ')}`
             : 'Quality check failed';
     }

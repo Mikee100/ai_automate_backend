@@ -23,7 +23,7 @@ export declare class InstagramService {
         lastMessageAt?: Date;
         hoursRemaining?: number;
     }>;
-    sendMessage(to: string, message: string): Promise<any>;
+    sendMessage(to: string, message: string, customerId?: string): Promise<any>;
     getMessages(options: {
         page?: number;
         limit?: number;

@@ -34,7 +34,8 @@ export declare class ResponseQualityService {
         intent?: string;
         emotionalTone?: string;
         history?: any[];
-    }): Promise<ValidationResult>;
+    }, awaitDeepValidation?: boolean): Promise<ValidationResult>;
+    private checkFastPath;
     private quickValidation;
     private scoreResponse;
     private improveResponse;

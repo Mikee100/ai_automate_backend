@@ -13,6 +13,7 @@ import { CustomersModule } from '../customers/customers.module';
 import { PaymentsModule } from '../payments/payments.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { WebsocketModule } from '../../websockets/websocket.module';
+import { WhatsappModule } from '../whatsapp/whatsapp.module';
 
 // Learning AI Services
 import { CustomerMemoryService } from './services/customer-memory.service';
@@ -33,7 +34,7 @@ import { OutreachScheduler } from './schedulers/outreach.scheduler';
 @Module({
   imports: [
     PrismaModule,
-    ScheduleModule.forRoot(),
+    ScheduleModule,
     forwardRef(() => BookingsModule),
     forwardRef(() => MessagesModule),
     CustomersModule,
@@ -46,6 +47,7 @@ import { OutreachScheduler } from './schedulers/outreach.scheduler';
     forwardRef(() => PaymentsModule),
     NotificationsModule,
     WebsocketModule,
+    forwardRef(() => WhatsappModule),
   ],
   controllers: [AiController, AdminAiController],
   providers: [

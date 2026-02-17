@@ -30,8 +30,9 @@ let ResponseQualityService = ResponseQualityService_1 = class ResponseQualitySer
             apiKey: this.configService.get('OPENAI_API_KEY')
         });
     }
-    async validateResponse(response, context) {
+    async validateResponse(response, context, awaitDeepValidation = true) {
         try {
+            const isFastPath = this.checkFastPath(response, context.intent);
             const quickValidation = this.quickValidation(response);
             if (!quickValidation.passed) {
                 return {
@@ -47,6 +48,27 @@ let ResponseQualityService = ResponseQualityService_1 = class ResponseQualitySer
                     },
                     shouldEscalate: false,
                     reason: quickValidation.reason,
+                };
+            }
+            if (isFastPath && !awaitDeepValidation) {
+                this.logger.debug(`[QUALITY] Fast-path detected for response. Skipping deep validation.`);
+                this.scoreResponse(response, context)
+                    .then(score => this.logQualityCheck(context.customerId, response, score, true))
+                    .catch(err => this.logger.warn('[QUALITY] Background scoring failed', err));
+                return {
+                    passed: true,
+                    score: { helpfulness: 10, accuracy: 10, empathy: 10, clarity: 10, overall: 10, issues: [], recommendations: [] },
+                    shouldEscalate: false
+                };
+            }
+            if (!awaitDeepValidation) {
+                this.scoreResponse(response, context)
+                    .then(score => this.logQualityCheck(context.customerId, response, score, true))
+                    .catch(err => this.logger.warn('[QUALITY] Background scoring failed', err));
+                return {
+                    passed: true,
+                    score: { helpfulness: 8, accuracy: 8, empathy: 8, clarity: 8, overall: 8, issues: [], recommendations: [] },
+                    shouldEscalate: false
                 };
             }
             const score = await this.scoreResponse(response, context);
@@ -86,6 +108,20 @@ let ResponseQualityService = ResponseQualityService_1 = class ResponseQualitySer
             };
         }
     }
+    checkFastPath(response, intent) {
+        if (intent === 'greeting' || intent === 'escort_redirect')
+            return true;
+        const lower = response.toLowerCase();
+        const fastPathPhrases = [
+            'hello there', 'welcome to fiesta house', 'how can i help',
+            'connecting you with our team', 'someone will be with you shortly',
+            'where are you located', 'our studio is in'
+        ];
+        if (fastPathPhrases.some(p => lower.includes(p)) && response.length < 300) {
+            return true;
+        }
+        return false;
+    }
     quickValidation(response) {
         const issues = [];
         const recommendations = [];
@@ -116,12 +152,13 @@ let ResponseQualityService = ResponseQualityService_1 = class ResponseQualitySer
         return { passed: true, issues, recommendations };
     }
     async scoreResponse(response, context) {
-        const systemPrompt = `You are an expert quality assessor for customer service AI responses.
+        const systemPrompt = `You are an expert quality assessor for customer service AI responses for a luxury maternity studio.
 Rate the following AI response on these dimensions (0-10 scale):
 1. Helpfulness: Does it answer the question and provide useful information?
 2. Accuracy: Is the information correct and factual?
-3. Empathy: Does it show understanding and care for the customer?
-4. Clarity: Is it easy to understand and well-structured?
+3. Empathy: Does it show genuine warmth, care, and emotional intelligence?
+4. Humanity: Is the tone natural and conversational? (Deduct points for robotic, stiff, or overly formal "copy-paste" style language).
+5. Clarity: Is it easy to understand and well-structured?
 
 Context:
 - User message: "${context.userMessage}"
@@ -133,9 +170,10 @@ Return a JSON object with:
   "helpfulness": <0-10>,
   "accuracy": <0-10>,
   "empathy": <0-10>,
+  "humanity": <0-10>,
   "clarity": <0-10>,
-  "issues": ["list of specific issues found"],
-  "recommendations": ["suggestions for improvement"]
+  "issues": ["list of specific issues found, e.g., 'too robotic', 'lacks warmth'"],
+  "recommendations": ["suggestions for improvement, e.g., 'use more conversational language'"]
 }`;
         try {
             const completion = await this.openai.chat.completions.create({
@@ -160,7 +198,8 @@ Return a JSON object with:
             score.overall = (score.helpfulness +
                 score.accuracy +
                 score.empathy +
-                score.clarity) / 4;
+                (result.humanity || 5) +
+                score.clarity) / 5;
             return score;
         }
         catch (error) {

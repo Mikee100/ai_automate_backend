@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { ConfigService } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -15,6 +16,7 @@ export class CronService {
         private prisma: PrismaService,
         private messagesService: MessagesService,
         @InjectQueue('aiQueue') private aiQueue: Queue,
+        private configService: ConfigService,
     ) { }
 
     /**
@@ -183,6 +185,112 @@ export class CronService {
     }
 
     /**
+     * Hourly cron job to check for abandoned bookings and send gentle nudges.
+     * Identifies drafts stuck in 'confirm' or pending payments.
+     */
+    @Cron(CronExpression.EVERY_HOUR)
+    async checkAbandonedBookings() {
+        this.logger.log('Running hourly abandoned booking recovery check');
+
+        try {
+            const oneHourAgo = DateTime.now().setZone(this.studioTz).minus({ hours: 1 }).toJSDate();
+            const thirtyMinsAgo = DateTime.now().setZone(this.studioTz).minus({ minutes: 30 }).toJSDate();
+            const twentyFourHoursAgo = DateTime.now().setZone(this.studioTz).minus({ hours: 24 }).toJSDate();
+
+            // 1. Find drafts stuck in 'confirm' step for > 1 hour
+            const abandonedDrafts = await this.prisma.bookingDraft.findMany({
+                where: {
+                    step: 'confirm',
+                    updatedAt: { lt: oneHourAgo },
+                    // Make sure they haven't been nudged in the last 24 hours
+                    customer: {
+                        proactiveOutreaches: {
+                            none: {
+                                type: 'abandoned_booking',
+                                createdAt: { gte: twentyFourHoursAgo }
+                            }
+                        }
+                    }
+                },
+                include: { customer: true }
+            });
+
+            // 2. Find pending payments for > 30 minutes
+            const pendingPayments = await this.prisma.payment.findMany({
+                where: {
+                    status: 'pending',
+                    createdAt: { lt: thirtyMinsAgo },
+                    bookingDraft: {
+                        customer: {
+                            proactiveOutreaches: {
+                                none: {
+                                    type: 'abandoned_booking',
+                                    createdAt: { gte: twentyFourHoursAgo }
+                                }
+                            }
+                        }
+                    }
+                },
+                include: {
+                    bookingDraft: {
+                        include: { customer: true }
+                    }
+                }
+            });
+
+            const uniqueCustomers = new Map<string, any>();
+
+            abandonedDrafts.forEach(d => uniqueCustomers.set(d.customerId, { draft: d, customer: d.customer }));
+            pendingPayments.forEach(p => {
+                if (p.bookingDraft) {
+                    uniqueCustomers.set(p.bookingDraft.customerId, { draft: p.bookingDraft, customer: p.bookingDraft.customer, isPaymentIssue: true });
+                }
+            });
+
+            this.logger.log(`Found ${uniqueCustomers.size} potential abandoned bookings to nudge.`);
+
+            for (const [customerId, data] of uniqueCustomers.entries()) {
+                const { draft, customer, isPaymentIssue } = data;
+
+                try {
+                    const recipientName = draft.recipientName || customer.name || 'there';
+                    const service = draft.service || 'your photoshoot';
+
+                    let nudgeMessage = '';
+                    if (isPaymentIssue) {
+                        nudgeMessage = `Hi ${recipientName}! 🌸 Just checking in to see if you had any trouble with the deposit prompt for your *${service}*? \n\nI'm still holding your spot, but if the prompt didn't show up or you have any questions, just let me know! I'm here to help. 💖`;
+                    } else {
+                        nudgeMessage = `Hi ${recipientName}! 🌸 I noticed we were almost finished with your *${service}* booking. \n\nI'd love to get that confirmed for you so we can start getting everything ready! Did you have any questions about the package or the date? ✨`;
+                    }
+
+                    // Send the message
+                    await this.messagesService.sendOutboundMessage(customerId, nudgeMessage, 'whatsapp');
+
+                    // Record the outreach to prevent over-notifying
+                    await this.prisma.proactiveOutreach.create({
+                        data: {
+                            customerId,
+                            type: 'abandoned_booking',
+                            status: 'sent',
+                            scheduledFor: new Date(),
+                            sentAt: new Date(),
+                            messageContent: nudgeMessage,
+                            channel: 'whatsapp'
+                        }
+                    });
+
+                    this.logger.log(`Sent abandoned booking nudge to customer ${customerId}`);
+                } catch (err) {
+                    this.logger.error(`Failed to send nudge to customer ${customerId}`, err);
+                }
+            }
+
+        } catch (error) {
+            this.logger.error('Error in checkAbandonedBookings cron job', error);
+        }
+    }
+
+    /**
      * Manual trigger for testing reminders
      */
     async triggerRemindersManually() {
@@ -196,5 +304,13 @@ export class CronService {
     async triggerFollowUpsManually() {
         this.logger.log('Manually triggering follow-ups');
         await this.sendPostShootFollowUps();
+    }
+
+    /**
+     * Manual trigger for testing nudges
+     */
+    async triggerNudgesManually() {
+        this.logger.log('Manually triggering nudges');
+        await this.checkAbandonedBookings();
     }
 }

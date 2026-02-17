@@ -15,7 +15,7 @@ export declare class MessengerSendService {
         lastMessageAt?: Date;
         hoursRemaining?: number;
     }>;
-    sendMessage(recipientId: string, message: string): Promise<any>;
+    sendMessage(recipientId: string, message: string, customerId?: string): Promise<any>;
     testConnection(): Promise<{
         success: boolean;
         message: string;

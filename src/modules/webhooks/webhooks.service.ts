@@ -139,80 +139,10 @@ export class WebhooksService {
       // Removed check for booking.awaitingRescheduleTime (property does not exist)
     });
 
-    // Automated reschedule flow for WhatsApp
-    const intent = await this.messagesService.classifyIntent(text);
-    if (intent === 'reschedule') {
-      // Step 2: Find active booking(s)
-      const bookings = await this.bookingsService.getActiveBookings(customer.id);
-      if (!bookings || bookings.length === 0) {
-        await this.whatsappService.sendMessage(from, `I couldn't find an active booking for you. Would you like to start a new booking?`);
-        return;
-      }
-      // If multiple, ask which one
-      let booking = bookings[0];
-      if (bookings.length > 1) {
-        await this.whatsappService.sendMessage(from, `You have multiple active bookings. Please reply with the date or service of the booking you want to reschedule.`);
-        await this.bookingsService.setAwaitingRescheduleSelection(customer.id, true);
-        await this.bookingsService.updateBookingDraft(customer.id, { step: 'reschedule', bookingId: null });
-        return;
-      }
-      // Step 3: Check eligibility
-      const now = new Date();
-      const bookingTime = new Date(booking.dateTime);
-      const hoursDiff = (bookingTime.getTime() - now.getTime()) / (1000 * 60 * 60);
-      if (booking.status === 'completed' || booking.status === 'cancelled') {
-        await this.whatsappService.sendMessage(from, `Your booking cannot be rescheduled as it is already completed or cancelled.`);
-        return;
-      }
-      if (hoursDiff < 72) {
-        // Create admin alert for reschedule request within 72 hours
-        const bookingDt = DateTime.fromJSDate(booking.dateTime).setZone('Africa/Nairobi');
-        if (this.notificationsService) {
-          await this.notificationsService.createNotification({
-            type: 'reschedule_request',
-            title: 'Reschedule Request - Within 72 Hours',
-            message: `Customer ${customer.name || customer.phone || from} requested to reschedule booking "${booking.service}" scheduled for ${bookingDt.toFormat('MMMM dd, yyyy')} at ${bookingDt.toFormat('h:mm a')}. Only ${Math.round(hoursDiff)} hours until booking.`,
-            metadata: {
-              customerId: customer.id,
-              customerName: customer.name,
-              customerPhone: customer.phone || from,
-              bookingId: booking.id,
-              hoursUntilBooking: Math.round(hoursDiff),
-              originalDateTime: booking.dateTime,
-              platform: 'whatsapp',
-            },
-          });
-        }
-        await this.whatsappService.sendMessage(from, `Rescheduling is only allowed at least 72 hours before your booking. Please contact support for urgent changes.`);
-        return;
-      }
-      // Step 4: Prompt for new date/time or handle reschedule flow
-      const isAwaitingRescheduleTime = await this.bookingsService.isAwaitingRescheduleTime(booking.id);
-      if (!isAwaitingRescheduleTime) {
-        await this.whatsappService.sendMessage(from, `Sure! Please reply with your new preferred date and time for your booking (e.g. '12th Dec, 3pm').`);
-        await this.bookingsService.setAwaitingRescheduleTime(booking.id, true);
-        return;
-      } else {
-        // Step 5: Validate new date/time
-        const newTime = await this.aiService.extractDateTime(text);
-        if (!newTime) {
-          await this.whatsappService.sendMessage(from, `Sorry, I couldn't understand the new date/time. Please reply with your preferred date and time (e.g. '12th Dec, 3pm').`);
-          return;
-        }
-        // Step 6: Check for conflicts
-        const conflict = await this.bookingsService.checkTimeConflict(newTime);
-        if (conflict) {
-          await this.whatsappService.sendMessage(from, `That time is not available. Please choose another date and time.`);
-          return;
-        }
-        // Step 7: Update booking
-        await this.bookingsService.updateBookingTime(booking.id, newTime);
-        await this.bookingsService.setAwaitingRescheduleTime(booking.id, false);
-        await this.whatsappService.sendMessage(from, `Your booking has been rescheduled to ${newTime}. If you need further changes, let us know!`);
-        // Step 8: End flow
-        return;
-      }
-    }
+    // Automated reschedule flow for WhatsApp - REDIRECTED TO AI SERVICE
+    // We let AiService handle rescheduling centrally to avoid logic duplication
+
+    // Check if the user sent a phone number (Kenyan format)
 
     // Check if the user sent a phone number (Kenyan format)
     const phoneMatch = text.match(/0\d{9}/); // Matches 0721840961
@@ -426,92 +356,20 @@ Just let me know! 💖`
 
         console.log('[WEBHOOK] Instagram message created in database:', createdMessage.id);
 
-      // Emit real-time update via WebSocket for inbound message
-      this.websocketGateway.emitNewMessage('instagram', {
-        id: createdMessage.id,
-        from: from,
-        to: '',
-        content: text,
-        timestamp: createdMessage.createdAt.toISOString(),
-        direction: 'inbound',
-        customerId: customer.id,
-        customerName: customer.name,
-      });
+        // Emit real-time update via WebSocket for inbound message
+        this.websocketGateway.emitNewMessage('instagram', {
+          id: createdMessage.id,
+          from: from,
+          to: '',
+          content: text,
+          timestamp: createdMessage.createdAt.toISOString(),
+          direction: 'inbound',
+          customerId: customer.id,
+          customerName: customer.name,
+        });
 
-      // Automated reschedule flow
-      const intent = await this.messagesService.classifyIntent(text);
-      if (intent === 'reschedule') {
-        // Step 2: Find active booking(s)
-        const bookings = await this.bookingsService.getActiveBookings(customer.id);
-        if (!bookings || bookings.length === 0) {
-          await this.instagramService.sendMessage(from, `I couldn’t find an active booking for you. Would you like to start a new booking?`);
-          return;
-        }
-        // If multiple, ask which one
-        let booking = bookings[0];
-        if (bookings.length > 1) {
-          await this.instagramService.sendMessage(from, `You have multiple active bookings. Please reply with the date or service of the booking you want to reschedule.`);
-          await this.bookingsService.setAwaitingRescheduleSelection(customer.id, true);
-          await this.bookingsService.updateBookingDraft(customer.id, { step: 'reschedule', bookingId: null });
-          return;
-        }
-        // Step 3: Check eligibility
-        const now = new Date();
-        const bookingTime = new Date(booking.dateTime);
-        const hoursDiff = (bookingTime.getTime() - now.getTime()) / (1000 * 60 * 60);
-        if (booking.status === 'completed' || booking.status === 'cancelled') {
-          await this.instagramService.sendMessage(from, `Your booking cannot be rescheduled as it is already completed or cancelled.`);
-          return;
-        }
-        if (hoursDiff < 72) {
-          // Create admin alert for reschedule request within 72 hours
-          const bookingDt = DateTime.fromJSDate(booking.dateTime).setZone('Africa/Nairobi');
-          if (this.notificationsService) {
-            await this.notificationsService.createNotification({
-              type: 'reschedule_request',
-              title: 'Reschedule Request - Within 72 Hours',
-              message: `Customer ${customer.name || customer.phone || from} requested to reschedule booking "${booking.service}" scheduled for ${bookingDt.toFormat('MMMM dd, yyyy')} at ${bookingDt.toFormat('h:mm a')}. Only ${Math.round(hoursDiff)} hours until booking.`,
-              metadata: {
-                customerId: customer.id,
-                customerName: customer.name,
-                customerPhone: customer.phone || from,
-                bookingId: booking.id,
-                hoursUntilBooking: Math.round(hoursDiff),
-                originalDateTime: booking.dateTime,
-                platform: 'instagram',
-              },
-            });
-          }
-          await this.instagramService.sendMessage(from, `Rescheduling is only allowed at least 72 hours before your booking. Please contact support for urgent changes.`);
-          return;
-        }
-        // Step 4: Prompt for new date/time or handle reschedule flow
-        const isAwaitingRescheduleTime = await this.bookingsService.isAwaitingRescheduleTime(booking.id);
-        if (!isAwaitingRescheduleTime) {
-          await this.instagramService.sendMessage(from, `Sure! Please reply with your new preferred date and time for your booking (e.g. '12th Dec, 3pm').`);
-          await this.bookingsService.setAwaitingRescheduleTime(booking.id, true);
-          return;
-        } else {
-          // Step 5: Validate new date/time
-          const newTime = await this.aiService.extractDateTime(text);
-          if (!newTime) {
-            await this.instagramService.sendMessage(from, `Sorry, I couldn’t understand the new date/time. Please reply with your preferred date and time (e.g. '12th Dec, 3pm').`);
-            return;
-          }
-          // Step 6: Check for conflicts
-          const conflict = await this.bookingsService.checkTimeConflict(newTime);
-          if (conflict) {
-            await this.instagramService.sendMessage(from, `That time is not available. Please choose another date and time.`);
-            return;
-          }
-          // Step 7: Update booking
-          await this.bookingsService.updateBookingTime(booking.id, newTime);
-          await this.bookingsService.setAwaitingRescheduleTime(booking.id, false);
-          await this.instagramService.sendMessage(from, `Your booking has been rescheduled to ${newTime}. If you need further changes, let us know!`);
-          // Step 8: End flow
-          return;
-        }
-      }
+        // Automated reschedule flow - REDIRECTED TO AI SERVICE
+        // We let AiService handle rescheduling centrally to avoid logic duplication
         // Check both global AI and customer-specific AI before queuing
         const globalAiEnabled = await this.aiSettingsService.isAiEnabled();
         const customerAiEnabled = customer.aiEnabled;

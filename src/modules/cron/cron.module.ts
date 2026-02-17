@@ -7,7 +7,7 @@ import { BullModule } from '@nestjs/bull';
 
 @Module({
     imports: [
-        ScheduleModule.forRoot(),
+        ScheduleModule,
         PrismaModule,
         MessagesModule,
         BullModule.registerQueue({ name: 'aiQueue' }),

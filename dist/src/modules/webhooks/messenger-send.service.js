@@ -55,7 +55,7 @@ let MessengerSendService = MessengerSendService_1 = class MessengerSendService {
             hoursRemaining
         };
     }
-    async sendMessage(recipientId, message) {
+    async sendMessage(recipientId, message, customerId) {
         this.logger.log(`📤 Sending Messenger message to: ${recipientId}`);
         this.logger.log(`Message: ${message.substring(0, 100)}...`);
         const canSend = await this.canSendMessage(recipientId);
@@ -83,7 +83,13 @@ let MessengerSendService = MessengerSendService_1 = class MessengerSendService {
                 },
             });
             this.logger.log('✔️ Messenger API response:', response.data);
-            const customer = await this.customersService.findByMessengerId(recipientId);
+            let customer;
+            if (customerId) {
+                customer = await this.customersService.findOne(customerId);
+            }
+            else {
+                customer = await this.customersService.findByMessengerId(recipientId);
+            }
             if (customer) {
                 await this.messagesService.create({
                     content: message,

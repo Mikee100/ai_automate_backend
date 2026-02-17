@@ -28,6 +28,7 @@ const escalation_service_1 = require("../escalation/escalation.service");
 const circuit_breaker_service_1 = require("./services/circuit-breaker.service");
 const notifications_service_1 = require("../notifications/notifications.service");
 const websocket_gateway_1 = require("../../websockets/websocket.gateway");
+const whatsapp_service_1 = require("../whatsapp/whatsapp.service");
 function extractModelVersion(model) {
     if (!model)
         return '';
@@ -36,6 +37,7 @@ function extractModelVersion(model) {
 }
 const package_inquiry_strategy_1 = require("./strategies/package-inquiry.strategy");
 const booking_strategy_1 = require("./strategies/booking.strategy");
+const reschedule_strategy_1 = require("./strategies/reschedule.strategy");
 const faq_strategy_1 = require("./strategies/faq.strategy");
 let encoding_for_model;
 let get_encoding;
@@ -120,7 +122,7 @@ let AiService = AiService_1 = class AiService {
             `💬 Or open chat: ${this.whatsappBookingLink}\n\n` +
             `Here I can answer any other questions—packages, pricing, location, what to bring, etc.! 💖`);
     }
-    constructor(configService, prisma, circuitBreaker, customerMemory, conversationLearning, domainExpertise, advancedIntent, personalization, responseHumanizer, feedbackLoop, predictiveAnalytics, responseQuality, bookingsService, messagesService, escalationService, aiQueue, notificationsService, websocketGateway) {
+    constructor(configService, prisma, circuitBreaker, customerMemory, conversationLearning, domainExpertise, advancedIntent, personalization, responseHumanizer, feedbackLoop, predictiveAnalytics, responseQuality, bookingsService, messagesService, escalationService, aiQueue, notificationsService, websocketGateway, whatsappService) {
         this.configService = configService;
         this.prisma = prisma;
         this.circuitBreaker = circuitBreaker;
@@ -139,6 +141,7 @@ let AiService = AiService_1 = class AiService {
         this.aiQueue = aiQueue;
         this.notificationsService = notificationsService;
         this.websocketGateway = websocketGateway;
+        this.whatsappService = whatsappService;
         this.logger = new common_1.Logger(AiService_1.name);
         this.pinecone = null;
         this.index = null;
@@ -175,6 +178,7 @@ let AiService = AiService_1 = class AiService {
             new faq_strategy_1.FaqStrategy(),
             new package_inquiry_strategy_1.PackageInquiryStrategy(),
             new booking_strategy_1.BookingStrategy(),
+            new reschedule_strategy_1.RescheduleStrategy(),
         ];
         this.strategies.sort((a, b) => (b.priority || 0) - (a.priority || 0));
         this.initializeTokenEncoding();
@@ -297,6 +301,19 @@ let AiService = AiService_1 = class AiService {
         catch (error) {
             this.logger.error(`[ESCALATION] Failed to create admin alert: ${error.message}`, error);
         }
+    }
+    generateUnknownQueryResponse(question, isOutOfScope) {
+        const questionLower = question.toLowerCase();
+        if (/discount|cheaper|lower price|deal|promo/i.test(questionLower)) {
+            return `That's a great question! Our pricing is carefully designed to provide exceptional value for our professional maternity photography services. For any special requests or to discuss your specific needs, I'd love to connect you with our team who can provide personalized assistance. Would you like me to have someone reach out to you? 💖\n\nYou can also contact us directly at ${this.customerCarePhone}.`;
+        }
+        if (/refund|money back/i.test(questionLower)) {
+            return `I want to make sure you get accurate information about our refund policies. Let me connect you with our team who can discuss your specific situation and provide the details you need. Would you like me to have someone reach out to you? 💖\n\nYou can also contact us at ${this.customerCarePhone}.`;
+        }
+        if (/custom.*(?:package|request|service)|special.*(?:package|request)/i.test(questionLower)) {
+            return `I love that you're thinking about a custom experience! While I can tell you about our standard packages, custom requests are best discussed with our team who can understand your vision and create something special for you. Would you like me to connect you with them? 💖\n\nFeel free to call us at ${this.customerCarePhone}.`;
+        }
+        return `That's a great question! I want to make sure you get the most accurate information. Let me connect you with our team who can provide personalized assistance with that. Would you like me to have someone reach out to you? 💖\n\nYou can also contact us directly at ${this.customerCarePhone} or ${this.customerCareEmail}.`;
     }
     async checkAndCreateSessionNote(message, customerId, enrichedContext, history) {
         try {
@@ -1162,7 +1179,7 @@ ${conversationText.substring(0, 2000)}...`;
                 (questionLower.includes('can') || questionLower.includes('may') || questionLower.includes('allowed') || questionLower.includes('welcome')) &&
                 !/\bphotographer\b|\bvideographer\b/i.test(question);
             if (isFamilyQuestion) {
-                prediction = "Yes, absolutely! Partners and family members are always welcome to join your photoshoot. Many of our packages include couple and family shots - it's a beautiful way to celebrate this journey together! 💖";
+                prediction = "We'd love to have your family join you! 💖 Partners and children are absolutely welcome in our studio. Most of our packages were actually designed with couple and family shots in mind, as we believe celebrating this journey together makes for the most beautiful memories. Would you like to know which packages are best for family sessions? 🌸";
                 confidence = 1.0;
                 this.logger.debug(`[AiService] Family/partner question detected. Using direct response.`);
                 return { text: prediction, mediaUrls };
@@ -1179,7 +1196,7 @@ ${conversationText.substring(0, 2000)}...`;
             ];
             const isBusinessDescriptionQuestion = businessDescriptionPatterns.some(pattern => pattern.test(question));
             if (isBusinessDescriptionQuestion) {
-                prediction = `Thank you for your interest! ${this.businessName} specializes in professional maternity photography services. We offer beautiful studio maternity photoshoots with professional makeup, styling, and a variety of packages to capture this special time in your life. Our packages range from intimate sessions to full VIP experiences, all designed to make you feel elegant and celebrated. We're located at ${this.businessLocation.replace(' We look forward to welcoming you! 💖', '')}. Would you like to know more about our packages or book a session? 💖`;
+                prediction = `It's so lovely that you're interested! ✨ Here at ${this.businessName}, we're passionate about capturing the magic of motherhood. We specialize in luxury studio maternity photography, offering a complete experience that includes professional makeup, artistic styling, and beautiful gowns to make you feel as radiant as you look. We have everything from intimate, cozy sessions to full VIP experiences. We're based at ${this.businessLocation.replace(' We look forward to welcoming you! 💖', '')}. I'd love to tell you more about our packages or help you find a perfect time for a session! 💖`;
                 confidence = 1.0;
                 this.logger.debug(`[AiService] Business description question detected. Using direct response.`);
                 return { text: prediction, mediaUrls };
@@ -1203,6 +1220,28 @@ ${conversationText.substring(0, 2000)}...`;
                 this.logger.debug(`[AiService] Found ${mediaUrls.length} media assets for backdrop query`);
             }
             const docs = await this.retrieveRelevantDocs(question, 10);
+            const outOfScopePatterns = [
+                /discount|discounted|cheaper|lower price|price reduction|special offer|deal|promo/i,
+                /refund|money back|get.*back.*money/i,
+                /custom.*(?:package|request|service)|special.*(?:package|request)/i,
+                /negotiate|bargain|haggle/i,
+            ];
+            const isOutOfScope = outOfScopePatterns.some(pattern => pattern.test(question));
+            const hasLowConfidence = docs.length === 0 || (docs[0]?.score || 0) < 0.5;
+            if (isOutOfScope || hasLowConfidence) {
+                this.logger.log(`[UNKNOWN QUERY] Detected unknown/out-of-scope query: "${question}" (confidence: ${docs[0]?.score || 0}, outOfScope: ${isOutOfScope})`);
+                if (customerId) {
+                    await this.createEscalationAlert(customerId, 'ai_escalation', 'Unknown Query - Needs Human Response', `Customer asked: "${question}". AI doesn't have a confident answer for this.`, {
+                        query: question,
+                        confidence: docs[0]?.score || 0,
+                        isOutOfScope,
+                        requiresAttention: true,
+                    });
+                }
+                prediction = this.generateUnknownQueryResponse(question, isOutOfScope);
+                confidence = 0.3;
+                return { text: prediction, mediaUrls };
+            }
             if (docs.length > 0) {
                 prediction = docs[0].metadata.answer;
                 confidence = docs[0].score;
@@ -1225,33 +1264,35 @@ ${conversationText.substring(0, 2000)}...`;
                     const messages = [
                         {
                             role: 'system',
-                            content: `You are a warm, empathetic AI assistant for ${this.businessName}. Always answer with genuine care and conversational intelligence.
+                            content: `You are the heart and soul of ${this.businessName}—a warm, empathetic, and highly attentive AI assistant. Your mission isn't just to provide information, but to make every expectant mother feel celebrated, supported, and excited about their journey.
 
-BUSINESS INFORMATION:
-- Business Name: ${this.businessName}
+TONE & PERSONALITY:
+- WARM & LOVING: Use gentle, encouraging language. You aren't a bot; you're a supportive friend who happens to know everything about the studio.
+- CELEBRATORY: Motherhood is a miracle! Use words like "radiant," "beautiful," "special," and "memories."
+- CONVERSATIONAL: Avoid stiff, bulleted lists unless requested. Flow naturally from one thought to the next.
+- EMPATHETIC: Acknowledge the user's feelings. If they're excited, share that joy! If they're nervous, offer reassurance.
+
+BUSINESS KNOWLEDGE:
+- Studio: ${this.businessName}
 - Location: ${this.businessLocation.replace(' We look forward to welcoming you! 💖', '')}
 - Website: ${this.businessWebsite}
-- Phone: ${this.customerCarePhone}
-- Email: ${this.customerCareEmail}
-- Hours: ${this.businessHours}
-- What We Do: ${this.businessDescription}
+- Reach us at: ${this.customerCarePhone} or ${this.customerCareEmail}
+- We're here: ${this.businessHours}
+- Our Magic: ${this.businessDescription}
 
-IMPORTANT: Before generating any answer, ALWAYS check the database FAQs provided in context. If a relevant FAQ is found, use its answer directly and do NOT invent or hallucinate. Only generate a new answer if no FAQ matches.
+HOW TO RESPOND:
+1. ALWAYS CHECK DB FIRST: If an FAQ match exists in the context below, use that wisdom. It's our studio's official voice.
+2. ACKNOWLEDGE & VALIDATE: Start by acknowledging their specific question with warmth (e.g., "I'd be absolutely happy to help with that!" or "That's such a great question!").
+3. BE HELPFUL, NOT ROBOTIC: Don't just give a 'yes' or 'no'. Explain things in a way that shows you care.
+4. POLICY WITH A SMILE: State policies clearly but gently.
+5. GUIDING LIGHT: Always suggest a gentle next step to keep the conversation going (e.g., "Would you like to see our gown collection?" or "Shall we check some available dates for you?").
 
-When asked about what the business does or what services are offered, use the business information above. Never use generic placeholders like "[Business Name]" or "[brief description of services offered]". Always use the specific business details provided.
+CRITICAL STUDIO POLICIES (PHRASE NATURALLY):
+- PHOTO DELIVERY: We take great care in editing your memories. You'll receive a special link on your WhatsApp within 10 working days. (NEVER say 'two weeks' or 'email').
+- PAYMENTS: To keep things simple, any remaining balance is settled right after your session.
+- FLEXIBILITY: We know things can change! Reschedules are free if made 72 hours in advance. Within that window, the session fee is forfeited as we’ve reserved that special time just for you.
 
-POLICY QUESTIONS - You MUST answer these directly:
-- Family/Partner questions: "Yes, absolutely! Partners and family members are always welcome to join your photoshoot. Many of our packages include couple and family shots - it's a beautiful way to celebrate this journey together! 💖"
-- What to bring: "You can bring your chosen outfits (2-3 options), comfortable shoes, any special props or accessories, snacks and water, and your partner/family if they're joining. We provide all backdrops, studio props, professional makeup & styling (if in package), and maternity gowns if you'd like to use ours."
-- Permission questions: Always answer positively and warmly. If unsure, say "Yes, that's absolutely fine!" rather than declining.
-
-META-COGNITIVE INSTRUCTIONS:
-- LISTEN & ACKNOWLEDGE: Start by showing you understood the question ("Great question!" or "I'd love to help with that!")
-- BE CONVERSATIONAL: Don't sound like you're reading from a manual. Sound like a knowledgeable friend
-- PROVIDE CONTEXT: Don't just answer yes/no. Explain WHY when it helps
-- CHECK BOOKINGS: If the user asks about their bookings, use the context provided below.
-
-CONTEXT - USER BOOKINGS:
+BOOKING CONTEXT:
 ${enrichedContext?.customer?.recentBookings ? JSON.stringify(enrichedContext.customer.recentBookings.map((b) => ({
                                 date: b.dateTime,
                                 service: b.service,
@@ -1259,30 +1300,15 @@ ${enrichedContext?.customer?.recentBookings ? JSON.stringify(enrichedContext.cus
                                 recipient: b.recipientName || b.customer?.name
                             })), null, 2) : 'No recent bookings found.'}
 
-If the user asks "what bookings do i have?" or similar, refer to the list above. If they have a confirmed booking, tell them the details (Date, Time, Package).
+If they ask about their bookings, share the lovely details with them!
 
-- OFFER NEXT STEPS: After answering, guide them ("Would you like to book?" or "Want to know more about...?")
-- BE HONEST: If you're not 100% sure, say "Let me get you the exact details" instead of guessing
-
-CRITICAL INSTRUCTIONS:
-- You MUST base your answer STRICTLY on the provided Context messages below
-- Do NOT invent, hallucinate, or add any information not in the contexts
-- **Business Policies (Always Enforce):**
-  * Remaining balance is due after the shoot
-  * Edited photos are delivered in 10 working days (never say 'two weeks' or any other time frame)
-  * You must always say '10 working days' for photo delivery, and NEVER say 'two weeks', '14 days', or any other duration
-  * Edited images are always sent as a link to the customer's WhatsApp. NEVER say 'online gallery', 'email', or any other delivery method. Always say 'WhatsApp link'.
-  * Reschedules must be made at least 72 hours before the shoot time to avoid forfeiting the session fee
-  * Cancellations or changes made within 72 hours of the shoot are non-refundable, and the session fee will be forfeited
-- When asked about packages:
-  * ONLY mention packages explicitly listed in the context
-  * NEVER create or mention package names not provided (e.g., don't say "Premium" or "Deluxe" if not in context)
-  * If asked about a feature, check which actual packages in the context have it
-  * If no packages match, say "Let me check our current packages for you" rather than inventing
-- When describing packages, include ALL features from context: images, outfits, makeup, styling, balloon backdrop, wigs, photobooks, mounts
-- If no relevant context provided, be helpful: "That's a great question! Let me find out for you" or "I can connect you with our team for that specific detail"
-
-IMPORTANT: If you ever mention the delivery time for edited photos, you MUST say '10 working days' and NEVER say 'two weeks', '14 days', or any other time frame. If you ever mention how images are delivered, you MUST say 'as a link to your WhatsApp' and NEVER say 'online gallery', 'email', or any other method. If you are unsure, say 'WhatsApp link'.`,
+HANDLING UNKNOWN QUERIES:
+- If you don't have enough information to answer confidently, BE HONEST
+- Say "I want to make sure you get accurate information" instead of guessing
+- Offer to connect them with the team for personalized assistance
+- NEVER make up information about pricing, policies, or services not in the context
+- For discount/refund/custom requests: Acknowledge the question warmly, then offer team connection
+- Example: "That's a great question! Let me connect you with our team who can provide personalized assistance with that."`,
                         },
                     ];
                     if (/(package|photobook|makeup|styling|balloon|wig|outfit|image|photo|shoot|session|include|feature|come with|have)/i.test(question)) {
@@ -2129,13 +2155,21 @@ DO NOT repeat your previous question. Instead:
             try {
                 const responseText = finalResponseText || '';
                 if (responseText) {
+                    const isHighConfidenceIntent = intentAnalysis?.confidence && intentAnalysis.confidence > 0.85;
+                    const isFaqStrategy = result.metrics?.strategyUsed === 'faq';
+                    const isGreetingResponse = intentAnalysis?.primaryIntent === 'greeting' ||
+                        result.metrics?.strategyUsed === 'greeting';
+                    const shouldAwaitValidation = !isHighConfidenceIntent && !isFaqStrategy && !isGreetingResponse && result.metrics?.isFallback;
+                    if (!shouldAwaitValidation) {
+                        this.logger.debug(`[LATENCY] Fast-path triggered. Backgrounding deep validation for ${intentAnalysis?.primaryIntent || 'unknown'}`);
+                    }
                     const qualityCheck = await this.responseQuality.validateResponse(responseText, {
                         userMessage: message,
                         customerId,
                         intent: intentAnalysis?.primaryIntent,
                         emotionalTone: intentAnalysis?.emotionalTone,
                         history,
-                    });
+                    }, shouldAwaitValidation);
                     if (!qualityCheck.passed && qualityCheck.improvedResponse) {
                         this.logger.log(`[QUALITY] Response improved: ${qualityCheck.score.overall.toFixed(1)}/10`);
                         const style = personalizationContext?.communicationStyle ?? 'friendly';
@@ -2313,13 +2347,13 @@ DO NOT repeat your previous question. Instead:
             }
             let recoveryMessage;
             if (breakerCheck.recovery === 'escalate') {
-                recoveryMessage = `I apologize for the confusion! 😓 It seems I'm having trouble understanding your request. Let me connect you with our amazing team who can assist you personally!\n\nWould you like someone to call you, or would you prefer to reach out directly at ${this.customerCarePhone}? 💖`;
+                recoveryMessage = `I'm so sorry, I think I'm getting a little tangled up! 😓 I want to make sure you get the best help possible. Let me connect you with one of our lovely team members who can assist you personally.\n\nWould you like someone to reach out to you, or would you prefer our studio's direct number at ${this.customerCarePhone}? 💖`;
             }
             else if (breakerCheck.recovery === 'simplify') {
-                recoveryMessage = `Let's start fresh! 🌸 I want to make sure I help you properly. Could you tell me in simple terms what you'd like to do today?\n\nFor example:\n✨ "I want to book a photoshoot"\n✨ "Tell me about your packages"\n✨ "I need to reschedule"\n\nWhat would you like help with? 💖`;
+                recoveryMessage = `Let's start fresh! 🌸 I really want to make sure I help you perfectly. Could you tell me in simple terms what you'd like to do today?\n\nFor example:\n✨ "I'd like to book a photoshoot"\n✨ "Tell me about your amazing packages"\n✨ "I need to change my booking date"\n\nWhat can I do for you? 💖`;
             }
             else {
-                recoveryMessage = `I apologize, but I seem to be having difficulty. Let me help you start fresh! What can I do for you today? 💖`;
+                recoveryMessage = `I apologize, I seem to be having a bit of trouble. Let's try starting over! What can I help you with today? 💖`;
             }
             return {
                 response: recoveryMessage,
@@ -2335,7 +2369,7 @@ DO NOT repeat your previous question. Instead:
         const withinLimit = await this.checkRateLimit(customerId);
         if (!withinLimit) {
             this.logger.warn(`Customer ${customerId} exceeded daily token limit`);
-            const limitMsg = "I've reached my daily conversation limit with you. Our team will be in touch tomorrow, or you can contact us directly at " + this.customerCarePhone + ". 💖";
+            const limitMsg = "I've enjoyed our chat today! 💖 I've reached my daily limit, but our team would love to continue the conversation. They'll be in touch tomorrow, or you're welcome to reach us at " + this.customerCarePhone + ". 🌸";
             return { response: limitMsg, draft: null, updatedHistory: [...history, { role: 'user', content: message }, { role: 'assistant', content: limitMsg }] };
         }
         const isFrustrated = await this.detectFrustration(message, history);
@@ -2343,7 +2377,7 @@ DO NOT repeat your previous question. Instead:
             this.logger.log(`[SENTIMENT] Customer ${customerId} showing frustration - auto-escalating`);
             const sentimentScore = 0.8;
             await this.escalationService.createEscalation(customerId, 'Customer showing signs of frustration (auto-detected)', 'frustration', { sentimentScore, lastMessage: message, historyLength: history.length });
-            const escalationMsg = "I sense you might be frustrated, and I'm so sorry! 😔 Let me connect you with a team member who can help you better. Someone will be with you shortly. 💖";
+            const escalationMsg = "I can sense you're frustrated, and I am so genuinely sorry! 😔 I want to make sure you're taken care of, so I'm connecting you with a human team member who can help you better right now. Someone will be with you shortly! 💖";
             return { response: escalationMsg, draft: null, updatedHistory: [...history, { role: 'user', content: message }, { role: 'assistant', content: escalationMsg }] };
         }
         let draft = earlyDraft || await this.prisma.bookingDraft.findUnique({ where: { customerId } });
@@ -2368,7 +2402,11 @@ DO NOT repeat your previous question. Instead:
         const isGreetingVariant = /^(hello+|hi+|hey+|hii+|heyy+)$/i.test(cleanMsg) || /^(good\s+(morning|afternoon|evening))$/i.test(cleanMsg);
         const isGreeting = isExactGreeting || (cleanMsg.split(/\s+/).length <= 2 && isGreetingVariant);
         if (isGreeting) {
-            const greetingResponse = `Thank you for contacting Fiesta House Maternity, Kenya’s leading luxury photo studio specializing in maternity photography. We provide an all-inclusive experience in a world-class luxury studio, featuring world-class sets, professional makeup, and a curated selection of luxury gowns. We’re here to ensure your maternity shoot is an elegant, memorable, and stress-free experience.`;
+            const greetingResponse = `Hello there! 🌸 Welcome to Fiesta House Maternity. We're so delighted you reached out! ✨
+
+We specialize in luxury maternity photography here in Kenya, offering a beautiful, all-inclusive experience. From our world-class studio sets and professional makeup to our curated collection of gorgeous gowns, we're here to make sure your shoot is as radiant and stress-free as possible.
+
+How can I help make your maternity session special today? 💖`;
             return {
                 response: greetingResponse,
                 draft: null,
@@ -2712,182 +2750,6 @@ DO NOT repeat your previous question. Instead:
                 ? "No problem! I've cleared your booking draft. Feel free to start fresh whenever you're ready! 💖"
                 : "I don't see any active bookings or drafts to cancel. Would you like to start a new booking? 🌸";
             return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
-        }
-        if (draft && draft.step === 'reschedule_confirm') {
-            this.logger.log(`[RESCHEDULE] In confirmation state for customer ${customerId}`);
-            if (/(yes|confirm|do it|sure|okay|fine|go ahead|please|yep|yeah)/i.test(message)) {
-                const bookingId = draft.bookingId;
-                const newDateObj = new Date(draft.dateTimeIso);
-                if (bookingId && draft.dateTimeIso) {
-                    await this.bookingsService.updateBooking(bookingId, { dateTime: newDateObj });
-                    await this.prisma.bookingDraft.delete({ where: { customerId } });
-                    const msg = `✅ Done! Your appointment has been rescheduled to *${luxon_1.DateTime.fromJSDate(newDateObj).setZone(this.studioTz).toFormat('ccc, LLL dd, yyyy \'at\' h:mm a')}*. See you then! 💖`;
-                    return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
-                }
-                else {
-                    const msg = "I couldn't find the booking details to update. Please try again or contact support. 😓";
-                    return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
-                }
-            }
-            else if (/(no|cancel|different|another|change)/i.test(message)) {
-                await this.prisma.bookingDraft.update({
-                    where: { customerId },
-                    data: {
-                        step: 'reschedule',
-                        date: null,
-                        time: null,
-                        dateTimeIso: null
-                    }
-                });
-                const msg = "No problem! What date and time would you prefer instead? 🗓️";
-                return { response: msg, draft, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
-            }
-            else {
-                const prettyDate = luxon_1.DateTime.fromISO(draft.dateTimeIso).setZone(this.studioTz).toFormat('ccc, LLL dd, yyyy \'at\' h:mm a');
-                const msg = `I'm waiting for your confirmation to reschedule to *${prettyDate}*. Please reply "YES" to confirm or "NO" if you'd like a different time. 💖`;
-                return { response: msg, draft, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
-            }
-        }
-        const isRescheduleIntent = /\b(reschedul\w*)\b/i.test(message) ||
-            /(i want to|i'd like to|i need to|can i|can we).*reschedule/i.test(message) ||
-            /(change|move|modify).*(booking|appointment|date|time)/i.test(message);
-        const recentRescheduleMsgs = history
-            .filter((msg) => msg.role === 'assistant')
-            .slice(-2)
-            .map(msg => msg.content)
-            .join(' ');
-        const isRespondingToBookingSelection = /Which one would you like to reschedule/i.test(recentRescheduleMsgs) ||
-            /upcoming bookings/i.test(recentRescheduleMsgs) ||
-            /reply with the date or service of the booking you want to reschedule/i.test(recentRescheduleMsgs) ||
-            /multiple active bookings/i.test(recentRescheduleMsgs);
-        if (isRescheduleIntent || (draft && draft.step === 'reschedule') || isRespondingToBookingSelection) {
-            this.logger.log(`[RESCHEDULE] Detected intent or active flow for customer ${customerId}, draft step: ${draft?.step}, bookingId: ${draft?.bookingId}`);
-            let currentDraft = await this.prisma.bookingDraft.findUnique({ where: { customerId } });
-            if (!currentDraft && draft) {
-                currentDraft = draft;
-            }
-            if (isRescheduleIntent && currentDraft && currentDraft.step !== 'reschedule' && currentDraft.step !== 'reschedule_confirm' && !currentDraft.bookingId) {
-                this.logger.log(`[RESCHEDULE] User wants to reschedule, clearing existing booking draft`);
-                await this.prisma.bookingDraft.delete({ where: { customerId } }).catch(() => {
-                });
-                currentDraft = null;
-                draft = null;
-            }
-            const isAlreadyInReschedule = currentDraft && (currentDraft.step === 'reschedule' || currentDraft.step === 'reschedule_confirm' || currentDraft.bookingId);
-            this.logger.log(`[RESCHEDULE] isAlreadyInReschedule: ${isAlreadyInReschedule}, currentDraft step: ${currentDraft?.step}, bookingId: ${currentDraft?.bookingId}`);
-            if (!isAlreadyInReschedule) {
-                this.logger.log(`[RESCHEDULE] Setting up new reschedule request for customer ${customerId}`);
-                const allBookings = await this.prisma.booking.findMany({
-                    where: {
-                        customerId,
-                        status: 'confirmed',
-                        dateTime: { gte: new Date() },
-                    },
-                    orderBy: { dateTime: 'asc' },
-                });
-                if (allBookings.length === 0) {
-                    const msg = "I'd love to help you reschedule, but I can't find a current booking for you. Would you like to make a new one? 💖";
-                    return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
-                }
-                let targetBooking = allBookings[0];
-                let dateMatch = null;
-                dateMatch = message.match(/(\d{1,2})(st|nd|rd|th)?\s*(dec|december|jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|september|oct|october|nov|november)/i);
-                if (dateMatch && allBookings.length > 1) {
-                    const day = parseInt(dateMatch[1]);
-                    const monthStr = dateMatch[3].toLowerCase();
-                    const monthMap = {
-                        jan: 0, january: 0, feb: 1, february: 1, mar: 2, march: 2,
-                        apr: 3, april: 3, may: 4, jun: 5, june: 5, jul: 6, july: 6,
-                        aug: 7, august: 7, sep: 8, september: 8, oct: 9, october: 9,
-                        nov: 10, november: 10, dec: 11, december: 11
-                    };
-                    const month = monthMap[monthStr];
-                    const matchedBooking = allBookings.find(b => {
-                        const bookingDt = luxon_1.DateTime.fromJSDate(b.dateTime).setZone(this.studioTz);
-                        return bookingDt.month === month + 1 && bookingDt.day === day;
-                    });
-                    if (matchedBooking) {
-                        targetBooking = matchedBooking;
-                        this.logger.log(`[RESCHEDULE] User specified booking on ${day} ${monthStr}, matched booking ID ${matchedBooking.id}`);
-                    }
-                }
-                else if (isRespondingToBookingSelection && allBookings.length > 1) {
-                    const dayOnlyMatch = message.match(/(?:the one on |on )?(\d{1,2})(?:st|nd|rd|th)?/i);
-                    if (dayOnlyMatch) {
-                        const day = parseInt(dayOnlyMatch[1]);
-                        const matchedBookings = allBookings.filter(b => {
-                            const bookingDt = luxon_1.DateTime.fromJSDate(b.dateTime).setZone(this.studioTz);
-                            return bookingDt.day === day;
-                        });
-                        if (matchedBookings.length === 1) {
-                            targetBooking = matchedBookings[0];
-                            dateMatch = dayOnlyMatch;
-                            this.logger.log(`[RESCHEDULE] User specified booking on day ${day}, matched booking ID ${targetBooking.id}`);
-                        }
-                        else if (matchedBookings.length > 1) {
-                            const bookingsList = matchedBookings.map((b, idx) => {
-                                const dt = luxon_1.DateTime.fromJSDate(b.dateTime).setZone(this.studioTz);
-                                return `${idx + 1}️⃣ ${b.service} on ${dt.toFormat('MMM dd, yyyy')} at ${dt.toFormat('h:mm a')}`;
-                            }).join('\n');
-                            const msg = `I found ${matchedBookings.length} bookings on the ${day}${this.getOrdinalSuffix(day)}:\n\n${bookingsList}\n\nWhich one would you like to reschedule? Please specify the time or service name. 🗓️`;
-                            return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
-                        }
-                    }
-                }
-                if (allBookings.length > 1 && !dateMatch && !isRespondingToBookingSelection) {
-                    const bookingsList = allBookings.map((b, idx) => {
-                        const dt = luxon_1.DateTime.fromJSDate(b.dateTime).setZone(this.studioTz);
-                        return `${idx + 1}️⃣ ${b.service} on ${dt.toFormat('MMM dd, yyyy')} at ${dt.toFormat('h:mm a')}`;
-                    }).join('\n');
-                    const msg = `You have ${allBookings.length} upcoming bookings:\n\n${bookingsList}\n\nWhich one would you like to reschedule? Just tell me the date (e.g., "the one on Dec 6th") 🗓️`;
-                    return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
-                }
-                const now = new Date();
-                const bookingTime = new Date(targetBooking.dateTime);
-                const hoursDiff = (bookingTime.getTime() - now.getTime()) / (1000 * 60 * 60);
-                if (hoursDiff < 72 && hoursDiff > 0) {
-                    const bookingDt = luxon_1.DateTime.fromJSDate(targetBooking.dateTime).setZone(this.studioTz);
-                    await this.createEscalationAlert(customerId, 'reschedule_request', 'Reschedule Request - Within 72 Hours', `Customer requested to reschedule booking "${targetBooking.service}" scheduled for ${bookingDt.toFormat('MMMM dd, yyyy')} at ${bookingDt.toFormat('h:mm a')}. Only ${Math.round(hoursDiff)} hours until booking.`, {
-                        bookingId: targetBooking.id,
-                        hoursUntilBooking: Math.round(hoursDiff),
-                        originalDateTime: targetBooking.dateTime,
-                    });
-                    const msg = `Rescheduling is only allowed at least 72 hours before your booking. Please contact support for urgent changes.`;
-                    return { response: msg, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
-                }
-                draft = await this.prisma.bookingDraft.upsert({
-                    where: { customerId },
-                    update: {
-                        step: 'reschedule',
-                        service: targetBooking.service,
-                        name: targetBooking.recipientName || '',
-                        date: null,
-                        time: null,
-                        dateTimeIso: null,
-                        bookingId: targetBooking.id,
-                    },
-                    create: {
-                        customerId,
-                        step: 'reschedule',
-                        service: targetBooking.service,
-                        name: targetBooking.recipientName || '',
-                        bookingId: targetBooking.id,
-                    },
-                });
-                const extraction = await this.extractBookingDetails(message, history);
-                if (extraction.date || extraction.time) {
-                    draft = await this.mergeIntoDraft(customerId, extraction);
-                    await this.prisma.bookingDraft.update({
-                        where: { customerId },
-                        data: { recipientPhone: targetBooking.id }
-                    });
-                }
-                else {
-                    const bookingDt = luxon_1.DateTime.fromJSDate(targetBooking.dateTime).setZone(this.studioTz);
-                    const msg = `I can certainly help reschedule your ${targetBooking.service} appointment on ${bookingDt.toFormat('MMM dd')}! 🗓️ When would you like to move it to?`;
-                    return { response: msg, draft, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
-                }
-            }
         }
         const recentAssistantMsgs = history
             .filter((msg) => msg.role === 'assistant')
@@ -3450,7 +3312,8 @@ DO NOT repeat your previous question. Instead:
             message,
             hasDraft,
             draft,
-            enrichedContext
+            enrichedContext,
+            whatsappService: this.whatsappService
         };
         for (const strategy of this.strategies) {
             if (strategy.canHandle(null, context)) {
@@ -3729,6 +3592,8 @@ exports.AiService = AiService = AiService_1 = __decorate([
     __param(16, (0, common_1.Optional)()),
     __param(17, (0, common_1.Inject)((0, common_1.forwardRef)(() => websocket_gateway_1.WebsocketGateway))),
     __param(17, (0, common_1.Optional)()),
+    __param(18, (0, common_1.Inject)((0, common_1.forwardRef)(() => whatsapp_service_1.WhatsappService))),
+    __param(18, (0, common_1.Optional)()),
     __metadata("design:paramtypes", [config_1.ConfigService,
         prisma_service_1.PrismaService,
         circuit_breaker_service_1.CircuitBreakerService,
@@ -3744,6 +3609,7 @@ exports.AiService = AiService = AiService_1 = __decorate([
         bookings_service_1.BookingsService,
         messages_service_1.MessagesService,
         escalation_service_1.EscalationService, Object, notifications_service_1.NotificationsService,
-        websocket_gateway_1.WebsocketGateway])
+        websocket_gateway_1.WebsocketGateway,
+        whatsapp_service_1.WhatsappService])
 ], AiService);
 //# sourceMappingURL=ai.service.js.map

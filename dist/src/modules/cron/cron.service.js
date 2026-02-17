@@ -16,15 +16,17 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.CronService = void 0;
 const common_1 = require("@nestjs/common");
 const schedule_1 = require("@nestjs/schedule");
+const config_1 = require("@nestjs/config");
 const bull_1 = require("@nestjs/bull");
 const prisma_service_1 = require("../../prisma/prisma.service");
 const messages_service_1 = require("../messages/messages.service");
 const luxon_1 = require("luxon");
 let CronService = CronService_1 = class CronService {
-    constructor(prisma, messagesService, aiQueue) {
+    constructor(prisma, messagesService, aiQueue, configService) {
         this.prisma = prisma;
         this.messagesService = messagesService;
         this.aiQueue = aiQueue;
+        this.configService = configService;
         this.logger = new common_1.Logger(CronService_1.name);
         this.studioTz = 'Africa/Nairobi';
     }
@@ -136,6 +138,91 @@ let CronService = CronService_1 = class CronService {
             this.logger.error('Error in sendPostShootFollowUps cron job', error);
         }
     }
+    async checkAbandonedBookings() {
+        this.logger.log('Running hourly abandoned booking recovery check');
+        try {
+            const oneHourAgo = luxon_1.DateTime.now().setZone(this.studioTz).minus({ hours: 1 }).toJSDate();
+            const thirtyMinsAgo = luxon_1.DateTime.now().setZone(this.studioTz).minus({ minutes: 30 }).toJSDate();
+            const twentyFourHoursAgo = luxon_1.DateTime.now().setZone(this.studioTz).minus({ hours: 24 }).toJSDate();
+            const abandonedDrafts = await this.prisma.bookingDraft.findMany({
+                where: {
+                    step: 'confirm',
+                    updatedAt: { lt: oneHourAgo },
+                    customer: {
+                        proactiveOutreaches: {
+                            none: {
+                                type: 'abandoned_booking',
+                                createdAt: { gte: twentyFourHoursAgo }
+                            }
+                        }
+                    }
+                },
+                include: { customer: true }
+            });
+            const pendingPayments = await this.prisma.payment.findMany({
+                where: {
+                    status: 'pending',
+                    createdAt: { lt: thirtyMinsAgo },
+                    bookingDraft: {
+                        customer: {
+                            proactiveOutreaches: {
+                                none: {
+                                    type: 'abandoned_booking',
+                                    createdAt: { gte: twentyFourHoursAgo }
+                                }
+                            }
+                        }
+                    }
+                },
+                include: {
+                    bookingDraft: {
+                        include: { customer: true }
+                    }
+                }
+            });
+            const uniqueCustomers = new Map();
+            abandonedDrafts.forEach(d => uniqueCustomers.set(d.customerId, { draft: d, customer: d.customer }));
+            pendingPayments.forEach(p => {
+                if (p.bookingDraft) {
+                    uniqueCustomers.set(p.bookingDraft.customerId, { draft: p.bookingDraft, customer: p.bookingDraft.customer, isPaymentIssue: true });
+                }
+            });
+            this.logger.log(`Found ${uniqueCustomers.size} potential abandoned bookings to nudge.`);
+            for (const [customerId, data] of uniqueCustomers.entries()) {
+                const { draft, customer, isPaymentIssue } = data;
+                try {
+                    const recipientName = draft.recipientName || customer.name || 'there';
+                    const service = draft.service || 'your photoshoot';
+                    let nudgeMessage = '';
+                    if (isPaymentIssue) {
+                        nudgeMessage = `Hi ${recipientName}! 🌸 Just checking in to see if you had any trouble with the deposit prompt for your *${service}*? \n\nI'm still holding your spot, but if the prompt didn't show up or you have any questions, just let me know! I'm here to help. 💖`;
+                    }
+                    else {
+                        nudgeMessage = `Hi ${recipientName}! 🌸 I noticed we were almost finished with your *${service}* booking. \n\nI'd love to get that confirmed for you so we can start getting everything ready! Did you have any questions about the package or the date? ✨`;
+                    }
+                    await this.messagesService.sendOutboundMessage(customerId, nudgeMessage, 'whatsapp');
+                    await this.prisma.proactiveOutreach.create({
+                        data: {
+                            customerId,
+                            type: 'abandoned_booking',
+                            status: 'sent',
+                            scheduledFor: new Date(),
+                            sentAt: new Date(),
+                            messageContent: nudgeMessage,
+                            channel: 'whatsapp'
+                        }
+                    });
+                    this.logger.log(`Sent abandoned booking nudge to customer ${customerId}`);
+                }
+                catch (err) {
+                    this.logger.error(`Failed to send nudge to customer ${customerId}`, err);
+                }
+            }
+        }
+        catch (error) {
+            this.logger.error('Error in checkAbandonedBookings cron job', error);
+        }
+    }
     async triggerRemindersManually() {
         this.logger.log('Manually triggering reminders');
         await this.sendBookingReminders();
@@ -143,6 +230,10 @@ let CronService = CronService_1 = class CronService {
     async triggerFollowUpsManually() {
         this.logger.log('Manually triggering follow-ups');
         await this.sendPostShootFollowUps();
+    }
+    async triggerNudgesManually() {
+        this.logger.log('Manually triggering nudges');
+        await this.checkAbandonedBookings();
     }
 };
 exports.CronService = CronService;
@@ -162,10 +253,16 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], CronService.prototype, "sendPostShootFollowUps", null);
+__decorate([
+    (0, schedule_1.Cron)(schedule_1.CronExpression.EVERY_HOUR),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], CronService.prototype, "checkAbandonedBookings", null);
 exports.CronService = CronService = CronService_1 = __decorate([
     (0, common_1.Injectable)(),
     __param(2, (0, bull_1.InjectQueue)('aiQueue')),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
-        messages_service_1.MessagesService, Object])
+        messages_service_1.MessagesService, Object, config_1.ConfigService])
 ], CronService);
 //# sourceMappingURL=cron.service.js.map

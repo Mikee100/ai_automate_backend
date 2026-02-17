@@ -12,7 +12,7 @@ export class PackageInquiryStrategy implements ResponseStrategy {
         // Allow package inquiries even if there's a draft - user might be comparing packages
         // Only block if the message is clearly a booking continuation (date/time related)
         const isBookingContinuation = hasDraft && /(date|time|when|schedule|book|appointment|tomorrow|next|monday|tuesday|wednesday|thursday|friday|saturday|sunday|am|pm|\d{1,2}[:\-]\d{2})/i.test(message) && !/(deposit|payment|pay)/i.test(message);
-        
+
         return isPackageQuery && !isBookingContinuation;
     }
 
@@ -24,7 +24,7 @@ export class PackageInquiryStrategy implements ResponseStrategy {
         try {
             // Check if there's an existing draft
             let existingDraft = hasDraft ? await prisma.bookingDraft.findUnique({ where: { customerId } }) : null;
-            
+
             // Use public method from AiService (need to ensure it's public)
             const allPackages = await aiService.getCachedPackages();
             logger.log(`[PACKAGE QUERY] Found ${allPackages?.length || 0} packages in DB`);
@@ -68,10 +68,9 @@ export class PackageInquiryStrategy implements ResponseStrategy {
             if (allPackages && allPackages.length > 0) {
                 let packages = allPackages;
                 let packageType = '';
-                
-                // Check if user asked for outdoor packages - inform them we only offer studio now
+
                 if (/(outdoor)/i.test(message)) {
-                    const response = `I'm so sorry, but we're currently focusing on our beautiful studio packages only! Our studio sessions provide a comfortable, controlled environment with stunning backdrops and professional lighting. Would you like to see our studio packages? They're absolutely gorgeous! 💖`;
+                    const response = `I'm so sorry, but we're currently focusing all our love and attention on our beautiful studio sessions! 🌸 Our studio provides such a cozy, controlled environment with stunning backdrops and professional lighting that really makes you glow. Would you like to see our studio packages? They're absolutely gorgeous! 💖`;
                     return { response, draft: existingDraft || null, updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
                 } else if (/(studio|indoor)/i.test(message)) {
                     packages = allPackages.filter((p: any) => p.type?.toLowerCase() === 'studio');
@@ -91,11 +90,11 @@ export class PackageInquiryStrategy implements ResponseStrategy {
                 if (packages.length > 0) {
                     // Check if asking about deposits specifically
                     const isDepositQuery = /(deposit|down payment|initial payment|advance payment)/i.test(message);
-                    
+
                     if (isDepositQuery) {
                         // Check if asking about specific packages mentioned in message (e.g., "deposit for the two")
                         const mentionedPackages = packages.filter((p: any) => matchPackage(message, p.name));
-                        
+
                         // Also check for phrases like "the two", "both", "these", etc. when packages were mentioned in recent history
                         const recentPackages = history.slice(-3).filter((h: any) => h.role === 'assistant').map((h: any) => {
                             const matches: any[] = [];
@@ -106,29 +105,29 @@ export class PackageInquiryStrategy implements ResponseStrategy {
                             });
                             return matches;
                         }).flat();
-                        
-                        const uniqueRecentPackages = recentPackages.filter((p: any, index: number, self: any[]) => 
+
+                        const uniqueRecentPackages = recentPackages.filter((p: any, index: number, self: any[]) =>
                             index === self.findIndex((t: any) => t.name === p.name)
                         );
-                        
+
                         // If user said "the two" or similar, use recent packages (limit to 2)
                         const isAskingAboutRecent = /(the (two|both)|these|those|them)/i.test(message);
-                        const packagesToShow = isAskingAboutRecent && uniqueRecentPackages.length > 0 
+                        const packagesToShow = isAskingAboutRecent && uniqueRecentPackages.length > 0
                             ? uniqueRecentPackages.slice(0, 2)
-                            : mentionedPackages.length > 0 
-                                ? mentionedPackages 
+                            : mentionedPackages.length > 0
+                                ? mentionedPackages
                                 : packages;
-                        
-                        const depositInfo = packagesToShow.map((p: any) => 
+
+                        const depositInfo = packagesToShow.map((p: any) =>
                             `📦 *${p.name}*: KES ${p.deposit || 2000} deposit`
                         ).join('\n');
                         const response = `Here are the deposit amounts:\n\n${depositInfo}\n\nThe remaining balance is due after your photoshoot. 💖`;
                         return { response, draft: existingDraft || null, updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
                     }
-                    
+
                     // Check if asking for details about ALL packages ("tell me about each", "tell me about all of them")
                     const isAskingAboutAll = /(tell me about (each|all|every)|what (are|is) (each|all|every)|details (about|on) (each|all|every)|describe (each|all|every))/i.test(message);
-                    
+
                     if (isAskingAboutAll) {
                         // Show detailed info for all packages
                         const packagesList = packages.map((p: any) => aiService.formatPackageDetails(p, true)).join('\n\n');
@@ -138,7 +137,7 @@ export class PackageInquiryStrategy implements ResponseStrategy {
 
                     // Check for "i want that one" or similar - look at recent conversation history
                     const wantsThatOne = /(i want (that|this) (one|package)|i'll take (that|this) (one|package)|i choose (that|this) (one|package)|i'll go with (that|this) (one|package)|(that|this) one|i want it|i'll take it)/i.test(message);
-                    
+
                     // Find package - packages array is already filtered to studio packages only
                     // Prioritize exact name matches to avoid confusion with similar names
                     let specificPackage = packages.find((p: any) => {
@@ -151,7 +150,7 @@ export class PackageInquiryStrategy implements ResponseStrategy {
                         // Then try the matchPackage logic for variations
                         return matchPackage(message, p.name);
                     });
-                    
+
                     // If user says "i want that one" but no package in message, check recent history
                     if (wantsThatOne && !specificPackage) {
                         // Look at recent assistant messages to find the package that was just mentioned
@@ -167,7 +166,7 @@ export class PackageInquiryStrategy implements ResponseStrategy {
                             }
                         }
                     }
-                    
+
                     // Check if asking about a SPECIFIC package with detail keywords
                     // Include conversational patterns like "how about", "what about" as detail inquiries
                     const isAskingForDetails = /(tell me about|what is|what's|details|include|come with|feature|what does.*include|how about|what about)/i.test(message);
@@ -177,19 +176,19 @@ export class PackageInquiryStrategy implements ResponseStrategy {
                         // If there's an existing draft, preserve it; otherwise return null
                         const detailedInfo = aiService.formatPackageDetails(specificPackage, true);
                         let response = `${detailedInfo}\n\n`;
-                        
+
                         // Only mention existing draft if it has a valid service name
                         if (existingDraft && existingDraft.service && existingDraft.service.trim() && existingDraft.service !== specificPackage.name) {
                             // User is comparing packages - they have a draft for a different package
-                            response += `I see you were interested in the ${existingDraft.service}. Would you like to switch to the ${specificPackage.name} instead, or would you like to continue with ${existingDraft.service}? 💖`;
+                            response += `I see you were interested in the ${existingDraft.service}. Would you like to switch to the ${specificPackage.name} instead, or would you like to continue with ${existingDraft.service}? I'm here to help you choose whatever feels perfect for you! 💖`;
                         } else {
-                            response += `This package is perfect for capturing beautiful moments! Would you like to book this package? 💖`;
+                            response += `This package is just perfect for capturing those beautiful, fleeting moments! ✨ Would you like to book this one? 💖`;
                         }
-                        
-                        return { 
-                            response, 
+
+                        return {
+                            response,
                             draft: existingDraft || null, // Preserve existing draft if it exists
-                            updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] 
+                            updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }]
                         };
                     }
 
@@ -204,17 +203,17 @@ export class PackageInquiryStrategy implements ResponseStrategy {
                         // Update service first
                         await prisma.bookingDraft.update({
                             where: { customerId },
-                            data: { 
+                            data: {
                                 service: specificPackage.name
                             },
                         });
 
                         // Reload draft to get updated service
                         draft = await prisma.bookingDraft.findUnique({ where: { customerId } });
-                        
+
                         // Determine the correct next step based on what's already filled
                         const nextStep = aiService.determineBookingStep(draft);
-                        
+
                         // Update step to the correct next step
                         draft = await prisma.bookingDraft.update({
                             where: { customerId },
@@ -223,7 +222,7 @@ export class PackageInquiryStrategy implements ResponseStrategy {
 
                         // Generate appropriate response based on next step
                         let response = `Perfect! I've noted you'd like the ${specificPackage.name}. `;
-                        
+
                         if (nextStep === 'date') {
                             response += `When would you like to come in for the shoot? (e.g., "next Tuesday at 10am") 🗓️`;
                         } else if (nextStep === 'time') {

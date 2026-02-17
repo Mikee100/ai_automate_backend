@@ -7,6 +7,7 @@ import { EscalationService } from '../escalation/escalation.service';
 import { CircuitBreakerService } from './services/circuit-breaker.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WebsocketGateway } from '../../websockets/websocket.gateway';
+import { WhatsappService } from '../whatsapp/whatsapp.service';
 type HistoryMsg = {
     role: 'user' | 'assistant';
     content: string;
@@ -39,6 +40,7 @@ export declare class AiService {
     private aiQueue?;
     private notificationsService?;
     private websocketGateway?;
+    private whatsappService?;
     extractDateTime(text: string): Promise<Date | null>;
     private getOrdinalSuffix;
     private readonly logger;
@@ -74,10 +76,11 @@ export declare class AiService {
     private getWhatsAppOnlyRedirectMessage;
     private readonly businessHours;
     private readonly businessDescription;
-    constructor(configService: ConfigService, prisma: PrismaService, circuitBreaker: CircuitBreakerService, customerMemory: CustomerMemoryService, conversationLearning: ConversationLearningService, domainExpertise: DomainExpertiseService, advancedIntent: AdvancedIntentService, personalization: PersonalizationService, responseHumanizer: ResponseHumanizerService, feedbackLoop: FeedbackLoopService, predictiveAnalytics: PredictiveAnalyticsService, responseQuality: ResponseQualityService, bookingsService?: BookingsService, messagesService?: MessagesService, escalationService?: EscalationService, aiQueue?: Queue, notificationsService?: NotificationsService, websocketGateway?: WebsocketGateway);
+    constructor(configService: ConfigService, prisma: PrismaService, circuitBreaker: CircuitBreakerService, customerMemory: CustomerMemoryService, conversationLearning: ConversationLearningService, domainExpertise: DomainExpertiseService, advancedIntent: AdvancedIntentService, personalization: PersonalizationService, responseHumanizer: ResponseHumanizerService, feedbackLoop: FeedbackLoopService, predictiveAnalytics: PredictiveAnalyticsService, responseQuality: ResponseQualityService, bookingsService?: BookingsService, messagesService?: MessagesService, escalationService?: EscalationService, aiQueue?: Queue, notificationsService?: NotificationsService, websocketGateway?: WebsocketGateway, whatsappService?: WhatsappService);
     private initializeTokenEncoding;
     private checkAndEscalateIfHandoffMentioned;
     createEscalationAlert(customerId: string, type: 'reschedule_request' | 'ai_escalation', title: string, message: string, metadata?: any): Promise<void>;
+    private generateUnknownQueryResponse;
     private checkAndCreateSessionNote;
     private initPineconeSafely;
     private checkRateLimit;
@@ -132,20 +135,20 @@ export declare class AiService {
     getOrCreateDraft(customerId: string): Promise<{
         id: string;
         customerId: string;
+        createdAt: Date;
+        name: string | null;
+        updatedAt: Date;
+        bookingId: string | null;
         service: string | null;
+        recipientName: string | null;
+        recipientPhone: string | null;
         date: string | null;
         time: string | null;
         dateTimeIso: string | null;
-        name: string | null;
-        recipientName: string | null;
-        recipientPhone: string | null;
         isForSomeoneElse: boolean | null;
         step: string;
         conflictResolution: string | null;
-        bookingId: string | null;
         version: number;
-        createdAt: Date;
-        updatedAt: Date;
     }>;
     mergeIntoDraft(customerId: string, extraction: any, existingDraft?: any): Promise<any>;
     determineBookingStep(draft: any): string | null;

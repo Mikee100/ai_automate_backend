@@ -202,7 +202,7 @@ let AiQueueProcessor = AiQueueProcessor_1 = class AiQueueProcessor {
             switch (platform) {
                 case 'whatsapp':
                     if (customer.whatsappId) {
-                        await this.whatsappService.sendMessage(customer.whatsappId, response);
+                        await this.whatsappService.sendMessage(customer.whatsappId, response, customerId);
                     }
                     else {
                         this.logger.error('Customer does not have WhatsApp ID');
@@ -212,7 +212,7 @@ let AiQueueProcessor = AiQueueProcessor_1 = class AiQueueProcessor {
                 case 'instagram':
                     if (customer.instagramId) {
                         this.logger.log(`[AI QUEUE] Sending Instagram response to customer ${customerId} (instagramId: ${customer.instagramId})`);
-                        await this.instagramService.sendMessage(customer.instagramId, response);
+                        await this.instagramService.sendMessage(customer.instagramId, response, customerId);
                         this.logger.log(`[AI QUEUE] Instagram response sent successfully`);
                     }
                     else {
@@ -222,7 +222,7 @@ let AiQueueProcessor = AiQueueProcessor_1 = class AiQueueProcessor {
                     break;
                 case 'messenger':
                     if (customer.messengerId) {
-                        await this.messengerSendService.sendMessage(customer.messengerId, response);
+                        await this.messengerSendService.sendMessage(customer.messengerId, response, customerId);
                     }
                     else {
                         this.logger.error('Customer does not have Messenger ID');

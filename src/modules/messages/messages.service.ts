@@ -23,11 +23,11 @@ export class MessagesService {
       return 'greeting';
     }
     // Reschedule intent
-    if (/(reschedul\w*|change|move|shift|postpone|adjust|modify|update).*(date|time|booking|appointment|slot)/i.test(lower) ||
-        /can i reschedul\w*/i.test(lower) ||
-        /(can we|could we|can i|could i)\s+.*reschedule/i.test(lower) ||
-        /(make|do|request)\s+(a\s+)?reschedule/i.test(lower) ||
-        /i want to (change|move|shift|postpone|adjust|modify|update) (my|the)? (date|time|booking|appointment|slot)/i.test(lower)) {
+    if (/(reschedul\w*|change|move|shift|postpone|adjust|modify|update|switch).*(date|time|booking|appointment|slot|shoot|session)/i.test(lower) ||
+      /can i (reschedul\w*|change|move|shift|postpone|adjust|modify|update|switch)/i.test(lower) ||
+      /(can we|could we|can i|could i|help me)\s+.*(reschedule|change|move|shift|postpone|adjust|modify|update|switch)/i.test(lower) ||
+      /(make|do|request)\s+(a\s+)?reschedule/i.test(lower) ||
+      /i want to (change|move|shift|postpone|adjust|modify|update|switch) (my|the)? (date|time|booking|appointment|slot|shoot|session)/i.test(lower)) {
       return 'reschedule';
     }
     // Booking inquiry intent
@@ -151,11 +151,11 @@ Respond with only the intent (e.g., booking_details).`;
       return 'greeting';
     }
     // Reschedule intent
-    if (/(reschedul\w*|change|move|shift|postpone|adjust|modify|update).*(date|time|booking|appointment|slot)/i.test(lower) ||
-        /can i reschedul\w*/i.test(lower) ||
-        /(can we|could we|can i|could i)\s+.*reschedule/i.test(lower) ||
-        /(make|do|request)\s+(a\s+)?reschedule/i.test(lower) ||
-        /i want to (change|move|shift|postpone|adjust|modify|update) (my|the)? (date|time|booking|appointment|slot)/i.test(lower)) {
+    if (/(reschedul\w*|change|move|shift|postpone|adjust|modify|update|switch).*(date|time|booking|appointment|slot|shoot|session)/i.test(lower) ||
+      /can i (reschedul\w*|change|move|shift|postpone|adjust|modify|update|switch)/i.test(lower) ||
+      /(can we|could we|can i|could i|help me)\s+.*(reschedule|change|move|shift|postpone|adjust|modify|update|switch)/i.test(lower) ||
+      /(make|do|request)\s+(a\s+)?reschedule/i.test(lower) ||
+      /i want to (change|move|shift|postpone|adjust|modify|update|switch) (my|the)? (date|time|booking|appointment|slot|shoot|session)/i.test(lower)) {
       console.log('Classified as reschedule');
       return 'reschedule';
     }
@@ -207,7 +207,7 @@ Respond with only the intent (e.g., booking_details).`;
     // Note: Actual sending is handled by the calling service (e.g., PaymentsService)
     // which has direct access to platform services (WhatsappService, etc.)
     // This method primarily saves the message to the database for record-keeping
-    
+
     return message;
   }
 

@@ -9,6 +9,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
+const schedule_1 = require("@nestjs/schedule");
 const bull_1 = require("@nestjs/bull");
 const throttler_1 = require("@nestjs/throttler");
 const event_emitter_1 = require("@nestjs/event-emitter");
@@ -51,6 +52,7 @@ exports.AppModule = AppModule = __decorate([
             config_1.ConfigModule.forRoot({
                 isGlobal: true,
             }),
+            schedule_1.ScheduleModule.forRoot(),
             throttler_1.ThrottlerModule.forRoot([
                 {
                     name: 'short',

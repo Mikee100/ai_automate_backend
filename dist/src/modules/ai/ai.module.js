@@ -22,6 +22,7 @@ const customers_module_1 = require("../customers/customers.module");
 const payments_module_1 = require("../payments/payments.module");
 const notifications_module_1 = require("../notifications/notifications.module");
 const websocket_module_1 = require("../../websockets/websocket.module");
+const whatsapp_module_1 = require("../whatsapp/whatsapp.module");
 const customer_memory_service_1 = require("./services/customer-memory.service");
 const conversation_learning_service_1 = require("./services/conversation-learning.service");
 const domain_expertise_service_1 = require("./services/domain-expertise.service");
@@ -41,7 +42,7 @@ exports.AiModule = AiModule = __decorate([
     (0, common_1.Module)({
         imports: [
             prisma_module_1.PrismaModule,
-            schedule_1.ScheduleModule.forRoot(),
+            schedule_1.ScheduleModule,
             (0, common_1.forwardRef)(() => bookings_module_1.BookingsModule),
             (0, common_1.forwardRef)(() => messages_module_1.MessagesModule),
             customers_module_1.CustomersModule,
@@ -54,6 +55,7 @@ exports.AiModule = AiModule = __decorate([
             (0, common_1.forwardRef)(() => payments_module_1.PaymentsModule),
             notifications_module_1.NotificationsModule,
             websocket_module_1.WebsocketModule,
+            (0, common_1.forwardRef)(() => whatsapp_module_1.WhatsappModule),
         ],
         controllers: [ai_controller_1.AiController, admin_ai_controller_1.AdminAiController],
         providers: [

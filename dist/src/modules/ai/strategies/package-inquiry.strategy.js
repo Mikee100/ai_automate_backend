@@ -51,7 +51,7 @@ class PackageInquiryStrategy {
                 let packages = allPackages;
                 let packageType = '';
                 if (/(outdoor)/i.test(message)) {
-                    const response = `I'm so sorry, but we're currently focusing on our beautiful studio packages only! Our studio sessions provide a comfortable, controlled environment with stunning backdrops and professional lighting. Would you like to see our studio packages? They're absolutely gorgeous! 💖`;
+                    const response = `I'm so sorry, but we're currently focusing all our love and attention on our beautiful studio sessions! 🌸 Our studio provides such a cozy, controlled environment with stunning backdrops and professional lighting that really makes you glow. Would you like to see our studio packages? They're absolutely gorgeous! 💖`;
                     return { response, draft: existingDraft || null, updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
                 }
                 else if (/(studio|indoor)/i.test(message)) {
@@ -123,10 +123,10 @@ class PackageInquiryStrategy {
                         const detailedInfo = aiService.formatPackageDetails(specificPackage, true);
                         let response = `${detailedInfo}\n\n`;
                         if (existingDraft && existingDraft.service && existingDraft.service.trim() && existingDraft.service !== specificPackage.name) {
-                            response += `I see you were interested in the ${existingDraft.service}. Would you like to switch to the ${specificPackage.name} instead, or would you like to continue with ${existingDraft.service}? 💖`;
+                            response += `I see you were interested in the ${existingDraft.service}. Would you like to switch to the ${specificPackage.name} instead, or would you like to continue with ${existingDraft.service}? I'm here to help you choose whatever feels perfect for you! 💖`;
                         }
                         else {
-                            response += `This package is perfect for capturing beautiful moments! Would you like to book this package? 💖`;
+                            response += `This package is just perfect for capturing those beautiful, fleeting moments! ✨ Would you like to book this one? 💖`;
                         }
                         return {
                             response,

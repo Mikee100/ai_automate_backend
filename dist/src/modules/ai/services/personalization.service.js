@@ -42,19 +42,30 @@ let PersonalizationService = PersonalizationService_1 = class PersonalizationSer
     }
     async generateGreeting(customerId, customerName) {
         const context = await this.customerMemory.getPersonalizationContext(customerId);
+        const name = customerName || 'lovely';
         if (context.isVIP) {
-            return `Welcome back, ${customerName || 'gorgeous'}! 👑 It's always a pleasure to assist our VIP clients. How can I make your day special? 💖`;
+            const vipGreetings = [
+                `Welcome back, ${name}! 👑 It's always a true joy to assist our VIP clients. How can I make your day extra special today? ✨`,
+                `Hello again, ${name}! 🌟 It’s so wonderful to see you. Being a VIP, you know we’re always here to make your experience perfect. What can I help you with? 💖`,
+                `So good to have you back, ${name}! 👑 We’ve been looking forward to your next visit. How can I assist you with your luxury maternity session today? ✨`
+            ];
+            return vipGreetings[Math.floor(Math.random() * vipGreetings.length)];
         }
         if (context.isReturning) {
-            return `Hi ${customerName || 'lovely'}! 🌸 So wonderful to see you again! How can I help you today? 💕`;
+            const returningGreetings = [
+                `Hi ${name}! 🌸 It’s so wonderful to see you again! How have you been? How can I help you today? 💕`,
+                `Welcome back, ${name}! ✨ We love seeing familiar faces. What can I help you with this time? 🌸`,
+                `Hello again, ${name}! 💖 It’s a pleasure to have you back with us. How can I assist you today? 🌸`
+            ];
+            return returningGreetings[Math.floor(Math.random() * returningGreetings.length)];
         }
         if (context.relationshipStage === 'new') {
-            return `Hi there! 💕 Welcome to Fiesta House Attire! I'm so excited to help you plan your maternity photoshoot. What can I help you with today? 🌸`;
+            return `Hi there! 🌸 Welcome to Fiesta House Maternity! We’re so honored you’re considering us to capture this beautiful chapter of your life. How can I help you plan your dream photoshoot today? ✨`;
         }
         if (context.relationshipStage === 'interested') {
-            return `Welcome back! 😊 I see you were looking at our packages before. Have you had a chance to think about which one might be perfect for you? I'm here to help! 💖`;
+            return `Welcome back! 😊 I remember you were looking at our beautiful packages earlier. Have you had a chance to think about which one might be the perfect fit for you? I’m here to help with any questions! 💖`;
         }
-        return `Hi! 💕 How can I help you today? 🌸`;
+        return `Hi! 🌸 How can I help make your day special today? ✨`;
     }
     async generateProactiveSuggestions(customerId, currentIntent) {
         const context = await this.customerMemory.getPersonalizationContext(customerId);
@@ -92,13 +103,19 @@ let PersonalizationService = PersonalizationService_1 = class PersonalizationSer
     matchEmotionalTone(response, customerTone) {
         switch (customerTone) {
             case 'excited':
-                return response.replace(/\./g, '!').replace(/💕/g, '💕✨');
+                const excitedIntros = [
+                    "Oh, how exciting! ✨ ",
+                    "That sounds absolutely wonderful! 💖 ",
+                    "I love that energy! 🌟 "
+                ];
+                const intro = excitedIntros[Math.floor(Math.random() * excitedIntros.length)];
+                return `${intro}${response.replace(/\./g, '!')}`;
             case 'anxious':
-                return `${response}\n\nDon't worry, I'm here to help make this as easy and stress-free as possible! 💕`;
+                return `I completely understand how you feel, and I'm here to make this as smooth and easy as possible for you. 🌸 ${response}\n\nDon't worry, we'll take care of every little detail so you can just enjoy the moment! 💕`;
             case 'frustrated':
-                return `I'm so sorry for any confusion! Let me help make this right. ${response}`;
+                return `I am so sorry for any frustration this has caused! 😔 I really want to make things right for you. ${response}`;
             case 'confused':
-                return `Let me break this down simply:\n\n${response}\n\nDoes that make sense? Feel free to ask if anything is unclear! 😊`;
+                return `I'm happy to clear that up for you! 🌸 Let's look at it this way:\n\n${response}\n\nDoes that help make things a bit clearer? I'm here if you have any more questions at all! 😊`;
             default:
                 return response;
         }

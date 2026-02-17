@@ -89,7 +89,7 @@ let InstagramService = class InstagramService {
             hoursRemaining
         };
     }
-    async sendMessage(to, message) {
+    async sendMessage(to, message, customerId) {
         console.log('[INSTAGRAM] 📤 Sending Instagram message to:', to);
         console.log('[INSTAGRAM] Message:', message);
         const canSend = await this.canSendMessage(to);
@@ -124,7 +124,13 @@ let InstagramService = class InstagramService {
                 },
             });
             console.log('[INSTAGRAM] ✔️ Instagram API response:', JSON.stringify(response.data, null, 2));
-            const customer = await this.customersService.findByInstagramId(to);
+            let customer;
+            if (customerId) {
+                customer = await this.customersService.findOne(customerId);
+            }
+            else {
+                customer = await this.customersService.findByInstagramId(to);
+            }
             if (customer) {
                 await this.messagesService.create({
                     content: message,

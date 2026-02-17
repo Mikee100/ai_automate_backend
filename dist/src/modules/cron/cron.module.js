@@ -19,7 +19,7 @@ exports.CronModule = CronModule;
 exports.CronModule = CronModule = __decorate([
     (0, common_1.Module)({
         imports: [
-            schedule_1.ScheduleModule.forRoot(),
+            schedule_1.ScheduleModule,
             prisma_module_1.PrismaModule,
             messages_module_1.MessagesModule,
             bull_1.BullModule.registerQueue({ name: 'aiQueue' }),

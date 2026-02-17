@@ -70,4 +70,16 @@ export declare class WhatsappService {
         totalConversations: number;
         activeConversations: number;
     }>;
+    sendInteractiveButtons(to: string, bodyText: string, buttons: {
+        id: string;
+        title: string;
+    }[]): Promise<any>;
+    sendInteractiveList(to: string, bodyText: string, buttonText: string, sections: {
+        title: string;
+        rows: {
+            id: string;
+            title: string;
+            description?: string;
+        }[];
+    }[]): Promise<any>;
 }

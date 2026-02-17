@@ -223,7 +223,7 @@ export class AiQueueProcessor implements OnModuleInit {
       switch (platform) {
         case 'whatsapp':
           if (customer.whatsappId) {
-            await this.whatsappService.sendMessage(customer.whatsappId, response);
+            await this.whatsappService.sendMessage(customer.whatsappId, response, customerId);
           } else {
             this.logger.error('Customer does not have WhatsApp ID');
             return;
@@ -233,7 +233,7 @@ export class AiQueueProcessor implements OnModuleInit {
         case 'instagram':
           if (customer.instagramId) {
             this.logger.log(`[AI QUEUE] Sending Instagram response to customer ${customerId} (instagramId: ${customer.instagramId})`);
-            await this.instagramService.sendMessage(customer.instagramId, response);
+            await this.instagramService.sendMessage(customer.instagramId, response, customerId);
             this.logger.log(`[AI QUEUE] Instagram response sent successfully`);
           } else {
             this.logger.error(`[AI QUEUE] Customer ${customerId} does not have Instagram ID - cannot send response`);
@@ -243,7 +243,7 @@ export class AiQueueProcessor implements OnModuleInit {
 
         case 'messenger':
           if (customer.messengerId) {
-            await this.messengerSendService.sendMessage(customer.messengerId, response);
+            await this.messengerSendService.sendMessage(customer.messengerId, response, customerId);
           } else {
             this.logger.error('Customer does not have Messenger ID');
             return;

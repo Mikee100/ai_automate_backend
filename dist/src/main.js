@@ -82,9 +82,10 @@ async function bootstrap() {
     catch (err) {
         console.warn('Bull Board dashboard setup failed:', err);
     }
-    const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+    const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 4000;
+    console.log(`[DEBUG] Attempting to listen on port: ${port} (127.0.0.1)`);
     try {
-        await app.listen(port);
+        await app.listen(port, '127.0.0.1');
         console.log(`✅ Application started successfully on port ${port}`);
         console.log(JSON.stringify({ message: 'Fiesta House APIs is running 🚀', port }));
     }
