@@ -30,20 +30,34 @@ export class AdvancedIntentService {
     async analyzeIntent(message: string, context?: any): Promise<IntentAnalysis> {
         const systemPrompt = `You are an expert intent classifier for a maternity photoshoot booking system.
 Analyze the user's message and return a JSON object with:
-- primaryIntent: main intent (booking, package_inquiry, faq, reschedule, cancel, complaint, price_inquiry, availability, objection)
-- secondaryIntents: array of additional intents detected
-- confidence: 0-1 score for primary intent
-- emotionalTone: excited, anxious, frustrated, neutral, confused, happy
-- urgencyLevel: low, medium, high
-- complexity: simple (single request), moderate (2-3 requests), complex (multiple requests or unclear)
-- requiresHumanHandoff: boolean (true if frustrated, very complex, or complaint)
+- primaryIntent: main intent (greeting, booking, package_inquiry, faq, reschedule, cancel, complaint, price_inquiry, availability, objection, bot_info)
+- secondaryIntents: array of other relevant intents
+- confidence: scale 0-1
+- emotionalTone: (happy, anxious, excited, frustrated, confused, neutral)
+- urgencyLevel: (low, medium, high)
+- complexity: (simple, complex)
+- requiresHumanHandoff: boolean
+
+CRITICAL RULE: If a user mentions wanting to book, inquiring about packages, or checking availability, the primaryIntent MUST be 'booking' or 'package_inquiry' even if they start with a greeting (like "Hi", "Hello"). 'greeting' should ONLY be the primaryIntent if the message contains NO other specific request.
 
 Examples:
-"I want to book the Gold package for next Friday at 2pm" 
+"I want to book the Gold package for next Friday at 2pm"
 → {primaryIntent: "booking", secondaryIntents: [], confidence: 0.95, emotionalTone: "neutral", urgencyLevel: "medium", complexity: "simple", requiresHumanHandoff: false}
+
+"Hello, I'm interested in a photoshoot"
+→ {primaryIntent: "booking", secondaryIntents: ["greeting"], confidence: 0.99, emotionalTone: "happy", urgencyLevel: "low", complexity: "simple", requiresHumanHandoff: false}
+
+"Hi, what are your prices?"
+→ {primaryIntent: "package_inquiry", secondaryIntents: ["greeting", "price_inquiry"], confidence: 0.99, emotionalTone: "neutral", urgencyLevel: "medium", complexity: "simple", requiresHumanHandoff: false}
+
+"Just saying hi!"
+→ {primaryIntent: "greeting", secondaryIntents: [], confidence: 1.0, emotionalTone: "happy", urgencyLevel: "low", complexity: "simple", requiresHumanHandoff: false}
 
 "Can you tell me about your packages and also what's included in the makeup? I'm not sure which one to choose"
 → {primaryIntent: "package_inquiry", secondaryIntents: ["faq"], confidence: 0.85, emotionalTone: "confused", urgencyLevel: "low", complexity: "moderate", requiresHumanHandoff: false}
+
+"Who are you?"
+→ {primaryIntent: "bot_info", secondaryIntents: [], confidence: 0.99, emotionalTone: "neutral", urgencyLevel: "low", complexity: "simple", requiresHumanHandoff: false}
 
 "This is ridiculous! I've been trying to book for 10 minutes and nothing works!"
 → {primaryIntent: "complaint", secondaryIntents: ["booking"], confidence: 0.9, emotionalTone: "frustrated", urgencyLevel: "high", complexity: "simple", requiresHumanHandoff: true}`;
@@ -164,6 +178,18 @@ Examples:
 
         // Cancel
         if (/(cancel|delete|remove)/i.test(message)) intents.push('cancel');
+
+        // Greeting
+        if (/(hi|hello|hey|greetings|hallo|habari|good morning|good afternoon|good evening)/i.test(message)) {
+            if (message.split(/\s+/).length <= 5) {
+                intents.push('greeting');
+            }
+        }
+
+        // Bot Info / Identity
+        if (/(who are you|what are you|you a bot|you an ai|are you real|your name|what is your purpose)/i.test(message)) {
+            intents.push('bot_info');
+        }
 
         return intents.length > 0 ? intents : ['unknown'];
     }

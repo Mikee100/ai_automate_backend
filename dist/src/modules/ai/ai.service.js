@@ -313,6 +313,9 @@ let AiService = AiService_1 = class AiService {
         if (/custom.*(?:package|request|service)|special.*(?:package|request)/i.test(questionLower)) {
             return `I love that you're thinking about a custom experience! While I can tell you about our standard packages, custom requests are best discussed with our team who can understand your vision and create something special for you. Would you like me to connect you with them? 💖\n\nFeel free to call us at ${this.customerCarePhone}.`;
         }
+        if (/who are you|what are you|you a bot|you an ai|your name|what is your purpose/i.test(questionLower)) {
+            return `I'm the Fiesta House Maternity assistant! 🌸 I'm here to help you with anything related to our luxury maternity photography—from choosing the perfect package and dress to booking your session and answering your questions. How can I assist you today? 💖`;
+        }
         return `That's a great question! I want to make sure you get the most accurate information. Let me connect you with our team who can provide personalized assistance with that. Would you like me to have someone reach out to you? 💖\n\nYou can also contact us directly at ${this.customerCarePhone} or ${this.customerCareEmail}.`;
     }
     async checkAndCreateSessionNote(message, customerId, enrichedContext, history) {
@@ -2163,6 +2166,7 @@ DO NOT repeat your previous question. Instead:
                     if (!shouldAwaitValidation) {
                         this.logger.debug(`[LATENCY] Fast-path triggered. Backgrounding deep validation for ${intentAnalysis?.primaryIntent || 'unknown'}`);
                     }
+                    this.logger.debug(`[QUALITY] Validating response for customer ${customerId}. Intent: ${intentAnalysis?.primaryIntent}`);
                     const qualityCheck = await this.responseQuality.validateResponse(responseText, {
                         userMessage: message,
                         customerId,
@@ -2171,7 +2175,7 @@ DO NOT repeat your previous question. Instead:
                         history,
                     }, shouldAwaitValidation);
                     if (!qualityCheck.passed && qualityCheck.improvedResponse) {
-                        this.logger.log(`[QUALITY] Response improved: ${qualityCheck.score.overall.toFixed(1)}/10`);
+                        this.logger.log(`[QUALITY] Response improved for ${customerId}. Original: "${responseText.substring(0, 50)}..."`);
                         const style = personalizationContext?.communicationStyle ?? 'friendly';
                         const userState = result.draft?.step === 'confirm' || (result.draft && intentAnalysis?.primaryIntent === 'booking')
                             ? 'booking'
@@ -2225,6 +2229,7 @@ DO NOT repeat your previous question. Instead:
             return result;
         }
         catch (err) {
+            this.logger.error(`[AI_ERROR] 🔴 CRITICAL: Conversation failed for customer ${customerId}. Error: ${err.message}`, err.stack);
             try {
                 await this.conversationLearning.recordLearning(customerId, {
                     userMessage: message,
@@ -2395,14 +2400,63 @@ DO NOT repeat your previous question. Instead:
                 metrics: { strategyUsed: 'redirect_to_whatsapp', platform: currentPlatform }
             };
         }
+        const strategyContext = {
+            aiService: this,
+            logger: this.logger,
+            history,
+            historyLimit: this.historyLimit,
+            customerId,
+            bookingsService,
+            prisma: this.prisma,
+            message,
+            hasDraft,
+            draft,
+            enrichedContext,
+            whatsappService: this.whatsappService,
+            intentAnalysis
+        };
+        for (const strategy of this.strategies) {
+            if (strategy.canHandle(null, strategyContext)) {
+                this.logger.debug(`[STRATEGY] ${strategy.constructor.name} handling message: "${message.substring(0, 50)}..."`);
+                const result = await strategy.generateResponse(message, strategyContext);
+                if (result) {
+                    let responseText = result;
+                    if (typeof result === 'object' && result !== null) {
+                        responseText = result.response;
+                        if (typeof responseText === 'object' && responseText !== null && 'text' in responseText) {
+                            responseText = responseText.text;
+                        }
+                    }
+                    const responseStr = typeof responseText === 'string' ? responseText : JSON.stringify(responseText);
+                    await this.checkAndEscalateIfHandoffMentioned(responseStr, customerId, message, history);
+                    const strategyName = strategy.constructor.name;
+                    const strategyUsed = strategyName === 'FaqStrategy' ? 'faq' : strategyName === 'PackageInquiryStrategy' ? 'package_inquiry' : strategyName === 'BookingStrategy' ? 'booking' : 'fallback';
+                    return {
+                        ...result,
+                        response: responseText,
+                        updatedHistory: result.updatedHistory
+                            ? result.updatedHistory.map((msg) => ({
+                                ...msg,
+                                content: typeof msg.content === 'object' && msg.content !== null && 'text' in msg.content ? msg.content.text : msg.content
+                            }))
+                            : undefined,
+                        metrics: { strategyUsed }
+                    };
+                }
+            }
+        }
         const lower = (message || '').toLowerCase();
+        const isGreetingIntent = intentAnalysis?.primaryIntent === 'greeting';
         const greetingKeywords = ['hi', 'hello', 'hey', 'greetings', 'hallo', 'habari', 'good morning', 'good afternoon', 'good evening'];
         const cleanMsg = lower.replace(/[^\w\s]/g, '').trim();
         const isExactGreeting = greetingKeywords.some(kw => cleanMsg === kw || cleanMsg.startsWith(kw + ' '));
         const isGreetingVariant = /^(hello+|hi+|hey+|hii+|heyy+)$/i.test(cleanMsg) || /^(good\s+(morning|afternoon|evening))$/i.test(cleanMsg);
-        const isGreeting = isExactGreeting || (cleanMsg.split(/\s+/).length <= 2 && isGreetingVariant);
-        if (isGreeting) {
-            const greetingResponse = `Hello there! 🌸 Welcome to Fiesta House Maternity. We're so delighted you reached out! ✨
+        const isSimpleGreeting = isExactGreeting || (cleanMsg.split(/\s+/).length <= 2 && isGreetingVariant);
+        if (isGreetingIntent || isSimpleGreeting) {
+            const customer = enrichedContext?.customer || await this.prisma.customer.findUnique({ where: { id: customerId } });
+            const name = customer?.name?.replace(/^WhatsApp User\s+/i, '') || '';
+            const personalizedName = name ? `, ${name}` : '';
+            const greetingResponse = `Hello there${personalizedName}! 🌸 Welcome to Fiesta House Maternity. We're so delighted you reached out! ✨
 
 We specialize in luxury maternity photography here in Kenya, offering a beautiful, all-inclusive experience. From our world-class studio sets and professional makeup to our curated collection of gorgeous gowns, we're here to make sure your shoot is as radiant and stress-free as possible.
 
@@ -3300,50 +3354,6 @@ How can I help make your maternity session special today? 💖`;
                 draft: null,
                 updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: acknowledgmentResponse }]
             };
-        }
-        const context = {
-            aiService: this,
-            logger: this.logger,
-            history,
-            historyLimit: this.historyLimit,
-            customerId,
-            bookingsService,
-            prisma: this.prisma,
-            message,
-            hasDraft,
-            draft,
-            enrichedContext,
-            whatsappService: this.whatsappService
-        };
-        for (const strategy of this.strategies) {
-            if (strategy.canHandle(null, context)) {
-                this.logger.debug(`[STRATEGY] ${strategy.constructor.name} handling message: "${message.substring(0, 50)}..."`);
-                const result = await strategy.generateResponse(message, context);
-                if (result) {
-                    let responseText = result;
-                    if (typeof result === 'object' && result !== null) {
-                        responseText = result.response;
-                        if (typeof responseText === 'object' && responseText !== null && 'text' in responseText) {
-                            responseText = responseText.text;
-                        }
-                    }
-                    const responseStr = typeof responseText === 'string' ? responseText : JSON.stringify(responseText);
-                    await this.checkAndEscalateIfHandoffMentioned(responseStr, customerId, message, history);
-                    const strategyName = strategy.constructor.name;
-                    const strategyUsed = strategyName === 'FaqStrategy' ? 'faq' : strategyName === 'PackageInquiryStrategy' ? 'package_inquiry' : strategyName === 'BookingStrategy' ? 'booking' : 'fallback';
-                    return {
-                        ...result,
-                        response: responseText,
-                        updatedHistory: result.updatedHistory
-                            ? result.updatedHistory.map((msg) => ({
-                                ...msg,
-                                content: typeof msg.content === 'object' && msg.content !== null && 'text' in msg.content ? msg.content.text : msg.content
-                            }))
-                            : undefined,
-                        metrics: { strategyUsed }
-                    };
-                }
-            }
         }
         let intent = 'other';
         const confidenceThreshold = 0.7;

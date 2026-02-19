@@ -32,7 +32,7 @@ export const NEUTRAL_OPENERS = [
   'Sure.',
   'Of course.',
   'Here you go.',
-  'Done.',
+  "I've handled that for you.",
 ];
 
 /** Soft closers (no pressure, optional) */

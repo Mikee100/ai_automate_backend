@@ -288,13 +288,21 @@ export class ResponseHumanizerService {
       }
     }
 
-    let result = text;
     const availableOpeners = openerPool.filter((o) => !usedPhrases.has(o));
     const availableClosers = closerPool.filter((c) => !usedPhrases.has(c));
+
+    const isShortMessage = text.length < 60;
+
     if (availableOpeners.length > 0 && this.shouldAddOpener(text, context)) {
       const opener = this.pickRandom(availableOpeners, 1)[0];
       result = opener + ' ' + result;
     }
+
+    // If it's a very short message and we already added an opener, skip the closer to avoid overcrowding
+    if (isShortMessage && result.length > text.length) {
+      return result;
+    }
+
     if (availableClosers.length > 0 && this.shouldAddCloser(text, context)) {
       const closer = this.pickRandom(availableClosers, 1)[0];
       result = result + '\n\n' + closer;

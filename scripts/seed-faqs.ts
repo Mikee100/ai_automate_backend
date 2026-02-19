@@ -13,12 +13,12 @@ async function main() {
         },
         {
             question: 'Can my partner and other children join the shoot?',
-            answer: 'Absolutely! Maternity sessions are about celebrating this special time for the entire family. Including your partner and children adds warmth and meaning to the photos. We can plan poses and setups that involve everyone while keeping the focus on you and your pregnancy.',
+            answer: 'Of course! Maternity sessions are a wonderful way to celebrate this special time with your entire family. We encourage involving your partner and children to add warmth and meaning to your photos, and we’ll guide you through poses that include everyone beautifully.',
             category: 'General',
         },
         {
             question: 'Do you provide outfits and props?',
-            answer: 'Yes. Our packages include professional makeup and outfits. We provide a wide variety of unique outfits, props, and accessories to make your session seamless and stress-free. Whether you prefer glamorous gowns or casual looks, we’ve got you covered. You’re also welcome to bring any sentimental items or personal outfits you\'d like to include.',
+            answer: 'Our packages include everything you need for a seamless experience—professional makeup, styling, and a wide variety of luxury gowns, props, and accessories. You are also more than welcome to bring any sentimental items or personal outfits you\'d like to feature.',
             category: 'Services',
         },
     ];
@@ -46,7 +46,7 @@ async function main() {
         },
         {
             question: 'Do I get to choose the background of my choice?',
-            answer: 'Yes. We offer over 15 exquisitely curated sets designed to celebrate pregnancy. Options include luxurious flower backdrops, glamorous chandeliers, boho themes, grand staircases, timeless plain backdrops, and a lush green garden-like setting. We also have a unique boat set for dreamy and artistic portraits. Each backdrop is crafted to make clients feel radiant and help create stunning, timeless images.',
+            answer: 'You certainly do. We offer over 15 exquisitely curated sets designed to celebrate pregnancy, including luxurious flower backdrops, glamorous chandeliers, boho themes, grand staircases, and a lush green garden setting. We even have a unique boat set for more artistic portraits. Each backdrop is crafted to make you feel radiant and create timeless images.',
             category: 'Services',
         },
         {
@@ -77,7 +77,7 @@ async function main() {
         // Services
         {
             question: 'Do you provide makeup?',
-            answer: 'Yes, professional makeup is included in all packages. Our makeup artists are experienced in working with pregnant women.',
+            answer: 'Professional makeup is included in all our packages. Our talented makeup artists are specialized in maternity styling to ensure you look and feel your absolute best.',
             category: 'Services',
         },
         {
@@ -87,17 +87,17 @@ async function main() {
         },
         {
             question: 'Do you provide hair styling?',
-            answer: 'Basic hair styling is provided. Wig styling and installation is available at KSH 3,000. Please inform us in advance.',
+            answer: 'We provide basic hair styling with all sessions. Professional wig styling and installation are also available for KSH 3,000—please just let us know in advance so we can prepare accordingly.',
             category: 'Services',
         },
         {
             question: 'Do you provide accessories?',
-            answer: 'Yes, we provide accessories for the shoot. You only need to bring personal accessories such as earrings.',
+            answer: 'We provide a curated selection of accessories for your shoot. You are only responsible for personal items such as earrings.',
             category: 'Services',
         },
         {
             question: 'Do you provide gowns and outfits?',
-            answer: 'Yes. We have over 300 luxury gowns designed for maternity shoots.',
+            answer: 'We take pride in our extensive collection of over 300 luxury gowns, exclusively designed to celebrate the beauty of maternity.',
             category: 'Services',
         },
         {
@@ -123,7 +123,7 @@ async function main() {
         // Preparation & Process
         {
             question: 'Do I get to choose the outfits?',
-            answer: 'Yes. You choose the outfits of your choice from our Instagram gallery. Everything is adjustable to any size.',
+            answer: 'You are welcome to choose your preferred outfits from our curated Instagram gallery. All our gowns are designed to be adjustable, ensuring a perfect and comfortable fit for any size.',
             category: 'Preparation',
         },
         {
@@ -143,12 +143,12 @@ async function main() {
         },
         {
             question: 'Can I include my partner and children?',
-            answer: 'Yes, you can include your family in the shoot. We recommend choosing outfits from our Instagram gallery prior to color coordinate.',
+            answer: 'We’d love to have your family join the session! To ensure a cohesive look, we recommend selecting your outfits from our Instagram gallery in advance to help with color coordination.',
             category: 'Preparation',
         },
         {
             question: 'Do you help with poses?',
-            answer: 'Yes. Our photographer will guide you with all poses and help you feel comfortable and confident.',
+            answer: 'Our professional photographers will guide you through every pose, ensuring you feel comfortable, relaxed, and confident throughout your session.',
             category: 'Preparation',
         },
         {
@@ -168,12 +168,12 @@ async function main() {
         },
         {
             question: 'Can I request a specific photographer?',
-            answer: 'Yes, depending on availability.',
+            answer: 'You are welcome to request a specific photographer, and we will do our best to accommodate you based on their availability.',
             category: 'Preparation',
         },
         {
             question: 'Can I do nude or semi-nude maternity?',
-            answer: 'Yes, based on your comfort. This is handled professionally and privately',
+            answer: 'Of course. We handle these sessions with the utmost professionalism and privacy, ensuring you feel completely comfortable and respected throughout the process.',
             category: 'Preparation',
         },
         // Policies & Booking
@@ -219,7 +219,7 @@ async function main() {
         },
         {
             question: 'Do you offer weekend shoots?',
-            answer: 'Yes, weekend slots are available. Book early as they fill fast.',
+            answer: 'We do offer weekend sessions. These slots are very popular and tend to fill up quickly, so we recommend booking as early as possible.',
             category: 'Booking',
         },
         // Facility
@@ -238,24 +238,20 @@ async function main() {
     faqs.push(...newFaqs);
 
     for (const faq of faqs) {
-        // Check if exists to avoid duplicates (optional, but good practice)
-        const existing = await prisma.knowledgeBase.findFirst({
+        await prisma.knowledgeBase.upsert({
             where: { question: faq.question },
+            update: {
+                answer: faq.answer,
+                category: faq.category,
+            },
+            create: {
+                question: faq.question,
+                answer: faq.answer,
+                category: faq.category,
+                embedding: [], // Placeholder
+            },
         });
-
-        if (!existing) {
-            await prisma.knowledgeBase.create({
-                data: {
-                    question: faq.question,
-                    answer: faq.answer,
-                    category: faq.category,
-                    embedding: [], // Placeholder
-                },
-            });
-            console.log(`Created FAQ: ${faq.question}`);
-        } else {
-            console.log(`Skipped existing FAQ: ${faq.question}`);
-        }
+        console.log(`Upserted FAQ: ${faq.question}`);
     }
 
     console.log('FAQ seeding completed.');

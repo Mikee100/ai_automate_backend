@@ -25,7 +25,7 @@ exports.NEUTRAL_OPENERS = [
     'Sure.',
     'Of course.',
     'Here you go.',
-    'Done.',
+    "I've handled that for you.",
 ];
 exports.SOFT_CLOSERS = [
     'Just message me if you need anything 😊',

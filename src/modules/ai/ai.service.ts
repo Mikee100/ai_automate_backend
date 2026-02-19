@@ -454,6 +454,11 @@ export class AiService {
       return `I love that you're thinking about a custom experience! While I can tell you about our standard packages, custom requests are best discussed with our team who can understand your vision and create something special for you. Would you like me to connect you with them? 💖\n\nFeel free to call us at ${this.customerCarePhone}.`;
     }
 
+    // Identity handling in unknown queries (safety fallback)
+    if (/who are you|what are you|you a bot|you an ai|your name|what is your purpose/i.test(questionLower)) {
+      return `I'm the Fiesta House Maternity assistant! 🌸 I'm here to help you with anything related to our luxury maternity photography—from choosing the perfect package and dress to booking your session and answering your questions. How can I assist you today? 💖`;
+    }
+
     // Generic unknown response
     return `That's a great question! I want to make sure you get the most accurate information. Let me connect you with our team who can provide personalized assistance with that. Would you like me to have someone reach out to you? 💖\n\nYou can also contact us directly at ${this.customerCarePhone} or ${this.customerCareEmail}.`;
   }
@@ -2915,22 +2920,19 @@ DO NOT repeat your previous question. Instead:
       try {
         const responseText = finalResponseText || '';
         if (responseText) {
-          // LATENCY OPTIMIZATION: Decide whether to await deep validation
-          // Fast-path for high confidence strategies or hardcoded greetings
+          // ... (existing comments)
           const isHighConfidenceIntent = intentAnalysis?.confidence && intentAnalysis.confidence > 0.85;
           const isFaqStrategy = result.metrics?.strategyUsed === 'faq';
-          // Check if it's a greeting - we use isGreeting defined earlier in the method
-          // Note: isGreeting might be out of scope here, let's derive it from intent
           const isGreetingResponse = intentAnalysis?.primaryIntent === 'greeting' ||
             result.metrics?.strategyUsed === 'greeting';
 
-          // We await validation ONLY if confidence is low, or it's a fallback LLM response
           const shouldAwaitValidation = !isHighConfidenceIntent && !isFaqStrategy && !isGreetingResponse && result.metrics?.isFallback;
 
           if (!shouldAwaitValidation) {
             this.logger.debug(`[LATENCY] Fast-path triggered. Backgrounding deep validation for ${intentAnalysis?.primaryIntent || 'unknown'}`);
           }
 
+          this.logger.debug(`[QUALITY] Validating response for customer ${customerId}. Intent: ${intentAnalysis?.primaryIntent}`);
           const qualityCheck = await this.responseQuality.validateResponse(responseText, {
             userMessage: message,
             customerId,
@@ -2939,9 +2941,10 @@ DO NOT repeat your previous question. Instead:
             history,
           }, shouldAwaitValidation);
 
-          // If quality check failed but we have an improved response, use it — then re-humanize so we don't send template phrasing
           if (!qualityCheck.passed && qualityCheck.improvedResponse) {
-            this.logger.log(`[QUALITY] Response improved: ${qualityCheck.score.overall.toFixed(1)}/10`);
+            this.logger.log(`[QUALITY] Response improved for ${customerId}. Original: "${responseText.substring(0, 50)}..."`);
+            // ... (rest of the improvement logic)
+            // (truncated for efficiency in this ReplacementChunk setup, I'll use the targetContent precisely)
             const style = personalizationContext?.communicationStyle ?? 'friendly';
             const userState: HumanizerContext['userState'] =
               result.draft?.step === 'confirm' || (result.draft && intentAnalysis?.primaryIntent === 'booking')
@@ -3000,6 +3003,7 @@ DO NOT repeat your previous question. Instead:
 
       return result;
     } catch (err) {
+      this.logger.error(`[AI_ERROR] 🔴 CRITICAL: Conversation failed for customer ${customerId}. Error: ${err.message}`, err.stack);
       // ============================================
       // ERROR HANDLING: Record failed conversation for learning
       // ============================================
@@ -3269,24 +3273,84 @@ DO NOT repeat your previous question. Instead:
 
     // ------------------------------------
 
+    // ============================================
+    // STRATEGY PATTERN: Specialized high-performance logic
+    // ============================================
+    // Execute strategies BEFORE generic greetings or other intents
+    // This allows BookingStrategy to handle its own greetings
+    const strategyContext = {
+      aiService: this,
+      logger: this.logger,
+      history,
+      historyLimit: this.historyLimit,
+      customerId,
+      bookingsService,
+      prisma: this.prisma,
+      message,
+      hasDraft,
+      draft,
+      enrichedContext,
+      whatsappService: this.whatsappService,
+      intentAnalysis
+    };
+
+    for (const strategy of this.strategies) {
+      if (strategy.canHandle(null, strategyContext)) {
+        this.logger.debug(`[STRATEGY] ${strategy.constructor.name} handling message: "${message.substring(0, 50)}..."`);
+        const result = await strategy.generateResponse(message, strategyContext);
+        if (result) {
+          let responseText = result;
+          if (typeof result === 'object' && result !== null) {
+            responseText = result.response;
+            if (typeof responseText === 'object' && responseText !== null && 'text' in responseText) {
+              responseText = responseText.text;
+            }
+          }
+          const responseStr = typeof responseText === 'string' ? responseText : JSON.stringify(responseText);
+          await this.checkAndEscalateIfHandoffMentioned(responseStr, customerId, message, history);
+
+          const strategyName = strategy.constructor.name;
+          const strategyUsed = strategyName === 'FaqStrategy' ? 'faq' : strategyName === 'PackageInquiryStrategy' ? 'package_inquiry' : strategyName === 'BookingStrategy' ? 'booking' : 'fallback';
+
+          return {
+            ...result,
+            response: responseText,
+            updatedHistory: result.updatedHistory
+              ? result.updatedHistory.map((msg: any) => ({
+                ...msg,
+                content: typeof msg.content === 'object' && msg.content !== null && 'text' in msg.content ? msg.content.text : msg.content
+              }))
+              : undefined,
+            metrics: { strategyUsed }
+          };
+        }
+      }
+    }
+
     const lower = (message || '').toLowerCase();
 
-    // --- GREETING DETECTION ---
+    // --- GREETING DETECTION (Prioritize Advanced Intent) ---
+    const isGreetingIntent = intentAnalysis?.primaryIntent === 'greeting';
+
+    // Fallback lightweight detection for very simple messages
     const greetingKeywords = ['hi', 'hello', 'hey', 'greetings', 'hallo', 'habari', 'good morning', 'good afternoon', 'good evening'];
-    // Check if message is essentially just a greeting (allow variants like Helloo, hii, heyy)
     const cleanMsg = lower.replace(/[^\w\s]/g, '').trim();
     const isExactGreeting = greetingKeywords.some(kw => cleanMsg === kw || cleanMsg.startsWith(kw + ' '));
     const isGreetingVariant = /^(hello+|hi+|hey+|hii+|heyy+)$/i.test(cleanMsg) || /^(good\s+(morning|afternoon|evening))$/i.test(cleanMsg);
-    const isGreeting = isExactGreeting || (cleanMsg.split(/\s+/).length <= 2 && isGreetingVariant);
+    const isSimpleGreeting = isExactGreeting || (cleanMsg.split(/\s+/).length <= 2 && isGreetingVariant);
 
-    // Only send the special greeting if it's a start of conversation or explicit greeting
-    // We allow this even if a draft exists, so a user saying "Hello" gets the proper welcome.
-    if (isGreeting) {
-      const greetingResponse = `Hello there! 🌸 Welcome to Fiesta House Maternity. We're so delighted you reached out! ✨
+    if (isGreetingIntent || isSimpleGreeting) {
+      // Get customer info for personalization if available
+      const customer = enrichedContext?.customer || await this.prisma.customer.findUnique({ where: { id: customerId } });
+      const name = customer?.name?.replace(/^WhatsApp User\s+/i, '') || '';
+      const personalizedName = name ? `, ${name}` : '';
+
+      const greetingResponse = `Hello there${personalizedName}! 🌸 Welcome to Fiesta House Maternity. We're so delighted you reached out! ✨
 
 We specialize in luxury maternity photography here in Kenya, offering a beautiful, all-inclusive experience. From our world-class studio sets and professional makeup to our curated collection of gorgeous gowns, we're here to make sure your shoot is as radiant and stress-free as possible.
 
 How can I help make your maternity session special today? 💖`;
+
       return {
         response: greetingResponse,
         draft: null,
@@ -4390,60 +4454,6 @@ How can I help make your maternity session special today? 💖`;
       };
     }
 
-    // --- STRATEGY PATTERN INTEGRATION ---
-    // Strategies are now ordered by priority (FAQ -> Package -> Booking)
-    // This ensures FAQ questions are handled first, even when there's a draft
-    const context = {
-      aiService: this,
-      logger: this.logger,
-      history,
-      historyLimit: this.historyLimit,
-      customerId,
-      bookingsService,
-      prisma: this.prisma,
-      message,
-      hasDraft,
-      draft,
-
-      enrichedContext,
-      whatsappService: this.whatsappService
-    };
-
-    // Execute strategies in priority order (already sorted in constructor)
-    for (const strategy of this.strategies) {
-      if (strategy.canHandle(null, context)) {
-        this.logger.debug(`[STRATEGY] ${strategy.constructor.name} handling message: "${message.substring(0, 50)}..."`);
-        const result = await strategy.generateResponse(message, context);
-        if (result) {
-          // Always extract the string response for history and output
-          let responseText = result;
-          if (typeof result === 'object' && result !== null) {
-            responseText = result.response;
-            if (typeof responseText === 'object' && responseText !== null && 'text' in responseText) {
-              responseText = responseText.text;
-            }
-          }
-          // Check if response mentions handing to team/admin - create escalation
-          const responseStr = typeof responseText === 'string' ? responseText : JSON.stringify(responseText);
-          await this.checkAndEscalateIfHandoffMentioned(responseStr, customerId, message, history);
-
-          const strategyName = strategy.constructor.name;
-          const strategyUsed = strategyName === 'FaqStrategy' ? 'faq' : strategyName === 'PackageInquiryStrategy' ? 'package_inquiry' : strategyName === 'BookingStrategy' ? 'booking' : 'fallback';
-
-          return {
-            ...result,
-            response: responseText,
-            updatedHistory: result.updatedHistory
-              ? result.updatedHistory.map((msg: any) => ({
-                ...msg,
-                content: typeof msg.content === 'object' && msg.content !== null && 'text' in msg.content ? msg.content.text : msg.content
-              }))
-              : undefined,
-            metrics: { strategyUsed }
-          };
-        }
-      }
-    }
     // ------------------------------------
     // INTENT CLASSIFICATION (Using Advanced Intent Service)
     // ------------------------------------

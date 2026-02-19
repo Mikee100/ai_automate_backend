@@ -17,4 +17,4 @@ import { CustomersModule } from '../customers/customers.module';
   providers: [WhatsappService],
   exports: [WhatsappService],
 })
-export class WhatsappModule {}
+export class WhatsappModule { }

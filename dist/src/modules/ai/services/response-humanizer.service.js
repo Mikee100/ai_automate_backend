@@ -204,12 +204,15 @@ let ResponseHumanizerService = ResponseHumanizerService_1 = class ResponseHumani
                     usedPhrases.add(p);
             }
         }
-        let result = text;
         const availableOpeners = openerPool.filter((o) => !usedPhrases.has(o));
         const availableClosers = closerPool.filter((c) => !usedPhrases.has(c));
+        const isShortMessage = text.length < 60;
         if (availableOpeners.length > 0 && this.shouldAddOpener(text, context)) {
             const opener = this.pickRandom(availableOpeners, 1)[0];
             result = opener + ' ' + result;
+        }
+        if (isShortMessage && result.length > text.length) {
+            return result;
         }
         if (availableClosers.length > 0 && this.shouldAddCloser(text, context)) {
             const closer = this.pickRandom(availableClosers, 1)[0];

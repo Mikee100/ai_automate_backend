@@ -29,7 +29,7 @@ export class WhatsappService {
 
   constructor(
     private configService: ConfigService,
-    private messagesService: MessagesService,
+    @Inject(forwardRef(() => MessagesService)) private messagesService: MessagesService,
     @Inject(forwardRef(() => CustomersService)) private customersService: CustomersService,
     @InjectQueue('messageQueue') private messageQueue: Queue,
   ) {

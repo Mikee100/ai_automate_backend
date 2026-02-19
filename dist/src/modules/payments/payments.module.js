@@ -30,7 +30,7 @@ exports.PaymentsModule = PaymentsModule = __decorate([
         imports: [
             prisma_module_1.PrismaModule,
             axios_1.HttpModule,
-            messages_module_1.MessagesModule,
+            (0, common_1.forwardRef)(() => messages_module_1.MessagesModule),
             notifications_module_1.NotificationsModule,
             packages_module_1.PackagesModule,
             (0, common_1.forwardRef)(() => bookings_module_1.BookingsModule),
@@ -41,7 +41,7 @@ exports.PaymentsModule = PaymentsModule = __decorate([
                 name: 'paymentsQueue',
             }),
             (0, common_1.forwardRef)(() => ai_module_1.AiModule),
-            whatsapp_module_1.WhatsappModule,
+            (0, common_1.forwardRef)(() => whatsapp_module_1.WhatsappModule),
             messenger_module_1.MessengerModule,
         ],
         providers: [payments_service_1.PaymentsService, payments_processor_1.PaymentsProcessor, payment_listener_1.PaymentListener],

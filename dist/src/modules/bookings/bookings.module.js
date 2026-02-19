@@ -26,10 +26,10 @@ exports.BookingsModule = BookingsModule = __decorate([
         imports: [
             prisma_module_1.PrismaModule,
             (0, common_1.forwardRef)(() => payments_module_1.PaymentsModule),
-            messages_module_1.MessagesModule,
+            (0, common_1.forwardRef)(() => messages_module_1.MessagesModule),
             notifications_module_1.NotificationsModule,
             packages_module_1.PackagesModule,
-            whatsapp_module_1.WhatsappModule,
+            (0, common_1.forwardRef)(() => whatsapp_module_1.WhatsappModule),
             calendar_module_1.CalendarModule,
             bull_1.BullModule.registerQueue({
                 name: 'bookingQueue',

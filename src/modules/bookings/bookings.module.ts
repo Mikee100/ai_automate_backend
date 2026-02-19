@@ -14,10 +14,10 @@ import { CalendarModule } from '../calendar/calendar.module';
   imports: [
     PrismaModule,
     forwardRef(() => PaymentsModule),
-    MessagesModule,
+    forwardRef(() => MessagesModule),
     NotificationsModule,
     PackagesModule,
-    WhatsappModule,
+    forwardRef(() => WhatsappModule),
     CalendarModule,
     BullModule.registerQueue({
       name: 'bookingQueue',

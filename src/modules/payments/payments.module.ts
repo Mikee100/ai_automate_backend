@@ -18,7 +18,7 @@ import { MessengerModule } from '../webhooks/messenger.module';
   imports: [
     PrismaModule,
     HttpModule,
-    MessagesModule,
+    forwardRef(() => MessagesModule),
     NotificationsModule,
     PackagesModule,
     forwardRef(() => BookingsModule),
@@ -29,7 +29,7 @@ import { MessengerModule } from '../webhooks/messenger.module';
       name: 'paymentsQueue',
     }),
     forwardRef(() => AiModule),
-    WhatsappModule,
+    forwardRef(() => WhatsappModule),
     MessengerModule,
   ],
   providers: [PaymentsService, PaymentsProcessor, PaymentListener],

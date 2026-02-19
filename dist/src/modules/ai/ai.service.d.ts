@@ -135,20 +135,20 @@ export declare class AiService {
     getOrCreateDraft(customerId: string): Promise<{
         id: string;
         customerId: string;
-        createdAt: Date;
-        name: string | null;
-        updatedAt: Date;
-        bookingId: string | null;
         service: string | null;
-        recipientName: string | null;
-        recipientPhone: string | null;
         date: string | null;
         time: string | null;
         dateTimeIso: string | null;
+        name: string | null;
+        recipientName: string | null;
+        recipientPhone: string | null;
         isForSomeoneElse: boolean | null;
         step: string;
         conflictResolution: string | null;
+        bookingId: string | null;
         version: number;
+        createdAt: Date;
+        updatedAt: Date;
     }>;
     mergeIntoDraft(customerId: string, extraction: any, existingDraft?: any): Promise<any>;
     determineBookingStep(draft: any): string | null;
