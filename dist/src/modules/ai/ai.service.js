@@ -1481,8 +1481,8 @@ PHONE EXTRACTION:
 
 SUB-INTENT DETECTION:
 - start: User initiating a new booking ("I want to book", "Can I schedule")
-- provide: User providing/updating information ("My name is...", "Change time to...")
-- confirm: Short confirmations ("yes", "confirm", "that's right", "sounds good") - BUT if draft.step is 'confirm' and message is "confirm", use 'deposit_confirmed'
+- provide: User providing/updating information ("My name is...", "Change time to...", "Is everything set?", "Are we good?")
+- confirm: Short confirmations ("yes", "confirm", "that's right", "sounds good", "is it booked?", "is it set?") - BUT if draft.step is 'confirm' and message is "confirm", use 'deposit_confirmed'
 - deposit_confirmed: User confirming deposit payment ("confirm", "yes" when asked to confirm deposit)
 - cancel: Cancellation request ("cancel", "forget it", "never mind")
 - reschedule: Requesting to change existing booking ("reschedule", "move my booking")
@@ -1670,7 +1670,16 @@ WHAT WE EXTRACTED: ${JSON.stringify(extraction)}
 
 YOUR TASK:
 ${missing.length === 0
-            ? '✅ All details collected! Warmly confirm everything and celebrate their booking.'
+            ? `✅ All details collected! provide a warm, complete summary using THIS EXACT TEMPLATE structure (but your own loving words):
+
+"Here are your booking details:
+• Package: [Package Name]
+• Date: [Date]
+• Time: [Time]
+• Name: [Name]
+• Phone: [Phone]
+
+To confirm your booking, a deposit of KSH [Amount] is required. Just reply *CONFIRM* if everything looks perfect! 💖"`
             : `❓ Missing: ${nextStep}. Ask for it naturally and warmly (just this ONE thing).`}`;
         if (isStuckOnField) {
             this.logger.warn(`[STUCK DETECTION] AI appears stuck asking for: ${missing[0]}`);
@@ -1876,6 +1885,13 @@ DO NOT repeat your previous question. Instead:
         }
         if (missing.length === 0) {
             this.logger.debug('All booking draft fields present (after defaults):', JSON.stringify(draft, null, 2));
+            if (!bookingsService) {
+                this.logger.warn('checkAndCompleteIfConfirmed called without bookingsService; cannot verify availability or complete booking.');
+                return {
+                    action: 'failed',
+                    error: "I'm having a little trouble completing your booking automatically. Please try again in a moment or contact our team to confirm your slot. 💖",
+                };
+            }
             const normalized = this.normalizeDateTime(draft.date, draft.time);
             if (!normalized) {
                 this.logger.warn('Unable to normalize date/time in checkAndCompleteIfConfirmed', { date: draft.date, time: draft.time });
@@ -2057,7 +2073,7 @@ DO NOT repeat your previous question. Instead:
                                 platform: enrichedContext?.platform ?? 'whatsapp',
                                 brandTone: 'WARM_PROFESSIONAL',
                                 isFirstMessage: history.length === 0,
-                                isEscalation: intentAnalysis?.requiresHumanHandoff === true,
+                                isEscalation: intentAnalysis?.requiresHumanHandoff === true || result.metrics?.circuitBreakerTrip === true,
                                 isBookingFlow: !!result.draft || intentAnalysis?.primaryIntent === 'booking',
                                 lastAiResponses: history
                                     .filter((m) => m.role === 'assistant')
@@ -2175,7 +2191,7 @@ DO NOT repeat your previous question. Instead:
                         history,
                     }, shouldAwaitValidation);
                     if (!qualityCheck.passed && qualityCheck.improvedResponse) {
-                        this.logger.log(`[QUALITY] Response improved for ${customerId}. Original: "${responseText.substring(0, 50)}..."`);
+                        this.logger.log(`[QUALITY] Response improved: ${qualityCheck.score.overall.toFixed(1)}/10 for ${customerId}. Original: "${responseText.substring(0, 50)}..."`);
                         const style = personalizationContext?.communicationStyle ?? 'friendly';
                         const userState = result.draft?.step === 'confirm' || (result.draft && intentAnalysis?.primaryIntent === 'booking')
                             ? 'booking'
@@ -2376,6 +2392,27 @@ DO NOT repeat your previous question. Instead:
             this.logger.warn(`Customer ${customerId} exceeded daily token limit`);
             const limitMsg = "I've enjoyed our chat today! 💖 I've reached my daily limit, but our team would love to continue the conversation. They'll be in touch tomorrow, or you're welcome to reach us at " + this.customerCarePhone + ". 🌸";
             return { response: limitMsg, draft: null, updatedHistory: [...history, { role: 'user', content: message }, { role: 'assistant', content: limitMsg }] };
+        }
+        const lowerForBiz = (message || '').toLowerCase();
+        const locationKw = ['location', 'where', 'address', 'located', 'studio location', 'studio address', 'where are you', 'where is the studio'];
+        if (locationKw.some((kw) => lowerForBiz.includes(kw))) {
+            const locationResponse = `Our business is called ${this.businessName}. ${this.businessLocation}`;
+            return { response: locationResponse, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: locationResponse }] };
+        }
+        const hoursKw = ['hours', 'open', 'when are you open', 'operating hours', 'business hours', 'what time', 'opening hours', 'closing time', 'when do you close'];
+        if (hoursKw.some((kw) => lowerForBiz.includes(kw))) {
+            const hoursResponse = `We're open ${this.businessHours}. Feel free to visit us or book an appointment during these times! 🕐✨`;
+            return { response: hoursResponse, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: hoursResponse }] };
+        }
+        const websiteKw = ['website', 'web address', 'url', 'online', 'site', 'web page', 'webpage'];
+        if (websiteKw.some((kw) => lowerForBiz.includes(kw))) {
+            const websiteResponse = `You can visit our website at ${this.businessWebsite} to learn more about our services and view our portfolio! 🌸✨`;
+            return { response: websiteResponse, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: websiteResponse }] };
+        }
+        const contactKw = ['customer care', 'support', 'help line', 'call', 'phone number', 'contact number', 'telephone', 'mobile number', 'reach you'];
+        if (contactKw.some((kw) => lowerForBiz.includes(kw))) {
+            const careResponse = `You can reach our customer care team at ${this.customerCarePhone}. We're here to help! 💖 You can also email us at ${this.customerCareEmail}.`;
+            return { response: careResponse, draft: null, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: careResponse }] };
         }
         const isFrustrated = await this.detectFrustration(message, history);
         if (isFrustrated && this.escalationService) {
@@ -3454,7 +3491,7 @@ How can I help make your maternity session special today? 💖`;
         }
         const bookingStrategy = this.strategies.find(s => s instanceof booking_strategy_1.BookingStrategy);
         if (bookingStrategy) {
-            const bookingResult = await bookingStrategy.generateResponse(message, { ...context, intent: 'booking' });
+            const bookingResult = await bookingStrategy.generateResponse(message, { ...strategyContext, intent: 'booking' });
             if (bookingResult)
                 return { ...bookingResult, metrics: { strategyUsed: 'booking' } };
         }

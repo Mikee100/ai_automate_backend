@@ -42,15 +42,15 @@ class BookingStrategy {
             return redirectResponse;
         let draft = await aiService.getOrCreateDraft(customerId);
         const requestsResend = this.RESEND_PAYMENT_PATTERNS.some(pattern => pattern.test(message));
-        if (draft && !requestsResend) {
-            const wasStale = await aiService.cleanupStaleDraft(customerId);
+        if (draft && !requestsResend && bookingsService) {
+            const wasStale = await bookingsService.cleanupStaleDraft(customerId);
             if (wasStale) {
                 logger.debug(`[STRATEGY] Stale draft detected and cleaned up for customer ${customerId}`);
                 draft = null;
             }
         }
-        if (draft) {
-            const hasFailed = await aiService.hasFailedPayment(customerId);
+        if (draft && bookingsService) {
+            const hasFailed = await bookingsService.hasFailedPayment(customerId);
             if (hasFailed) {
                 const lower = message.toLowerCase();
                 const isBookingRelated = /(how.*(do|can).*(make|book|start|get|schedule).*(booking|appointment)|(i want|i'd like|i need|can i|please).*(to book|booking|appointment|make.*booking|schedule)|let.*book|start.*booking)/i.test(message) ||
@@ -236,7 +236,7 @@ class BookingStrategy {
                 }
             }
         }
-        const completion = await aiService.checkAndCompleteIfConfirmed(draft, extraction, customerId);
+        const completion = await aiService.checkAndCompleteIfConfirmed(draft, extraction, customerId, bookingsService);
         const completionResponse = await this.handleBookingCompletion(completion, message, context, draft);
         if (completionResponse)
             return completionResponse;
@@ -315,7 +315,7 @@ class BookingStrategy {
             const latestPayment = bookingsService
                 ? await bookingsService.getLatestPaymentForDraft(customerId)
                 : await aiService.getLatestPaymentForDraft(customerId);
-            if (latestPayment && (latestPayment.status === 'failed' || latestPayment.status === 'pending')) {
+            if (latestPayment && (latestPayment.status === 'failed' || latestPayment.status === 'pending' || latestPayment.status === 'timed_out')) {
                 logger.debug(`[PAYMENT] Found ${latestPayment.status} payment, resending prompt`);
                 const result = bookingsService
                     ? await bookingsService.resendPaymentPrompt(customerId)

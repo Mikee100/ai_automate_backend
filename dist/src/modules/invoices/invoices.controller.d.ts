@@ -4,16 +4,29 @@ export declare class InvoicesController {
     private readonly invoicesService;
     constructor(invoicesService: InvoicesService);
     generateInvoice(bookingId: string): Promise<{
-        customer: {
+        booking: {
             id: string;
-            name: string;
+            customerId: string;
+            service: string;
+            dateTime: Date;
+            status: string;
+            durationMinutes: number | null;
+            recipientName: string | null;
+            recipientPhone: string | null;
+            googleEventId: string | null;
             createdAt: Date;
             updatedAt: Date;
+        };
+        customer: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            name: string;
             email: string | null;
+            phone: string | null;
             whatsappId: string | null;
             instagramId: string | null;
             messengerId: string | null;
-            phone: string | null;
             aiEnabled: boolean;
             isAiPaused: boolean;
             lastInstagramMessageAt: Date | null;
@@ -22,26 +35,13 @@ export declare class InvoicesController {
             tokenResetDate: Date | null;
             totalTokensUsed: number;
         };
-        booking: {
-            id: string;
-            customerId: string;
-            service: string;
-            recipientName: string | null;
-            recipientPhone: string | null;
-            createdAt: Date;
-            updatedAt: Date;
-            status: string;
-            dateTime: Date;
-            durationMinutes: number | null;
-            googleEventId: string | null;
-        };
     } & {
         id: string;
         customerId: string;
-        bookingId: string;
+        status: string;
         createdAt: Date;
         updatedAt: Date;
-        status: string;
+        bookingId: string;
         invoiceNumber: string;
         subtotal: number;
         tax: number;
@@ -58,16 +58,29 @@ export declare class InvoicesController {
         message: string;
     }>;
     getInvoicesByBooking(bookingId: string): Promise<({
-        customer: {
+        booking: {
             id: string;
-            name: string;
+            customerId: string;
+            service: string;
+            dateTime: Date;
+            status: string;
+            durationMinutes: number | null;
+            recipientName: string | null;
+            recipientPhone: string | null;
+            googleEventId: string | null;
             createdAt: Date;
             updatedAt: Date;
+        };
+        customer: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            name: string;
             email: string | null;
+            phone: string | null;
             whatsappId: string | null;
             instagramId: string | null;
             messengerId: string | null;
-            phone: string | null;
             aiEnabled: boolean;
             isAiPaused: boolean;
             lastInstagramMessageAt: Date | null;
@@ -76,26 +89,13 @@ export declare class InvoicesController {
             tokenResetDate: Date | null;
             totalTokensUsed: number;
         };
-        booking: {
-            id: string;
-            customerId: string;
-            service: string;
-            recipientName: string | null;
-            recipientPhone: string | null;
-            createdAt: Date;
-            updatedAt: Date;
-            status: string;
-            dateTime: Date;
-            durationMinutes: number | null;
-            googleEventId: string | null;
-        };
     } & {
         id: string;
         customerId: string;
-        bookingId: string;
+        status: string;
         createdAt: Date;
         updatedAt: Date;
-        status: string;
+        bookingId: string;
         invoiceNumber: string;
         subtotal: number;
         tax: number;
@@ -109,16 +109,29 @@ export declare class InvoicesController {
         pdfUrl: string | null;
     })[]>;
     getInvoicesByCustomer(customerId: string): Promise<({
-        customer: {
+        booking: {
             id: string;
-            name: string;
+            customerId: string;
+            service: string;
+            dateTime: Date;
+            status: string;
+            durationMinutes: number | null;
+            recipientName: string | null;
+            recipientPhone: string | null;
+            googleEventId: string | null;
             createdAt: Date;
             updatedAt: Date;
+        };
+        customer: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            name: string;
             email: string | null;
+            phone: string | null;
             whatsappId: string | null;
             instagramId: string | null;
             messengerId: string | null;
-            phone: string | null;
             aiEnabled: boolean;
             isAiPaused: boolean;
             lastInstagramMessageAt: Date | null;
@@ -127,26 +140,13 @@ export declare class InvoicesController {
             tokenResetDate: Date | null;
             totalTokensUsed: number;
         };
-        booking: {
-            id: string;
-            customerId: string;
-            service: string;
-            recipientName: string | null;
-            recipientPhone: string | null;
-            createdAt: Date;
-            updatedAt: Date;
-            status: string;
-            dateTime: Date;
-            durationMinutes: number | null;
-            googleEventId: string | null;
-        };
     } & {
         id: string;
         customerId: string;
-        bookingId: string;
+        status: string;
         createdAt: Date;
         updatedAt: Date;
-        status: string;
+        bookingId: string;
         invoiceNumber: string;
         subtotal: number;
         tax: number;
@@ -160,16 +160,29 @@ export declare class InvoicesController {
         pdfUrl: string | null;
     })[]>;
     getAllInvoices(): Promise<({
-        customer: {
+        booking: {
             id: string;
-            name: string;
+            customerId: string;
+            service: string;
+            dateTime: Date;
+            status: string;
+            durationMinutes: number | null;
+            recipientName: string | null;
+            recipientPhone: string | null;
+            googleEventId: string | null;
             createdAt: Date;
             updatedAt: Date;
+        };
+        customer: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            name: string;
             email: string | null;
+            phone: string | null;
             whatsappId: string | null;
             instagramId: string | null;
             messengerId: string | null;
-            phone: string | null;
             aiEnabled: boolean;
             isAiPaused: boolean;
             lastInstagramMessageAt: Date | null;
@@ -178,26 +191,13 @@ export declare class InvoicesController {
             tokenResetDate: Date | null;
             totalTokensUsed: number;
         };
-        booking: {
-            id: string;
-            customerId: string;
-            service: string;
-            recipientName: string | null;
-            recipientPhone: string | null;
-            createdAt: Date;
-            updatedAt: Date;
-            status: string;
-            dateTime: Date;
-            durationMinutes: number | null;
-            googleEventId: string | null;
-        };
     } & {
         id: string;
         customerId: string;
-        bookingId: string;
+        status: string;
         createdAt: Date;
         updatedAt: Date;
-        status: string;
+        bookingId: string;
         invoiceNumber: string;
         subtotal: number;
         tax: number;

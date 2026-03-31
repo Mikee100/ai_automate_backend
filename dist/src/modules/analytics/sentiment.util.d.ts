@@ -1,5 +1,5 @@
 export declare function analyzeSentiment(text: string): {
-    mood: "positive" | "negative" | "neutral";
+    mood: "neutral" | "positive" | "negative";
     score: any;
     comparative: any;
 };

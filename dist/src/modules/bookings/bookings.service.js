@@ -480,10 +480,10 @@ let BookingsService = BookingsService_1 = class BookingsService {
         }
         const latestPayment = await this.getLatestPaymentForDraft(customerId);
         if (latestPayment && latestPayment.status === 'failed') {
-            if (hoursOld > 1) {
+            if (hoursOld > 2) {
                 return true;
             }
-            return true;
+            return false;
         }
         if (!latestPayment && hoursOld > 48) {
             return true;

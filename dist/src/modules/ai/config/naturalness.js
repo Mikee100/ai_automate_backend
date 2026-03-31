@@ -56,7 +56,7 @@ exports.PROMOTIONAL_PATTERNS = [
     { pattern: /\bluxury\s+photo\s+studio\b/gi, replacement: 'photo studio' },
     { pattern: /\bWe\s+specialize\s+in\s+professional\s+maternity\s+photography[^.!?]*\.?\s*/gi, replacement: '' },
 ];
-exports.GREETING_MAX_LINES = 2;
+exports.GREETING_MAX_LINES = 3;
 exports.GREETING_SIMPLE_TEMPLATE = "Hi there! 😊 Welcome to Fiesta House Maternity 🤍\nHow can I help you today? ✨";
 exports.GREETING_OVERRIDE_IF_CONTAINS = [
     "thank you for contacting",

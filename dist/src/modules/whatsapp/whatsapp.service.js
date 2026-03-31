@@ -27,7 +27,7 @@ let WhatsappService = class WhatsappService {
         this.messageQueue = messageQueue;
         this.phoneNumberId = this.configService.get('WHATSAPP_PHONE_NUMBER_ID');
         this.accessToken = this.configService.get('WHATSAPP_ACCESS_TOKEN');
-        this.apiVersion = this.configService.get('WHATSAPP_API_VERSION') || 'v21.0';
+        this.apiVersion = this.configService.get('WHATSAPP_API_VERSION') || 'v25.0';
         this.baseUrl = `https://graph.facebook.com/${this.apiVersion}`;
         console.log('📞 Initializing WhatsApp:', '\n phoneNumberId:', this.phoneNumberId, '\n accessToken present:', !!this.accessToken, '\n API Version:', this.apiVersion);
         if (!this.phoneNumberId || !this.accessToken) {

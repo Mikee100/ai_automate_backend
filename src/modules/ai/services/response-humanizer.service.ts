@@ -120,7 +120,7 @@ export class ResponseHumanizerService {
     const isGreeting =
       context.isFirstMessage === true ||
       (context.intent?.primaryIntent ?? '').toLowerCase() === 'greeting';
-    if (isGreeting) {
+    if (isGreeting && !context.isEscalation && !context.isBookingFlow) {
       result = this.simplifyGreeting(result);
     }
     return result.trim().replace(/\n{3,}/g, '\n\n');
@@ -291,6 +291,7 @@ export class ResponseHumanizerService {
     const availableOpeners = openerPool.filter((o) => !usedPhrases.has(o));
     const availableClosers = closerPool.filter((c) => !usedPhrases.has(c));
 
+    let result = text;
     const isShortMessage = text.length < 60;
 
     if (availableOpeners.length > 0 && this.shouldAddOpener(text, context)) {
@@ -312,7 +313,9 @@ export class ResponseHumanizerService {
 
   private shouldAddOpener(text: string, context: HumanizerContext): boolean {
     const intent = (context.intent?.primaryIntent ?? '').toLowerCase();
-    const allow = ['package_inquiry', 'booking', 'faq', 'greeting', 'confirm', 'availability', 'price_inquiry'].some(
+    // Don't add openers for greetings – the reply already starts with "Hi there!" etc.; "I've handled that for you." would be wrong
+    if (intent === 'greeting') return false;
+    const allow = ['package_inquiry', 'booking', 'faq', 'confirm', 'availability', 'price_inquiry'].some(
       (i) => intent.includes(i) || intent === i,
     );
     if (!allow) return false;

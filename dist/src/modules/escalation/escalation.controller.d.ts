@@ -28,9 +28,9 @@ export declare class EscalationController {
         createdAt: Date;
         updatedAt: Date;
         sentimentScore: number | null;
+        description: string | null;
         metadata: import("@prisma/client/runtime/library").JsonValue | null;
         reason: string | null;
-        description: string | null;
         escalationType: string;
     })[]>;
     resolveEscalation(id: string): Promise<{
@@ -40,9 +40,9 @@ export declare class EscalationController {
         createdAt: Date;
         updatedAt: Date;
         sentimentScore: number | null;
+        description: string | null;
         metadata: import("@prisma/client/runtime/library").JsonValue | null;
         reason: string | null;
-        description: string | null;
         escalationType: string;
     }>;
 }

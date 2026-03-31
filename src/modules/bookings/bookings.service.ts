@@ -635,17 +635,15 @@ export class BookingsService {
     // Check payment status
     const latestPayment = await this.getLatestPaymentForDraft(customerId);
 
-    // CRITICAL: Drafts with failed payments are considered stale immediately
-    // This prevents showing failed booking details when user asks unrelated questions
+    // CRITICAL: Drafts with failed payments are considered stale after a grace period.
+    // This allows users to retry ("resend") even if they've asked other questions first.
     if (latestPayment && latestPayment.status === 'failed') {
-      // If payment failed more than 1 hour ago, definitely stale
-      if (hoursOld > 1) {
+      // Allow 2 hours for retrying a failed payment
+      if (hoursOld > 2) {
         return true;
       }
-      // If payment failed recently (within 1 hour), still consider it stale
-      // to prevent showing booking details for non-booking queries
-      // But allow retry if user explicitly asks about payment
-      return true;
+      // Within 2 hours, keep the draft alive so "resend" works
+      return false;
     }
 
     // Draft older than 48 hours with no payment attempts is stale

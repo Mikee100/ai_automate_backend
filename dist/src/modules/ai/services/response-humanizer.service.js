@@ -56,7 +56,7 @@ let ResponseHumanizerService = ResponseHumanizerService_1 = class ResponseHumani
         result = this.stripBlockedPhrases(result);
         const isGreeting = context.isFirstMessage === true ||
             (context.intent?.primaryIntent ?? '').toLowerCase() === 'greeting';
-        if (isGreeting) {
+        if (isGreeting && !context.isEscalation && !context.isBookingFlow) {
             result = this.simplifyGreeting(result);
         }
         return result.trim().replace(/\n{3,}/g, '\n\n');
@@ -206,6 +206,7 @@ let ResponseHumanizerService = ResponseHumanizerService_1 = class ResponseHumani
         }
         const availableOpeners = openerPool.filter((o) => !usedPhrases.has(o));
         const availableClosers = closerPool.filter((c) => !usedPhrases.has(c));
+        let result = text;
         const isShortMessage = text.length < 60;
         if (availableOpeners.length > 0 && this.shouldAddOpener(text, context)) {
             const opener = this.pickRandom(availableOpeners, 1)[0];
@@ -222,7 +223,9 @@ let ResponseHumanizerService = ResponseHumanizerService_1 = class ResponseHumani
     }
     shouldAddOpener(text, context) {
         const intent = (context.intent?.primaryIntent ?? '').toLowerCase();
-        const allow = ['package_inquiry', 'booking', 'faq', 'greeting', 'confirm', 'availability', 'price_inquiry'].some((i) => intent.includes(i) || intent === i);
+        if (intent === 'greeting')
+            return false;
+        const allow = ['package_inquiry', 'booking', 'faq', 'confirm', 'availability', 'price_inquiry'].some((i) => intent.includes(i) || intent === i);
         if (!allow)
             return false;
         if (text.length > 400)

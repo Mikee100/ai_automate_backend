@@ -39,10 +39,15 @@ class FaqStrategy {
             /show.*(image|photo|picture|portfolio|example)/i,
             /see.*(image|photo|picture|example)/i,
             /(hours|location|address|phone|contact|email|website)/i,
-            /when (are|is).*(open|closed|available)/i,
+            /when (are|is).*(open|closed)/i,
+            /is.*(parking|location|address).*available/i,
             /\?/,
         ];
         const isFaqQuestion = faqPatterns.some(pattern => pattern.test(message));
+        const isBookingQuery = /(slot|available.*slot|book.*time|available.*time|when.*available)/i.test(message);
+        if (isBookingQuery && !/parking|location|address/i.test(message)) {
+            return false;
+        }
         const isBookingContinuation = context.hasDraft &&
             /(date|time|when|schedule|book|appointment|tomorrow|next|monday|tuesday|wednesday|thursday|friday|saturday|sunday|am|pm|\d{1,2}[:\-]\d{2})/i.test(message) &&
             !isFaqQuestion;

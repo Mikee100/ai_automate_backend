@@ -21,6 +21,11 @@ let CircuitBreakerService = CircuitBreakerService_1 = class CircuitBreakerServic
     async checkAndBreak(customerId, recentMessages) {
         const repetition = this.detectRepetition(recentMessages);
         if (repetition.count >= 4) {
+            const isKnownFallback = /i'm having a little trouble|having trouble processing|try rephrasing|try saying it differently/i.test(repetition.pattern || '');
+            if (isKnownFallback) {
+                this.logger.debug(`[CIRCUIT_BREAKER] Ignoring repetition of fallback message for ${customerId} – allowing request through`);
+                return { shouldBreak: false, recovery: 'retry' };
+            }
             this.logger.warn(`[CIRCUIT_BREAKER] Detected ${repetition.count} repetitions for customer ${customerId}: "${repetition.pattern}"`);
             return {
                 shouldBreak: true,

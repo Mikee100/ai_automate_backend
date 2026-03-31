@@ -55,7 +55,7 @@ class RescheduleStrategy {
         if (!draft || (draft.step !== 'reschedule' && draft.step !== 'reschedule_confirm' && draft.step !== 'reschedule_select' && !draft.bookingId)) {
             if (draft)
                 await prisma.bookingDraft.delete({ where: { customerId } });
-            const bookings = await bookingsService.getCustomerBookings(customerId);
+            const bookings = await bookingsService.getActiveBookings(customerId);
             const futureBookings = bookings.filter((b) => b.status === 'confirmed' && new Date(b.dateTime) > new Date());
             if (futureBookings.length === 0) {
                 const msg = "I'd love to help you reschedule, but I can't find an upcoming booking for you. Would you like to make a new one? 💖";
@@ -163,7 +163,7 @@ class RescheduleStrategy {
             return { response: msg, draft: null, updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
         }
         if (draft.step === 'reschedule_select') {
-            const bookings = await bookingsService.getCustomerBookings(customerId);
+            const bookings = await bookingsService.getActiveBookings(customerId);
             let foundId = null;
             const matched = bookings.find((b) => {
                 const dt = luxon_1.DateTime.fromJSDate(new Date(b.dateTime)).setZone(this.STUDIO_TIMEZONE);
@@ -209,7 +209,7 @@ class RescheduleStrategy {
             return { response: msg, draft, updatedHistory: [...history, { role: 'user', content: message }, { role: 'assistant', content: msg }] };
         }
         if (draft.step === 'reschedule_date' || draft.step === 'reschedule') {
-            let extraction = await aiService.extractBookingDetails(message, luxon_1.DateTime.now().setZone(this.STUDIO_TIMEZONE).toFormat('yyyy-MM-dd'));
+            let extraction = await aiService.extractBookingDetails(message, history, draft);
             if (!extraction.date || !extraction.time) {
                 const msg = "Could you please specify both the date and time you'd prefer? (e.g., 'Next Friday at 2pm') 🌸";
                 return { response: msg, draft, updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };

@@ -1,0 +1,48 @@
+{
+  "packages": [
+    {
+      "id": "cmiycidwx000010uwc2gb32eh",
+      "name": "Standard Package",
+      "type": "studio",
+      "price": 10000,
+      "deposit": 10,
+      "duration": "1 hr 30 mins",
+      "images": 6,
+      "makeup": true,
+      "outfits": 2,
+      "styling": true,
+      "photobook": false,
+      "photobookSize": null,
+      "mount": false,
+      "balloonBackdrop": false,
+      "wig": false,
+      "notes": "Standard indoor studio maternity package.",
+      "createdAt": "2025-12-09T08:55:55.377Z",
+      "updatedAt": "2025-12-15T13:51:03.017Z"
+    }
+  ],
+  "kbParking": [
+    {
+      "id": "cmiyci9dj001614bwq09ehafz",
+      "question": "Is parking available?",
+      "answer": "Yes, secure parking is available at Diamond Plaza Annex.",
+      "category": "Facility",
+      "embedding": [],
+      "mediaUrls": [],
+      "createdAt": "2025-12-09T08:55:49.495Z",
+      "updatedAt": "2026-02-19T12:24:00.254Z"
+    }
+  ],
+  "kbAvailable": [
+    {
+      "id": "cmiyci9dj001614bwq09ehafz",
+      "question": "Is parking available?",
+      "answer": "Yes, secure parking is available at Diamond Plaza Annex.",
+      "category": "Facility",
+      "embedding": [],
+      "mediaUrls": [],
+      "createdAt": "2025-12-09T08:55:49.495Z",
+      "updatedAt": "2026-02-19T12:24:00.254Z"
+    }
+  ]
+}

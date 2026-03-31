@@ -69,7 +69,8 @@ export class FaqStrategy implements ResponseStrategy {
             
             // Business info questions
             /(hours|location|address|phone|contact|email|website)/i,
-            /when (are|is).*(open|closed|available)/i,
+            /when (are|is).*(open|closed)/i,
+            /is.*(parking|location|address).*available/i, // Specific FAQ-related availability
             
             // General question indicators
             /\?/,
@@ -78,6 +79,12 @@ export class FaqStrategy implements ResponseStrategy {
         // Check if message matches any FAQ pattern
         const isFaqQuestion = faqPatterns.some(pattern => pattern.test(message));
         
+        // Exclude booking-specific queries (slots, available slots, etc.)
+        const isBookingQuery = /(slot|available.*slot|book.*time|available.*time|when.*available)/i.test(message);
+        if (isBookingQuery && !/parking|location|address/i.test(message)) {
+            return false;
+        }
+
         // Exclude booking-specific continuations (date/time when there's a draft)
         const isBookingContinuation = context.hasDraft && 
             /(date|time|when|schedule|book|appointment|tomorrow|next|monday|tuesday|wednesday|thursday|friday|saturday|sunday|am|pm|\d{1,2}[:\-]\d{2})/i.test(message) &&

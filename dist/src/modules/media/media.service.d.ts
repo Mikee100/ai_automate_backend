@@ -7,8 +7,8 @@ export declare class MediaService {
         id: string;
         createdAt: Date;
         updatedAt: Date;
-        title: string | null;
         description: string | null;
+        title: string | null;
         category: string;
         subcategory: string | null;
         url: string;
@@ -19,8 +19,8 @@ export declare class MediaService {
         id: string;
         createdAt: Date;
         updatedAt: Date;
-        title: string | null;
         description: string | null;
+        title: string | null;
         category: string;
         subcategory: string | null;
         url: string;

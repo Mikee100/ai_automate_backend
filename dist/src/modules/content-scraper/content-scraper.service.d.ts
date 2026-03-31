@@ -23,8 +23,8 @@ export declare class ContentScraperService {
         id: string;
         createdAt: Date;
         updatedAt: Date;
-        title: string | null;
         description: string | null;
+        title: string | null;
         category: string;
         subcategory: string | null;
         url: string;
@@ -35,8 +35,8 @@ export declare class ContentScraperService {
         id: string;
         createdAt: Date;
         updatedAt: Date;
-        title: string | null;
         description: string | null;
+        title: string | null;
         category: string;
         subcategory: string | null;
         url: string;

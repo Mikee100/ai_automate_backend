@@ -19,7 +19,7 @@ export class ExternalServicesHealthIndicator extends HealthIndicator {
     try {
       const phoneNumberId = this.configService.get<string>('WHATSAPP_PHONE_NUMBER_ID');
       const accessToken = this.configService.get<string>('WHATSAPP_ACCESS_TOKEN');
-      const apiVersion = this.configService.get<string>('WHATSAPP_API_VERSION', 'v21.0');
+      const apiVersion = this.configService.get<string>('WHATSAPP_API_VERSION', 'v25.0');
 
       if (!phoneNumberId || !accessToken) {
         return this.getStatus(key, false, {

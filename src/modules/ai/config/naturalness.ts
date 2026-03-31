@@ -68,7 +68,7 @@ export const PROMOTIONAL_PATTERNS: Array<{ pattern: RegExp; replacement: string 
 ];
 
 /** Greeting: max lines (simple + warm + light). */
-export const GREETING_MAX_LINES = 2;
+export const GREETING_MAX_LINES = 3;
 
 /** When greeting is long and promotional, use this instead (simple + warm + light). */
 export const GREETING_SIMPLE_TEMPLATE =

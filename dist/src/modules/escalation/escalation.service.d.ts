@@ -14,9 +14,9 @@ export declare class EscalationService {
         createdAt: Date;
         updatedAt: Date;
         sentimentScore: number | null;
+        description: string | null;
         metadata: import("@prisma/client/runtime/library").JsonValue | null;
         reason: string | null;
-        description: string | null;
         escalationType: string;
     }>;
     resolveEscalation(escalationId: string): Promise<{
@@ -26,9 +26,9 @@ export declare class EscalationService {
         createdAt: Date;
         updatedAt: Date;
         sentimentScore: number | null;
+        description: string | null;
         metadata: import("@prisma/client/runtime/library").JsonValue | null;
         reason: string | null;
-        description: string | null;
         escalationType: string;
     }>;
     isCustomerEscalated(customerId: string): Promise<boolean>;
@@ -58,9 +58,9 @@ export declare class EscalationService {
         createdAt: Date;
         updatedAt: Date;
         sentimentScore: number | null;
+        description: string | null;
         metadata: import("@prisma/client/runtime/library").JsonValue | null;
         reason: string | null;
-        description: string | null;
         escalationType: string;
     })[]>;
 }

@@ -27,7 +27,7 @@ let ExternalServicesHealthIndicator = class ExternalServicesHealthIndicator exte
         try {
             const phoneNumberId = this.configService.get('WHATSAPP_PHONE_NUMBER_ID');
             const accessToken = this.configService.get('WHATSAPP_ACCESS_TOKEN');
-            const apiVersion = this.configService.get('WHATSAPP_API_VERSION', 'v21.0');
+            const apiVersion = this.configService.get('WHATSAPP_API_VERSION', 'v25.0');
             if (!phoneNumberId || !accessToken) {
                 return this.getStatus(key, false, {
                     message: 'WhatsApp credentials not configured',

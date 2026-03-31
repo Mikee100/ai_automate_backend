@@ -74,7 +74,7 @@ export class RescheduleStrategy implements ResponseStrategy {
             if (draft) await prisma.bookingDraft.delete({ where: { customerId } });
 
             // Find existing confirmed future bookings
-            const bookings = await bookingsService.getCustomerBookings(customerId);
+            const bookings = await bookingsService.getActiveBookings(customerId);
             const futureBookings = bookings.filter((b: any) =>
                 b.status === 'confirmed' && new Date(b.dateTime) > new Date()
             );
@@ -230,7 +230,7 @@ export class RescheduleStrategy implements ResponseStrategy {
             // Simplest: If logic above didn't catch it as a "new request" because draft exists, we need to handle it here.
 
             // Check if message matches one of the bookings
-            const bookings = await bookingsService.getCustomerBookings(customerId);
+            const bookings = await bookingsService.getActiveBookings(customerId);
             let foundId = null;
 
             // Check if it's a list reply (often contains ID in hidden field, but we only get text here usually)
@@ -289,7 +289,7 @@ export class RescheduleStrategy implements ResponseStrategy {
 
         if (draft.step === 'reschedule_date' || draft.step === 'reschedule') {
             // Extract new date/time
-            let extraction = await aiService.extractBookingDetails(message, DateTime.now().setZone(this.STUDIO_TIMEZONE).toFormat('yyyy-MM-dd'));
+            let extraction = await aiService.extractBookingDetails(message, history, draft);
 
             if (!extraction.date || !extraction.time) {
                 const msg = "Could you please specify both the date and time you'd prefer? (e.g., 'Next Friday at 2pm') 🌸";
