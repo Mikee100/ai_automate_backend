@@ -3,7 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const client_1 = require("@prisma/client");
 const prisma = new client_1.PrismaClient();
 async function main() {
-    console.log('Seeding FAQs...');
     const faqs = [
         {
             question: 'When is the best time to schedule my session?',
@@ -58,13 +57,18 @@ async function main() {
             category: 'Contact',
         },
         {
-            question: 'What are your business hours?',
-            answer: 'We\'re open Monday-Saturday: 9:00 AM - 6:00 PM. Feel free to visit us or book an appointment during these times! 🕐✨',
+            question: 'What are your opening days and hours? Are you open on Sunday? Which days are you closed? What time do you open and close?',
+            answer: 'We are open from 9:00 AM to 7:00 PM every day except Monday. We are open on Sundays too! Our studio is closed only on Mondays. You can visit or book an appointment any other day, including weekends. If you have questions about our opening days, hours, or holiday schedule, just ask!',
+            category: 'Contact',
+        },
+        {
+            question: 'Can I book on a Monday? Are you open on Monday?',
+            answer: 'Our studio is closed on Mondays, so we do not take any bookings for that day. We are open from Tuesday to Sunday, 9:00 AM to 7:00 PM, and you are welcome to book an appointment for any of those days! 💕',
             category: 'Contact',
         },
         {
             question: 'What are your contact details?',
-            answer: 'Here are our complete contact details:\n\n📍 Location: 4th Avenue Parklands, Diamond Plaza Annex, 2nd Floor, Nairobi, Kenya\n📞 Phone: 0720 111928\n📧 Email: info@fiestahouseattire.com\n🌐 Website: https://fiestahouseattire.com/\n🕐 Hours: Monday-Saturday: 9:00 AM - 6:00 PM\n\nWe look forward to welcoming you! 💖',
+            answer: 'Here are our complete contact details:\n\n📍 Location: 4th Avenue Parklands, Diamond Plaza Annex, 2nd Floor, Nairobi, Kenya\n📞 Phone: 0720 111928\n📧 Email: info@fiestahouseattire.com\n🌐 Website: https://fiestahouseattire.com/\n🕐 Hours: Tuesday-Sunday: 9:00 AM - 7:00 PM\n\nWe look forward to welcoming you! 💖',
             category: 'Contact',
         },
         {
@@ -226,6 +230,31 @@ async function main() {
             question: 'Is the studio safe for pregnant moms?',
             answer: 'Yes, our space is designed for pregnant women, and we are an all-women team trained to handle maternity clients.',
             category: 'Facility',
+        },
+        {
+            question: 'What are your social media accounts?',
+            answer: `You can follow us on our social media platforms for the latest updates, behind-the-scenes content, and stunning maternity photos:\n\n📸 Instagram: https://www.instagram.com/fiestahousematernity\n👍 Facebook: https://www.facebook.com/fiestahouseattire/\n\nWe'd love to have you as part of our community! Follow us to stay inspired and see our beautiful work. 💕`,
+            category: 'Contact',
+        },
+        {
+            question: 'Where can I find you on Instagram?',
+            answer: `You can find us on Instagram at:\n\n @fiestahousematernity\nhttps://www.instagram.com/fiestahousematernity\n\nFollow us to see our latest maternity shoots, behind-the-scenes moments, and stunning photo gallery! 💕`,
+            category: 'Contact',
+        },
+        {
+            question: 'Where can I find you on Facebook?',
+            answer: `You can find us on Facebook at:\n\n Fiesta House Attire\nhttps://www.facebook.com/fiestahouseattire/\n\nLike and follow our page to stay updated with our latest work, promotions, and announcements! 💕`,
+            category: 'Contact',
+        },
+        {
+            question: 'Do you have Instagram?',
+            answer: `Yes! Follow us on Instagram for daily inspiration and stunning maternity photos:\n\n📸 @fiestahousematernity\nhttps://www.instagram.com/fiestahousematernity\n\nWe post regularly and would love to connect with you! 💕`,
+            category: 'Contact',
+        },
+        {
+            question: 'Do you have a Facebook page?',
+            answer: `Yes! Like our Facebook page to stay connected:\n\n Fiesta House Attire\nhttps://www.facebook.com/fiestahouseattire/\n\nWe share updates, promotions, and our latest beautiful maternity sessions there! 💕`,
+            category: 'Contact',
         },
     ];
     faqs.push(...newFaqs);

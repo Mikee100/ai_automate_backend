@@ -5,6 +5,19 @@ class PackageInquiryStrategy {
     constructor() {
         this.priority = 60;
     }
+    findRecentPackageFromHistory(history, packages, matchPackage) {
+        const recentMessages = [...history].reverse();
+        for (const entry of recentMessages) {
+            if (!entry?.content || typeof entry.content !== 'string') {
+                continue;
+            }
+            const matchedPackage = packages.find((pkg) => matchPackage(entry.content, pkg.name));
+            if (matchedPackage) {
+                return matchedPackage;
+            }
+        }
+        return null;
+    }
     canHandle(intent, context) {
         const { message, hasDraft } = context;
         const isBackdropImageRequest = /(backdrop|background|studio set|flower wall|portfolio|show.*(image|photo|picture|portfolio)|see.*(image|photo|picture|example))/i.test(message);
@@ -67,6 +80,7 @@ class PackageInquiryStrategy {
                     return { response, draft: existingDraft || null, updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
                 }
                 if (packages.length > 0) {
+                    const latestReferencedPackage = this.findRecentPackageFromHistory(history, packages, matchPackage);
                     const isDepositQuery = /(deposit|down payment|initial payment|advance payment)/i.test(message);
                     if (isDepositQuery) {
                         const mentionedPackages = packages.filter((p) => matchPackage(message, p.name));
@@ -81,11 +95,14 @@ class PackageInquiryStrategy {
                         }).flat();
                         const uniqueRecentPackages = recentPackages.filter((p, index, self) => index === self.findIndex((t) => t.name === p.name));
                         const isAskingAboutRecent = /(the (two|both)|these|those|them)/i.test(message);
+                        const isAskingAboutSingleRecent = /\b(it|its|that (one|package)|this (one|package)|the package)\b/i.test(message);
                         const packagesToShow = isAskingAboutRecent && uniqueRecentPackages.length > 0
                             ? uniqueRecentPackages.slice(0, 2)
-                            : mentionedPackages.length > 0
-                                ? mentionedPackages
-                                : packages;
+                            : isAskingAboutSingleRecent && latestReferencedPackage
+                                ? [latestReferencedPackage]
+                                : mentionedPackages.length > 0
+                                    ? mentionedPackages
+                                    : packages;
                         const depositInfo = packagesToShow.map((p) => `📦 *${p.name}*: KES ${p.deposit || 2000} deposit`).join('\n');
                         const response = `Here are the deposit amounts:\n\n${depositInfo}\n\nThe remaining balance is due after your photoshoot. 💖`;
                         return { response, draft: existingDraft || null, updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
@@ -94,9 +111,10 @@ class PackageInquiryStrategy {
                     if (isAskingAboutAll) {
                         const packagesList = packages.map((p) => aiService.formatPackageDetails(p, true)).join('\n\n');
                         const response = `Oh, my dear, I'm so delighted to share details about all our ${packageType}packages with you! Each one is thoughtfully crafted to beautifully capture this precious time in your life. Here they are:\n\n${packagesList}\n\nWhich package would you like to book? 💖`;
-                        return { response, draft: null, updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
+                        return { response, draft: existingDraft || null, updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
                     }
                     const wantsThatOne = /(i want (that|this) (one|package)|i'll take (that|this) (one|package)|i choose (that|this) (one|package)|i'll go with (that|this) (one|package)|(that|this) one|i want it|i'll take it)/i.test(message);
+                    const asksAboutSingleRecentPackage = /\b(it|its|that (one|package)|this (one|package)|the package)\b/i.test(message);
                     let specificPackage = packages.find((p) => {
                         const lowerMsg = message.toLowerCase();
                         const lowerPkg = p.name.toLowerCase();
@@ -117,6 +135,10 @@ class PackageInquiryStrategy {
                                 break;
                             }
                         }
+                    }
+                    if (!specificPackage && asksAboutSingleRecentPackage && latestReferencedPackage) {
+                        specificPackage = latestReferencedPackage;
+                        logger.log(`[PACKAGE QUERY] Resolved singular package reference to "${specificPackage.name}"`);
                     }
                     const isAskingForDetails = /(tell me about|what is|what's|details|include|come with|feature|what does.*include|how about|what about)/i.test(message);
                     if (specificPackage && isAskingForDetails) {
@@ -176,7 +198,7 @@ class PackageInquiryStrategy {
                     const packagesList = packages.map((p) => aiService.formatPackageDetails(p, false)).join('\n\n');
                     const packageTypeLabel = packageType ? `${packageType}packages` : 'studio packages';
                     const response = `Oh, my dear, I'm so delighted to share our ${packageTypeLabel} with you! Each one is thoughtfully crafted to beautifully capture this precious time in your life. Here they are:\n\n${packagesList}\n\nIf you'd like to know more about any specific package, just ask! 💖`;
-                    return { response, draft: null, updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
+                    return { response, draft: existingDraft || null, updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
                 }
             }
             return null;

@@ -211,10 +211,8 @@ export class RescheduleStrategy implements ResponseStrategy {
                     customerId,
                     step: 'reschedule_date', // Waiting for new date
                     bookingId: targetBooking.id,
-                    service: targetBooking.service, // Store service for logging/context
-                    data: {
-                        originalDate: targetBooking.dateTime
-                    }
+                    service: targetBooking.service // Store service for logging/context
+                    // If you want to store originalDate, use an existing string field like conflictResolution or add a new field to the schema
                 }
             });
 

@@ -79,7 +79,27 @@ export class BookingsService {
       // Validation for required fields
       if (!draft) throw new Error(`No booking draft found for customerId=${customerId}`);
       if (!draft.service) throw new Error(`Draft missing service for customerId=${customerId}`);
-      if (!draft.dateTimeIso && !providedDateTime) throw new Error(`Draft missing dateTimeIso for customerId=${customerId}`);
+      // If dateTimeIso is missing, try to generate it from date and time
+      if (!draft.dateTimeIso && !providedDateTime) {
+        if (draft.date && draft.time) {
+          // Attempt to combine date and time into ISO string
+          const dateString = `${draft.date}T${draft.time}`;
+          const dateObj = new Date(dateString);
+          if (!isNaN(dateObj.getTime())) {
+            // Save to DB for future use
+            await this.prisma.bookingDraft.update({
+              where: { customerId },
+              data: { dateTimeIso: dateObj.toISOString() }
+            });
+            draft.dateTimeIso = dateObj.toISOString();
+            this.logger.debug(`[AUTO-FIX] Generated dateTimeIso: ${draft.dateTimeIso} for customerId=${customerId}`);
+          } else {
+            throw new Error(`Could not generate valid dateTimeIso from date and time for customerId=${customerId}`);
+          }
+        } else {
+          throw new Error(`Draft missing dateTimeIso for customerId=${customerId}`);
+        }
+      }
       if (!draft.name) throw new Error(`Draft missing name for customerId=${customerId}`);
 
       // Handle missing recipientPhone by checking customer profile
@@ -109,25 +129,27 @@ export class BookingsService {
       }
       this.logger.debug(`[STK] Using phone: ${phone}, amount: ${depositAmount}`);
 
-      // Emit event for payment initiation
-      this.logger.error(`[DEBUG-TRACE] Emitting booking.draft.completed event for customerId=${customerId}, draftId=${draft.id}`);
-      this.logger.log(`[BOOKING] Emitting booking.draft.completed event for customerId=${customerId}, draftId=${draft.id}`);
-      this.eventEmitter.emit('booking.draft.completed', {
-        customerId,
-        draftId: draft.id,
-        service: draft.service,
-        dateTime: providedDateTime || new Date(draft.dateTimeIso),
-        recipientPhone,
-        depositAmount,
+      // Payment step is paused: create a confirmed booking directly
+      this.logger.log(`[BOOKING] Payment step is paused. Creating confirmed booking for customerId=${customerId}, draftId=${draft.id}`);
+      // Create booking
+      const booking = await this.prisma.booking.create({
+        data: {
+          customerId,
+          service: draft.service,
+          dateTime: providedDateTime || new Date(draft.dateTimeIso),
+          recipientName: draft.recipientName || draft.name,
+          recipientPhone,
+          status: 'confirmed',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }
       });
-      this.logger.log(`[BOOKING] Event emitted successfully`);
-
+      // Remove the draft
+      await this.prisma.bookingDraft.delete({ where: { id: draft.id } });
       return {
-        message: "I've sent a request to your phone for the deposit. 📲 Once you complete that, your magical session will be officially booked! ✨",
-        depositAmount,
-        packageName: pkg.name,
-        checkoutRequestId: 'simulated_checkout_id', // In a real app this comes from the payment provider
-        paymentId: 'simulated_payment_id' // In a real app this comes from the payment provider
+        message: "Your booking is confirmed! 🎉 The payment step is currently paused. If you have any questions, please contact us.",
+        bookingId: booking.id,
+        packageName: pkg.name
       };
     } catch (error) {
       this.logger.error(`completeBookingDraft failed for customerId=${customerId}`, error);

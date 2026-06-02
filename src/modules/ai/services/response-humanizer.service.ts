@@ -276,8 +276,7 @@ export class ResponseHumanizerService {
     const formality = context.customerProfile?.formalityLevel ?? 'medium';
     const openerPool =
       formality === 'high' ? NEUTRAL_OPENERS : formality === 'low' ? [...CASUAL_OPENERS, ...WARM_OPENERS] : WARM_OPENERS;
-    const closerPool =
-      formality === 'high' ? SOFT_CLOSERS : [...WARM_CLOSERS, ...SOFT_CLOSERS];
+    const closerPool = SOFT_CLOSERS;
 
     const allPhrases = [...openerPool, ...closerPool, ...WARM_OPENERS, ...WARM_CLOSERS];
     const lastAi = (context.lastAiResponses ?? []).slice(-MEMORY_WINDOW);
@@ -315,6 +314,8 @@ export class ResponseHumanizerService {
     const intent = (context.intent?.primaryIntent ?? '').toLowerCase();
     // Don't add openers for greetings – the reply already starts with "Hi there!" etc.; "I've handled that for you." would be wrong
     if (intent === 'greeting') return false;
+    if (text.length < 35) return false;
+    if (/^(hi|hello|hey|got it|sure|of course|here you go|perfect|booked|yes)/i.test(text.trim())) return false;
     const allow = ['package_inquiry', 'booking', 'faq', 'confirm', 'availability', 'price_inquiry'].some(
       (i) => intent.includes(i) || intent === i,
     );
@@ -329,6 +330,9 @@ export class ResponseHumanizerService {
       (i) => intent.includes(i) || intent === i,
     );
     if (!allow) return false;
+    if (text.length < 90) return false;
+    if (/\?$/.test(text.trim())) return false;
+    if ((text.match(/\n/g) || []).length >= 2) return false;
     if (text.length > 500) return false;
     return true;
   }

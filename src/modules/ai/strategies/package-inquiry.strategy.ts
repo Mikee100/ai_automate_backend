@@ -3,6 +3,23 @@ import { ResponseStrategy } from './response-strategy.interface';
 export class PackageInquiryStrategy implements ResponseStrategy {
     readonly priority = 60; // Run before FAQ to handle package queries first
 
+    private findRecentPackageFromHistory(history: any[], packages: any[], matchPackage: (msg: string, packageName: string) => boolean): any | null {
+        const recentMessages = [...history].reverse();
+
+        for (const entry of recentMessages) {
+            if (!entry?.content || typeof entry.content !== 'string') {
+                continue;
+            }
+
+            const matchedPackage = packages.find((pkg: any) => matchPackage(entry.content, pkg.name));
+            if (matchedPackage) {
+                return matchedPackage;
+            }
+        }
+
+        return null;
+    }
+
     canHandle(intent: string, context: any): boolean {
         const { message, hasDraft } = context;
         // Exclude backdrop/image requests which should go to FAQ flow
@@ -88,6 +105,8 @@ export class PackageInquiryStrategy implements ResponseStrategy {
                 }
 
                 if (packages.length > 0) {
+                    const latestReferencedPackage = this.findRecentPackageFromHistory(history, packages, matchPackage);
+
                     // Check if asking about deposits specifically
                     const isDepositQuery = /(deposit|down payment|initial payment|advance payment)/i.test(message);
 
@@ -112,8 +131,11 @@ export class PackageInquiryStrategy implements ResponseStrategy {
 
                         // If user said "the two" or similar, use recent packages (limit to 2)
                         const isAskingAboutRecent = /(the (two|both)|these|those|them)/i.test(message);
+                        const isAskingAboutSingleRecent = /\b(it|its|that (one|package)|this (one|package)|the package)\b/i.test(message);
                         const packagesToShow = isAskingAboutRecent && uniqueRecentPackages.length > 0
                             ? uniqueRecentPackages.slice(0, 2)
+                            : isAskingAboutSingleRecent && latestReferencedPackage
+                                ? [latestReferencedPackage]
                             : mentionedPackages.length > 0
                                 ? mentionedPackages
                                 : packages;
@@ -132,11 +154,12 @@ export class PackageInquiryStrategy implements ResponseStrategy {
                         // Show detailed info for all packages
                         const packagesList = packages.map((p: any) => aiService.formatPackageDetails(p, true)).join('\n\n');
                         const response = `Oh, my dear, I'm so delighted to share details about all our ${packageType}packages with you! Each one is thoughtfully crafted to beautifully capture this precious time in your life. Here they are:\n\n${packagesList}\n\nWhich package would you like to book? 💖`;
-                        return { response, draft: null, updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
+                        return { response, draft: existingDraft || null, updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
                     }
 
                     // Check for "i want that one" or similar - look at recent conversation history
                     const wantsThatOne = /(i want (that|this) (one|package)|i'll take (that|this) (one|package)|i choose (that|this) (one|package)|i'll go with (that|this) (one|package)|(that|this) one|i want it|i'll take it)/i.test(message);
+                    const asksAboutSingleRecentPackage = /\b(it|its|that (one|package)|this (one|package)|the package)\b/i.test(message);
 
                     // Find package - packages array is already filtered to studio packages only
                     // Prioritize exact name matches to avoid confusion with similar names
@@ -165,6 +188,11 @@ export class PackageInquiryStrategy implements ResponseStrategy {
                                 break;
                             }
                         }
+                    }
+
+                    if (!specificPackage && asksAboutSingleRecentPackage && latestReferencedPackage) {
+                        specificPackage = latestReferencedPackage;
+                        logger.log(`[PACKAGE QUERY] Resolved singular package reference to "${specificPackage.name}"`);
                     }
 
                     // Check if asking about a SPECIFIC package with detail keywords
@@ -248,7 +276,7 @@ export class PackageInquiryStrategy implements ResponseStrategy {
                     const packageTypeLabel = packageType ? `${packageType}packages` : 'studio packages';
                     const response = `Oh, my dear, I'm so delighted to share our ${packageTypeLabel} with you! Each one is thoughtfully crafted to beautifully capture this precious time in your life. Here they are:\n\n${packagesList}\n\nIf you'd like to know more about any specific package, just ask! 💖`;
 
-                    return { response, draft: null, updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
+                    return { response, draft: existingDraft || null, updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
                 }
             }
 

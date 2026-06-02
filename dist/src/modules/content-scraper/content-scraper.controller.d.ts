@@ -27,11 +27,11 @@ export declare class ContentScraperController {
             id: string;
             createdAt: Date;
             updatedAt: Date;
-            description: string | null;
             title: string | null;
+            description: string | null;
             category: string;
-            subcategory: string | null;
             url: string;
+            subcategory: string | null;
             mediaType: string;
             source: string;
         }[];
@@ -43,11 +43,11 @@ export declare class ContentScraperController {
             id: string;
             createdAt: Date;
             updatedAt: Date;
-            description: string | null;
             title: string | null;
+            description: string | null;
             category: string;
-            subcategory: string | null;
             url: string;
+            subcategory: string | null;
             mediaType: string;
             source: string;
         }[];

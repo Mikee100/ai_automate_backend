@@ -3,25 +3,23 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
-    console.log('Seeding FAQs...');
-
-    const faqs = [
-        {
-            question: 'When is the best time to schedule my session?',
-            answer: 'The ideal time for a maternity shoot is between 28 and 34 weeks of pregnancy. At this stage, your baby bump is well-defined, and you’re likely to feel more comfortable during the session compared to the later weeks of pregnancy. However, we’re happy to accommodate your schedule if these weeks aren’t suitable.',
-            category: 'General',
-        },
-        {
-            question: 'Can my partner and other children join the shoot?',
-            answer: 'Of course! Maternity sessions are a wonderful way to celebrate this special time with your entire family. We encourage involving your partner and children to add warmth and meaning to your photos, and we’ll guide you through poses that include everyone beautifully.',
-            category: 'General',
-        },
-        {
-            question: 'Do you provide outfits and props?',
-            answer: 'Our packages include everything you need for a seamless experience—professional makeup, styling, and a wide variety of luxury gowns, props, and accessories. You are also more than welcome to bring any sentimental items or personal outfits you\'d like to feature.',
-            category: 'Services',
-        },
-    ];
+const faqs = [
+    {
+        question: 'When is the best time to schedule my session?',
+        answer: 'The ideal time for a maternity shoot is between 28 and 34 weeks of pregnancy. At this stage, your baby bump is well-defined, and you’re likely to feel more comfortable during the session compared to the later weeks of pregnancy. However, we’re happy to accommodate your schedule if these weeks aren’t suitable.',
+        category: 'General',
+    },
+    {
+        question: 'Can my partner and other children join the shoot?',
+        answer: 'Of course! Maternity sessions are a wonderful way to celebrate this special time with your entire family. We encourage involving your partner and children to add warmth and meaning to your photos, and we’ll guide you through poses that include everyone beautifully.',
+        category: 'General',
+    },
+    {
+        question: 'Do you provide outfits and props?',
+        answer: 'Our packages include everything you need for a seamless experience—professional makeup, styling, and a wide variety of luxury gowns, props, and accessories. You are also more than welcome to bring any sentimental items or personal outfits you\'d like to feature.',
+        category: 'Services',
+    },
+];
 
     const newFaqs = [
         {
@@ -60,13 +58,18 @@ async function main() {
             category: 'Contact',
         },
         {
-            question: 'What are your business hours?',
-            answer: 'We\'re open Monday-Saturday: 9:00 AM - 6:00 PM. Feel free to visit us or book an appointment during these times! 🕐✨',
+            question: 'What are your opening days and hours? Are you open on Sunday? Which days are you closed? What time do you open and close?',
+            answer: 'We are open from 9:00 AM to 7:00 PM every day except Monday. We are open on Sundays too! Our studio is closed only on Mondays. You can visit or book an appointment any other day, including weekends. If you have questions about our opening days, hours, or holiday schedule, just ask!',
+            category: 'Contact',
+        },
+        {
+            question: 'Can I book on a Monday? Are you open on Monday?',
+            answer: 'Our studio is closed on Mondays, so we do not take any bookings for that day. We are open from Tuesday to Sunday, 9:00 AM to 7:00 PM, and you are welcome to book an appointment for any of those days! 💕',
             category: 'Contact',
         },
         {
             question: 'What are your contact details?',
-            answer: 'Here are our complete contact details:\n\n📍 Location: 4th Avenue Parklands, Diamond Plaza Annex, 2nd Floor, Nairobi, Kenya\n📞 Phone: 0720 111928\n📧 Email: info@fiestahouseattire.com\n🌐 Website: https://fiestahouseattire.com/\n🕐 Hours: Monday-Saturday: 9:00 AM - 6:00 PM\n\nWe look forward to welcoming you! 💖',
+            answer: 'Here are our complete contact details:\n\n📍 Location: 4th Avenue Parklands, Diamond Plaza Annex, 2nd Floor, Nairobi, Kenya\n📞 Phone: 0720 111928\n📧 Email: info@fiestahouseattire.com\n🌐 Website: https://fiestahouseattire.com/\n🕐 Hours: Tuesday-Sunday: 9:00 AM - 7:00 PM\n\nWe look forward to welcoming you! 💖',
             category: 'Contact',
         },
         {
@@ -232,6 +235,32 @@ async function main() {
             question: 'Is the studio safe for pregnant moms?',
             answer: 'Yes, our space is designed for pregnant women, and we are an all-women team trained to handle maternity clients.',
             category: 'Facility',
+        },
+        // Social Media
+        {
+            question: 'What are your social media accounts?',
+            answer: `You can follow us on our social media platforms for the latest updates, behind-the-scenes content, and stunning maternity photos:\n\n📸 Instagram: https://www.instagram.com/fiestahousematernity\n👍 Facebook: https://www.facebook.com/fiestahouseattire/\n\nWe'd love to have you as part of our community! Follow us to stay inspired and see our beautiful work. 💕`,
+            category: 'Contact',
+        },
+        {
+            question: 'Where can I find you on Instagram?',
+            answer: `You can find us on Instagram at:\n\n @fiestahousematernity\nhttps://www.instagram.com/fiestahousematernity\n\nFollow us to see our latest maternity shoots, behind-the-scenes moments, and stunning photo gallery! 💕`,
+            category: 'Contact',
+        },
+        {
+            question: 'Where can I find you on Facebook?',
+            answer: `You can find us on Facebook at:\n\n Fiesta House Attire\nhttps://www.facebook.com/fiestahouseattire/\n\nLike and follow our page to stay updated with our latest work, promotions, and announcements! 💕`,
+            category: 'Contact',
+        },
+        {
+            question: 'Do you have Instagram?',
+            answer: `Yes! Follow us on Instagram for daily inspiration and stunning maternity photos:\n\n📸 @fiestahousematernity\nhttps://www.instagram.com/fiestahousematernity\n\nWe post regularly and would love to connect with you! 💕`,
+            category: 'Contact',
+        },
+        {
+            question: 'Do you have a Facebook page?',
+            answer: `Yes! Like our Facebook page to stay connected:\n\n Fiesta House Attire\nhttps://www.facebook.com/fiestahouseattire/\n\nWe share updates, promotions, and our latest beautiful maternity sessions there! 💕`,
+            category: 'Contact',
         },
     ];
 

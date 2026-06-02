@@ -9,7 +9,6 @@ export declare class MessagesService {
     getCustomerById(customerId: string): Promise<{
         id: string;
         createdAt: Date;
-        updatedAt: Date;
         name: string;
         email: string | null;
         phone: string | null;
@@ -23,17 +22,18 @@ export declare class MessagesService {
         dailyTokenUsage: number;
         tokenResetDate: Date | null;
         totalTokensUsed: number;
+        updatedAt: Date;
     }>;
     static classifyIntentSimple(content: string): string;
     constructor(prisma: PrismaService, messageQueue: Queue, aiService: AiService);
     create(createMessageDto: CreateMessageDto): Promise<{
         id: string;
-        customerId: string;
-        createdAt: Date;
-        platform: string;
         content: string;
+        platform: string;
         direction: string;
+        customerId: string;
         externalId: string | null;
+        createdAt: Date;
         handledBy: string | null;
         isResolved: boolean | null;
         isEscalated: boolean | null;
@@ -42,7 +42,6 @@ export declare class MessagesService {
         customer: {
             id: string;
             createdAt: Date;
-            updatedAt: Date;
             name: string;
             email: string | null;
             phone: string | null;
@@ -56,15 +55,16 @@ export declare class MessagesService {
             dailyTokenUsage: number;
             tokenResetDate: Date | null;
             totalTokensUsed: number;
+            updatedAt: Date;
         };
     } & {
         id: string;
-        customerId: string;
-        createdAt: Date;
-        platform: string;
         content: string;
+        platform: string;
         direction: string;
+        customerId: string;
         externalId: string | null;
+        createdAt: Date;
         handledBy: string | null;
         isResolved: boolean | null;
         isEscalated: boolean | null;
@@ -74,7 +74,6 @@ export declare class MessagesService {
         customer: {
             id: string;
             createdAt: Date;
-            updatedAt: Date;
             name: string;
             email: string | null;
             phone: string | null;
@@ -88,15 +87,16 @@ export declare class MessagesService {
             dailyTokenUsage: number;
             tokenResetDate: Date | null;
             totalTokensUsed: number;
+            updatedAt: Date;
         };
     } & {
         id: string;
-        customerId: string;
-        createdAt: Date;
-        platform: string;
         content: string;
+        platform: string;
         direction: string;
+        customerId: string;
         externalId: string | null;
+        createdAt: Date;
         handledBy: string | null;
         isResolved: boolean | null;
         isEscalated: boolean | null;
@@ -105,7 +105,6 @@ export declare class MessagesService {
         customer: {
             id: string;
             createdAt: Date;
-            updatedAt: Date;
             name: string;
             email: string | null;
             phone: string | null;
@@ -119,15 +118,16 @@ export declare class MessagesService {
             dailyTokenUsage: number;
             tokenResetDate: Date | null;
             totalTokensUsed: number;
+            updatedAt: Date;
         };
     } & {
         id: string;
-        customerId: string;
-        createdAt: Date;
-        platform: string;
         content: string;
+        platform: string;
         direction: string;
+        customerId: string;
         externalId: string | null;
+        createdAt: Date;
         handledBy: string | null;
         isResolved: boolean | null;
         isEscalated: boolean | null;
@@ -136,7 +136,6 @@ export declare class MessagesService {
         customer: {
             id: string;
             createdAt: Date;
-            updatedAt: Date;
             name: string;
             email: string | null;
             phone: string | null;
@@ -150,15 +149,16 @@ export declare class MessagesService {
             dailyTokenUsage: number;
             tokenResetDate: Date | null;
             totalTokensUsed: number;
+            updatedAt: Date;
         };
     } & {
         id: string;
-        customerId: string;
-        createdAt: Date;
-        platform: string;
         content: string;
+        platform: string;
         direction: string;
+        customerId: string;
         externalId: string | null;
+        createdAt: Date;
         handledBy: string | null;
         isResolved: boolean | null;
         isEscalated: boolean | null;
@@ -166,12 +166,12 @@ export declare class MessagesService {
     classifyIntent(content: string, history?: string[]): Promise<string>;
     sendOutboundMessage(customerId: string, content: string, platform: string): Promise<{
         id: string;
-        customerId: string;
-        createdAt: Date;
-        platform: string;
         content: string;
+        platform: string;
         direction: string;
+        customerId: string;
         externalId: string | null;
+        createdAt: Date;
         handledBy: string | null;
         isResolved: boolean | null;
         isEscalated: boolean | null;
@@ -191,27 +191,27 @@ export declare class MessagesService {
             recentBookings: {
                 id: string;
                 customerId: string;
+                createdAt: Date;
+                updatedAt: Date;
+                status: string;
+                googleEventId: string | null;
                 service: string;
                 dateTime: Date;
-                status: string;
                 durationMinutes: number | null;
                 recipientName: string | null;
                 recipientPhone: string | null;
-                googleEventId: string | null;
-                createdAt: Date;
-                updatedAt: Date;
             }[];
             isReturning: boolean;
         };
         bookingDraft: {
             id: string;
             customerId: string;
+            createdAt: Date;
+            name: string;
+            updatedAt: Date;
             service: string;
             recipientName: string;
             recipientPhone: string;
-            createdAt: Date;
-            updatedAt: Date;
-            name: string;
             date: string;
             time: string;
             dateTimeIso: string;

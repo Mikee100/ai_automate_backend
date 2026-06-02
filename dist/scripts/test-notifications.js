@@ -25,7 +25,7 @@ async function main() {
             data: {
                 id: customerId,
                 name: 'Notification Tester',
-                phone: '254712345678',
+                phone: '254721840961',
                 whatsappId: customerId,
             }
         });

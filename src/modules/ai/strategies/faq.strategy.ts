@@ -68,7 +68,7 @@ export class FaqStrategy implements ResponseStrategy {
             /see.*(image|photo|picture|example)/i,
             
             // Business info questions
-            /(hours|location|address|phone|contact|email|website)/i,
+            /(hours|location|address|phone|contact|email|website|social media|instagram|facebook|ig|fb|follow|handle)/i,
             /when (are|is).*(open|closed)/i,
             /is.*(parking|location|address).*available/i, // Specific FAQ-related availability
             

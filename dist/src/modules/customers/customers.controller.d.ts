@@ -6,7 +6,6 @@ export declare class CustomersController {
     create(createCustomerDto: CreateCustomerDto): Promise<{
         id: string;
         createdAt: Date;
-        updatedAt: Date;
         name: string;
         email: string | null;
         phone: string | null;
@@ -20,17 +19,18 @@ export declare class CustomersController {
         dailyTokenUsage: number;
         tokenResetDate: Date | null;
         totalTokensUsed: number;
+        updatedAt: Date;
     }>;
     findAll(): Promise<{
         platform: string;
         messages: {
             id: string;
-            customerId: string;
-            createdAt: Date;
-            platform: string;
             content: string;
+            platform: string;
             direction: string;
+            customerId: string;
             externalId: string | null;
+            createdAt: Date;
             handledBy: string | null;
             isResolved: boolean | null;
             isEscalated: boolean | null;
@@ -38,19 +38,18 @@ export declare class CustomersController {
         bookings: {
             id: string;
             customerId: string;
+            createdAt: Date;
+            updatedAt: Date;
+            status: string;
+            googleEventId: string | null;
             service: string;
             dateTime: Date;
-            status: string;
             durationMinutes: number | null;
             recipientName: string | null;
             recipientPhone: string | null;
-            googleEventId: string | null;
-            createdAt: Date;
-            updatedAt: Date;
         }[];
         id: string;
         createdAt: Date;
-        updatedAt: Date;
         name: string;
         email: string | null;
         phone: string | null;
@@ -64,11 +63,11 @@ export declare class CustomersController {
         dailyTokenUsage: number;
         tokenResetDate: Date | null;
         totalTokensUsed: number;
+        updatedAt: Date;
     }[]>;
     findByWhatsappId(whatsappId: string): Promise<{
         id: string;
         createdAt: Date;
-        updatedAt: Date;
         name: string;
         email: string | null;
         phone: string | null;
@@ -82,16 +81,17 @@ export declare class CustomersController {
         dailyTokenUsage: number;
         tokenResetDate: Date | null;
         totalTokensUsed: number;
+        updatedAt: Date;
     }>;
     findOne(id: string): Promise<{
         messages: {
             id: string;
-            customerId: string;
-            createdAt: Date;
-            platform: string;
             content: string;
+            platform: string;
             direction: string;
+            customerId: string;
             externalId: string | null;
+            createdAt: Date;
             handledBy: string | null;
             isResolved: boolean | null;
             isEscalated: boolean | null;
@@ -99,20 +99,19 @@ export declare class CustomersController {
         bookings: {
             id: string;
             customerId: string;
+            createdAt: Date;
+            updatedAt: Date;
+            status: string;
+            googleEventId: string | null;
             service: string;
             dateTime: Date;
-            status: string;
             durationMinutes: number | null;
             recipientName: string | null;
             recipientPhone: string | null;
-            googleEventId: string | null;
-            createdAt: Date;
-            updatedAt: Date;
         }[];
     } & {
         id: string;
         createdAt: Date;
-        updatedAt: Date;
         name: string;
         email: string | null;
         phone: string | null;
@@ -126,11 +125,11 @@ export declare class CustomersController {
         dailyTokenUsage: number;
         tokenResetDate: Date | null;
         totalTokensUsed: number;
+        updatedAt: Date;
     }>;
     update(id: string, updateCustomerDto: Partial<CreateCustomerDto>): Promise<{
         id: string;
         createdAt: Date;
-        updatedAt: Date;
         name: string;
         email: string | null;
         phone: string | null;
@@ -144,12 +143,12 @@ export declare class CustomersController {
         dailyTokenUsage: number;
         tokenResetDate: Date | null;
         totalTokensUsed: number;
+        updatedAt: Date;
     }>;
     sendPhotoLink(id: string, link: string): Promise<any>;
     remove(id: string): Promise<{
         id: string;
         createdAt: Date;
-        updatedAt: Date;
         name: string;
         email: string | null;
         phone: string | null;
@@ -163,11 +162,11 @@ export declare class CustomersController {
         dailyTokenUsage: number;
         tokenResetDate: Date | null;
         totalTokensUsed: number;
+        updatedAt: Date;
     }>;
     toggleAi(id: string, enabled: boolean): Promise<{
         id: string;
         createdAt: Date;
-        updatedAt: Date;
         name: string;
         email: string | null;
         phone: string | null;
@@ -181,30 +180,31 @@ export declare class CustomersController {
         dailyTokenUsage: number;
         tokenResetDate: Date | null;
         totalTokensUsed: number;
+        updatedAt: Date;
     }>;
     getPhotoLinks(id: string): Promise<{
+        link: string;
         id: string;
         customerId: string;
-        link: string;
         sentAt: Date;
     }[]>;
     getSessionNotes(id: string): Promise<({
         booking: {
             id: string;
+            status: string;
             service: string;
             dateTime: Date;
-            status: string;
         };
     } & {
         id: string;
+        platform: string | null;
         customerId: string;
-        status: string;
         createdAt: Date;
         updatedAt: Date;
         type: string;
-        bookingId: string | null;
-        platform: string | null;
         description: string | null;
+        bookingId: string | null;
+        status: string;
         items: string[];
         adminNotes: string | null;
         reviewedBy: string | null;
@@ -217,14 +217,14 @@ export declare class CustomersController {
         reviewedBy?: string;
     }): Promise<{
         id: string;
+        platform: string | null;
         customerId: string;
-        status: string;
         createdAt: Date;
         updatedAt: Date;
         type: string;
-        bookingId: string | null;
-        platform: string | null;
         description: string | null;
+        bookingId: string | null;
+        status: string;
         items: string[];
         adminNotes: string | null;
         reviewedBy: string | null;

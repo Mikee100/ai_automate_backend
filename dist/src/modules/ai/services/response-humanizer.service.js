@@ -194,7 +194,7 @@ let ResponseHumanizerService = ResponseHumanizerService_1 = class ResponseHumani
             return text;
         const formality = context.customerProfile?.formalityLevel ?? 'medium';
         const openerPool = formality === 'high' ? phrases_1.NEUTRAL_OPENERS : formality === 'low' ? [...phrases_1.CASUAL_OPENERS, ...phrases_1.WARM_OPENERS] : phrases_1.WARM_OPENERS;
-        const closerPool = formality === 'high' ? phrases_1.SOFT_CLOSERS : [...phrases_1.WARM_CLOSERS, ...phrases_1.SOFT_CLOSERS];
+        const closerPool = phrases_1.SOFT_CLOSERS;
         const allPhrases = [...openerPool, ...closerPool, ...phrases_1.WARM_OPENERS, ...phrases_1.WARM_CLOSERS];
         const lastAi = (context.lastAiResponses ?? []).slice(-MEMORY_WINDOW);
         const usedPhrases = new Set();
@@ -225,6 +225,10 @@ let ResponseHumanizerService = ResponseHumanizerService_1 = class ResponseHumani
         const intent = (context.intent?.primaryIntent ?? '').toLowerCase();
         if (intent === 'greeting')
             return false;
+        if (text.length < 35)
+            return false;
+        if (/^(hi|hello|hey|got it|sure|of course|here you go|perfect|booked|yes)/i.test(text.trim()))
+            return false;
         const allow = ['package_inquiry', 'booking', 'faq', 'confirm', 'availability', 'price_inquiry'].some((i) => intent.includes(i) || intent === i);
         if (!allow)
             return false;
@@ -236,6 +240,12 @@ let ResponseHumanizerService = ResponseHumanizerService_1 = class ResponseHumani
         const intent = (context.intent?.primaryIntent ?? '').toLowerCase();
         const allow = ['package_inquiry', 'booking', 'faq', 'availability', 'price_inquiry'].some((i) => intent.includes(i) || intent === i);
         if (!allow)
+            return false;
+        if (text.length < 90)
+            return false;
+        if (/\?$/.test(text.trim()))
+            return false;
+        if ((text.match(/\n/g) || []).length >= 2)
             return false;
         if (text.length > 500)
             return false;

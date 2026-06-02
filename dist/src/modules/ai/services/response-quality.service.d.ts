@@ -15,6 +15,7 @@ interface ValidationResult {
     improvedResponse?: string;
     shouldEscalate: boolean;
     reason?: string;
+    isBackgroundValidation?: boolean;
 }
 export declare class ResponseQualityService {
     private configService;

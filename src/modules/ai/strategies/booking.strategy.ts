@@ -31,6 +31,17 @@ export class BookingStrategy implements ResponseStrategy {
         // Check if user wants to START a booking (even if no draft exists)
         const wantsToStartBooking = /(how.*(do|can).*(make|book|start|get|schedule).*(booking|appointment)|(i want|i'd like|i need|can i|please).*(to book|booking|appointment|make.*booking|schedule)|let.*book|start.*booking)/i.test(message);
 
+        // CRITICAL: Explicitly reject greetings unless there is a draft in a critical phase (e.g. confirm or payment)
+        const isGreetingIntent = intent === 'greeting' || context.intentAnalysis?.primaryIntent === 'greeting';
+        const cleanMsg = message.replace(/[^\w\s]/g, '').trim().toLowerCase();
+        const isSimpleGreeting = /^(hi|hello|hey|greetings|hallo|habari)$/i.test(cleanMsg) || /^(good\s+(morning|afternoon|evening))$/i.test(cleanMsg);
+        
+        if (isGreetingIntent || isSimpleGreeting) {
+            if (!hasDraft || (context.draft && !['confirm', 'payment'].includes(context.draft.step))) {
+                return false;
+            }
+        }
+
         // Handle if:
         // 1. There's an active draft (continue existing booking)
         // 2. Intent is booking (from intent classifier)
@@ -178,14 +189,21 @@ export class BookingStrategy implements ResponseStrategy {
                     const depositAmount = pkg?.deposit || 2000;
 
                     if (bookingsService) {
-                        await bookingsService.completeBookingDraft(customerId, dateObj);
+                        const bookingResult = await bookingsService.completeBookingDraft(customerId, dateObj);
+                        if (bookingResult && bookingResult.bookingId) {
+                            // Booking was created successfully
+                            const completion = { action: 'payment_initiated', packageName: draft.service, amount: depositAmount };
+                            return this.handleBookingCompletion(completion, message, context, draft);
+                        } else {
+                            // Booking creation failed
+                            const response = "Sorry, there was an issue confirming your booking. Please try again or contact us at 0720 111928 for assistance. 💖";
+                            return { response, draft, updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
+                        }
                     } else {
                         logger.warn('[BOOKING] completeBookingDraft not available - would trigger event to business service');
                     }
 
-                    // Use helper to generate "payment initiated" response
-                    const completion = { action: 'payment_initiated', packageName: draft.service, amount: depositAmount };
-                    return this.handleBookingCompletion(completion, message, context, draft);
+                    // ...existing code...
 
                 } catch (error) {
                     logger.error('Error processing confirmation:', error);
@@ -742,13 +760,13 @@ export class BookingStrategy implements ResponseStrategy {
                 return { response: result.message, draft, updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: result.message }] };
             }
 
-            const response = `Great! Here are your booking details:\n\n• Package: ${completion.packageName || 'selected'}\n• Date: ${draft.date}\n• Time: ${draft.time}\n• Name: ${draft.name}\n• Phone: ${draft.recipientPhone}\n\nTo confirm your booking, a deposit of KSH ${completion.amount} is required.\n\nReply with *CONFIRM* to accept and receive the payment prompt. If you need to make changes, just let me know!`;
+            const response = `Great! Here are your booking details:\n\n• Package: ${completion.packageName || 'selected'}\n• Date: ${draft.date}\n• Time: ${draft.time}\n• Name: ${draft.name}\n• Phone: ${draft.recipientPhone}\n\nYour booking is almost complete! Just reply *CONFIRM* to finalize your booking. If you need to make changes, just let me know!`;
             return { response, draft, updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
         }
 
         // If user replied CONFIRM, then initiate payment
         if (completion.action === 'payment_initiated') {
-            const response = `Awesome, we're almost done! 🎉\n\nTo lock in your booking for the ${completion.packageName || 'selected'} package, a deposit of KSH ${completion.amount} is required—this helps us secure your spot and prepare everything just for you.\n\nI am now sending the payment prompt to your phone.`;
+            const response = `Awesome, we're almost done! 🎉\n\nYour booking is now confirmed! If you have any questions, just let us know.`;
             return { response, draft, updatedHistory: [...history.slice(-historyLimit), { role: 'user', content: message }, { role: 'assistant', content: response }] };
         }
 

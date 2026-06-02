@@ -1,6 +1,6 @@
 /**
  * Naturalness layer: avoid theatrical, fake-human, and over-promotional tone.
- * Target: calm, warm, grounded — not robotic, not over-humanized.
+ * Target: calm, warm, grounded - not robotic, not over-humanized.
  */
 
 /** Phrases we strip or replace (case-insensitive). Prevents "AI trying to sound human". */
@@ -20,11 +20,13 @@ export const BLOCKED_PHRASES: string[] = [
   'we are so excited to',
   'absolutely thrilled',
   'cannot wait to',
+  'all set on our side',
+  'let me know if anything changes',
+  "i've handled that for you",
 ];
 
-/** Theatrical → natural replacements (pattern, replacement). Applied in order. */
+/** Theatrical -> natural replacements (pattern, replacement). Applied in order. */
 export const THEATRICAL_REPLACEMENTS: Array<{ pattern: RegExp; replacement: string }> = [
-  // Package intro
   { pattern: /^Oh,?\s*my dear,?\s*/gim, replacement: '' },
   {
     pattern: /Oh,?\s*my dear,?\s*I'?m\s+so\s+delighted\s+to\s+share\s+our\s+studio\s+packages\s+with\s+you!?/gi,
@@ -40,10 +42,8 @@ export const THEATRICAL_REPLACEMENTS: Array<{ pattern: RegExp; replacement: stri
   { pattern: /\bthrilled\s+beyond\s+words\b/gi, replacement: 'excited' },
   { pattern: /\becstatic\s+to\s+share\b/gi, replacement: 'happy to share' },
   { pattern: /\bhonored\s+to\s+present\b/gi, replacement: 'happy to share' },
-  // "I've noted the time for X" → "I've got X"
   { pattern: /\bI'?ve\s+noted\s+the\s+time\s+for\s+/gi, replacement: "I've got " },
   { pattern: /\bI\s+have\s+noted\s+the\s+time\s+for\s+/gi, replacement: "I've got " },
-  // Package description
   {
     pattern: /Each\s+one\s+is\s+thoughtfully\s+crafted\s+to\s+celebrate\s+your\s+beautiful\s+journey\.?/gi,
     replacement: 'Each one is designed to give you a beautiful, relaxed maternity shoot experience.',
@@ -72,14 +72,14 @@ export const GREETING_MAX_LINES = 3;
 
 /** When greeting is long and promotional, use this instead (simple + warm + light). */
 export const GREETING_SIMPLE_TEMPLATE =
-  "Hi there! 😊 Welcome to Fiesta House Maternity 🤍\nHow can I help you today? ✨";
+  "Hi! Welcome to Fiesta House.\nHow can I help?";
 
 /** If greeting text matches these, prefer GREETING_SIMPLE_TEMPLATE (avoid long branded intro). */
 export const GREETING_OVERRIDE_IF_CONTAINS = [
-  "thank you for contacting",
+  'thank you for contacting',
   "kenya's leading",
-  "leading luxury",
-  "luxury photo studio",
+  'leading luxury',
+  'luxury photo studio',
 ];
 
 /** Emotion cap: "soft" = warm but not dramatic/theatrical. */
@@ -93,20 +93,17 @@ export const INTENTS_SOFT_EMOTION_ONLY: string[] = [
   'availability',
 ];
 
-/** Template-structured (corporate/LLM-default) → natural, chunked rhythm. Applied in NATURALNESS. */
+/** Template-structured (corporate/LLM-default) -> natural, chunked rhythm. Applied in NATURALNESS. */
 export const TEMPLATE_STRUCTURED_REPLACEMENTS: Array<{ pattern: RegExp; replacement: string }> = [
-  // Reschedule / clarification (often reintroduced by quality service)
   { pattern: /Thank\s+you\s+for\s+your\s+message!?\s*I\s+want\s+to\s+clarify\s+the\s+date\s+you\s+mentioned\s+for\s+rescheduling\.?\s*/gi, replacement: 'Got it. ' },
   { pattern: /Thank\s+you\s+for\s+your\s+message!?\s*I\s+want\s+to\s+clarify[^.!?]*\.?\s*/gi, replacement: 'Quick clarification: ' },
   { pattern: /Thank\s+you\s+for\s+your\s+message!?\s*/gi, replacement: '' },
-  // Booking confirmation opener
   { pattern: /Thank\s+you\s+for\s+your\s+request!?\s*/gi, replacement: 'Perfect. ' },
   { pattern: /Thank\s+you\s+for\s+your\s+request\.\s*/gi, replacement: 'Got it. ' },
   { pattern: /I\s+have\s+noted\s+your\s+booking\s+for\s+/gi, replacement: "I've locked in " },
-  { pattern: /I\s+have\s+confirmed\s+your\s+booking\s+for\s+/gi, replacement: "Booked for " },
+  { pattern: /I\s+have\s+confirmed\s+your\s+booking\s+for\s+/gi, replacement: 'Booked for ' },
   { pattern: /Your\s+booking\s+(?:has\s+been\s+)?confirmed\s+for\s+/gi, replacement: '' },
   { pattern: /Your\s+booking\s+is\s+confirmed\s+for\s+/gi, replacement: '' },
-  // Polite filler → short
   { pattern: /I'?m\s+glad\s+to\s+hear\s+you'?re\s+doing\s+well!?\s*/gi, replacement: 'All good then. ' },
   { pattern: /I'?m\s+glad\s+to\s+hear\s+that!?\s*/gi, replacement: 'Good to hear. ' },
   {
@@ -121,13 +118,13 @@ export const TEMPLATE_STRUCTURED_REPLACEMENTS: Array<{ pattern: RegExp; replacem
     pattern: /(?:Please\s+)?feel\s+free\s+to\s+reach\s+out\s+if\s+you\s+need\s+anything\.?/gi,
     replacement: 'Just message me if you need anything.',
   },
-  // Yes, you can absolutely → Yes — you can (remove filler)
-  { pattern: /\bYes,?\s+you\s+can\s+absolutely\s+/gi, replacement: 'Yes — you can ' },
-  { pattern: /\bAbsolutely!?\s+You\s+can\s+/gi, replacement: 'Yes — you can ' },
-  { pattern: /\bOf\s+course!?\s+You\s+can\s+/gi, replacement: 'Yes — you can ' },
-  // Booking rhythm: "with the X Package" → "— X Package"
-  { pattern: /\s+with\s+the\s+(Standard|Economy|Executive|Gold|Platinum|VIP|VVIP)\s+Package\.?/gi, replacement: ' — $1 Package.' },
-  { pattern: /\s+with\s+the\s+(\w+)\s+package\.?/gi, replacement: ' — $1 package.' },
-  // We're all set on our side
-  { pattern: /\b(?:We\s+have\s+recorded\s+your\s+booking|Your\s+booking\s+has\s+been\s+recorded)\.?/gi, replacement: "We're all set on our side." },
+  { pattern: /\bYes,?\s+you\s+can\s+absolutely\s+/gi, replacement: 'Yes - you can ' },
+  { pattern: /\bAbsolutely!?\s+You\s+can\s+/gi, replacement: 'Yes - you can ' },
+  { pattern: /\bOf\s+course!?\s+You\s+can\s+/gi, replacement: 'Yes - you can ' },
+  { pattern: /\s+with\s+the\s+(Standard|Economy|Executive|Gold|Platinum|VIP|VVIP)\s+Package\.?/gi, replacement: ' - $1 Package.' },
+  { pattern: /\s+with\s+the\s+(\w+)\s+package\.?/gi, replacement: ' - $1 package.' },
+  { pattern: /\b(?:We\s+have\s+recorded\s+your\s+booking|Your\s+booking\s+has\s+been\s+recorded)\.?/gi, replacement: 'Your booking details are saved.' },
+  { pattern: /\bAll\s+set\s+on\s+our\s+side\.?/gi, replacement: 'Everything is set.' },
+  { pattern: /\bLet\s+me\s+know\s+if\s+anything\s+changes\.?/gi, replacement: "If anything changes, tell me and I'll adjust it." },
+  { pattern: /\bI'?ve\s+handled\s+that\s+for\s+you\.?/gi, replacement: 'Got it.' },
 ];

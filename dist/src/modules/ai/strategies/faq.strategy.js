@@ -38,7 +38,7 @@ class FaqStrategy {
             /(backdrop|background|studio set|flower wall|portfolio)/i,
             /show.*(image|photo|picture|portfolio|example)/i,
             /see.*(image|photo|picture|example)/i,
-            /(hours|location|address|phone|contact|email|website)/i,
+            /(hours|location|address|phone|contact|email|website|social media|instagram|facebook|ig|fb|follow|handle)/i,
             /when (are|is).*(open|closed)/i,
             /is.*(parking|location|address).*available/i,
             /\?/,

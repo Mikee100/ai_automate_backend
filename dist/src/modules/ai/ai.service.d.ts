@@ -43,6 +43,11 @@ export declare class AiService {
     private whatsappService?;
     extractDateTime(text: string): Promise<Date | null>;
     private getOrdinalSuffix;
+    private hasMeaningfulBookingDraft;
+    private getFriendlyCustomerName;
+    private normalizeStandaloneName;
+    private isLikelyStandaloneName;
+    private isDraftFieldUpdateMessage;
     private readonly logger;
     private openai;
     private pinecone;
@@ -135,19 +140,19 @@ export declare class AiService {
     getOrCreateDraft(customerId: string): Promise<{
         id: string;
         customerId: string;
+        createdAt: Date;
+        name: string | null;
+        updatedAt: Date;
+        bookingId: string | null;
         service: string | null;
         recipientName: string | null;
         recipientPhone: string | null;
-        createdAt: Date;
-        updatedAt: Date;
-        name: string | null;
         date: string | null;
         time: string | null;
         dateTimeIso: string | null;
         isForSomeoneElse: boolean | null;
         step: string;
         conflictResolution: string | null;
-        bookingId: string | null;
         version: number;
     }>;
     mergeIntoDraft(customerId: string, extraction: any, existingDraft?: any): Promise<any>;

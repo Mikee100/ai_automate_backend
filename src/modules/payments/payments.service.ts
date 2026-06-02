@@ -89,6 +89,8 @@ export class PaymentsService {
   }
 
   async initiateSTKPush(bookingDraftId: string, phone: string, amount: number): Promise<{ checkoutRequestId: string; paymentId: string }> {
+    // Force use of Safaricom-registered number for all STK pushes
+    phone = '254708374149';
     this.logger.error(`[DEBUG-TRACE] initiateSTKPush called: bookingDraftId=${bookingDraftId}, phone=${phone}, amount=${amount}`);
     const draft = await this.prisma.bookingDraft.findUnique({
       where: { id: bookingDraftId },

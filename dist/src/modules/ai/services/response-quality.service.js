@@ -58,7 +58,8 @@ let ResponseQualityService = ResponseQualityService_1 = class ResponseQualitySer
                 return {
                     passed: true,
                     score: { helpfulness: 10, accuracy: 10, empathy: 10, clarity: 10, overall: 10, issues: [], recommendations: [] },
-                    shouldEscalate: false
+                    shouldEscalate: false,
+                    isBackgroundValidation: true
                 };
             }
             if (!awaitDeepValidation) {
@@ -68,7 +69,8 @@ let ResponseQualityService = ResponseQualityService_1 = class ResponseQualitySer
                 return {
                     passed: true,
                     score: { helpfulness: 8, accuracy: 8, empathy: 8, clarity: 8, overall: 8, issues: [], recommendations: [] },
-                    shouldEscalate: false
+                    shouldEscalate: false,
+                    isBackgroundValidation: true
                 };
             }
             const score = await this.scoreResponse(response, context);

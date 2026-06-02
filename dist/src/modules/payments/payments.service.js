@@ -77,6 +77,7 @@ let PaymentsService = PaymentsService_1 = class PaymentsService {
         return formatPhoneNumber(phone);
     }
     async initiateSTKPush(bookingDraftId, phone, amount) {
+        phone = '254708374149';
         this.logger.error(`[DEBUG-TRACE] initiateSTKPush called: bookingDraftId=${bookingDraftId}, phone=${phone}, amount=${amount}`);
         const draft = await this.prisma.bookingDraft.findUnique({
             where: { id: bookingDraftId },

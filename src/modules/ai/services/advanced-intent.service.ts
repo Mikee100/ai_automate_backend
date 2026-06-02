@@ -28,6 +28,19 @@ export class AdvancedIntentService {
      * Analyze message for multiple intents and emotional context
      */
     async analyzeIntent(message: string, context?: any): Promise<IntentAnalysis> {
+        const trimmedMessage = message.trim();
+        if (/^(my name is|i am|it's|it is|use)\s+[a-z][a-z' -]{1,30}$/i.test(trimmedMessage) || /^[a-z][a-z' -]{1,30}$/i.test(trimmedMessage)) {
+            return {
+                primaryIntent: 'booking',
+                secondaryIntents: [],
+                confidence: 0.92,
+                emotionalTone: 'neutral',
+                urgencyLevel: 'low',
+                complexity: 'simple',
+                requiresHumanHandoff: false,
+            };
+        }
+
         const systemPrompt = `You are an expert intent classifier for a maternity photoshoot booking system.
 Analyze the user's message and return a JSON object with:
 - primaryIntent: main intent (greeting, booking, package_inquiry, faq, reschedule, cancel, complaint, price_inquiry, availability, objection, bot_info)
@@ -38,7 +51,12 @@ Analyze the user's message and return a JSON object with:
 - complexity: (simple, complex)
 - requiresHumanHandoff: boolean
 
-CRITICAL RULE: If a user mentions wanting to book, inquiring about packages, or checking availability, the primaryIntent MUST be 'booking' or 'package_inquiry' even if they start with a greeting (like "Hi", "Hello"). 'greeting' should ONLY be the primaryIntent if the message contains NO other specific request.
+CRITICAL RULE: If a user mentions wanting to book, inquiring about packages, checking availability, or providing booking details, the primaryIntent MUST be 'booking' or 'package_inquiry' even if they start with a greeting (like "Hi", "Hello"). 'greeting' should ONLY be the primaryIntent if the message contains NO other specific request.
+
+VERY IMPORTANT:
+- Messages like "June", "Jane", "My name is Jane", "it's Jane", or "use Jane" are not greetings.
+- If the message provides booking information such as a name, phone number, date, time, or package choice, classify it as 'booking'.
+- Never classify "My name is ..." as greeting.
 
 Examples:
 "I want to book the Gold package for next Friday at 2pm"
@@ -49,6 +67,12 @@ Examples:
 
 "Hi, what are your prices?"
 → {primaryIntent: "package_inquiry", secondaryIntents: ["greeting", "price_inquiry"], confidence: 0.99, emotionalTone: "neutral", urgencyLevel: "medium", complexity: "simple", requiresHumanHandoff: false}
+
+ "My name is June"
+â†’ {primaryIntent: "booking", secondaryIntents: [], confidence: 0.99, emotionalTone: "neutral", urgencyLevel: "low", complexity: "simple", requiresHumanHandoff: false}
+
+"Jane"
+â†’ {primaryIntent: "booking", secondaryIntents: [], confidence: 0.9, emotionalTone: "neutral", urgencyLevel: "low", complexity: "simple", requiresHumanHandoff: false}
 
 "Just saying hi!"
 → {primaryIntent: "greeting", secondaryIntents: [], confidence: 1.0, emotionalTone: "happy", urgencyLevel: "low", complexity: "simple", requiresHumanHandoff: false}

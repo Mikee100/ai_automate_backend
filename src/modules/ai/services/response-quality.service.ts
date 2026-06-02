@@ -20,6 +20,7 @@ interface ValidationResult {
     improvedResponse?: string;
     shouldEscalate: boolean;
     reason?: string;
+    isBackgroundValidation?: boolean;
 }
 
 @Injectable()
@@ -95,7 +96,8 @@ export class ResponseQualityService {
                 return {
                     passed: true,
                     score: { helpfulness: 10, accuracy: 10, empathy: 10, clarity: 10, overall: 10, issues: [], recommendations: [] },
-                    shouldEscalate: false
+                    shouldEscalate: false,
+                    isBackgroundValidation: true
                 };
             }
 
@@ -109,7 +111,8 @@ export class ResponseQualityService {
                 return {
                     passed: true,
                     score: { helpfulness: 8, accuracy: 8, empathy: 8, clarity: 8, overall: 8, issues: [], recommendations: [] },
-                    shouldEscalate: false
+                    shouldEscalate: false,
+                    isBackgroundValidation: true
                 };
             }
 

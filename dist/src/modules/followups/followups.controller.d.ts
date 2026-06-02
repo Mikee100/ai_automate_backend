@@ -9,7 +9,6 @@ export declare class FollowupsController {
                 customer: {
                     id: string;
                     createdAt: Date;
-                    updatedAt: Date;
                     name: string;
                     email: string | null;
                     phone: string | null;
@@ -23,27 +22,28 @@ export declare class FollowupsController {
                     dailyTokenUsage: number;
                     tokenResetDate: Date | null;
                     totalTokensUsed: number;
+                    updatedAt: Date;
                 };
             } & {
                 id: string;
                 customerId: string;
+                createdAt: Date;
+                updatedAt: Date;
+                status: string;
+                googleEventId: string | null;
                 service: string;
                 dateTime: Date;
-                status: string;
                 durationMinutes: number | null;
                 recipientName: string | null;
                 recipientPhone: string | null;
-                googleEventId: string | null;
-                createdAt: Date;
-                updatedAt: Date;
             };
         } & {
             id: string;
-            status: string;
             createdAt: Date;
             updatedAt: Date;
             type: string;
             bookingId: string;
+            status: string;
             sentAt: Date | null;
             scheduledFor: Date;
             messageContent: string | null;
@@ -66,7 +66,6 @@ export declare class FollowupsController {
                 customer: {
                     id: string;
                     createdAt: Date;
-                    updatedAt: Date;
                     name: string;
                     email: string | null;
                     phone: string | null;
@@ -80,27 +79,28 @@ export declare class FollowupsController {
                     dailyTokenUsage: number;
                     tokenResetDate: Date | null;
                     totalTokensUsed: number;
+                    updatedAt: Date;
                 };
             } & {
                 id: string;
                 customerId: string;
+                createdAt: Date;
+                updatedAt: Date;
+                status: string;
+                googleEventId: string | null;
                 service: string;
                 dateTime: Date;
-                status: string;
                 durationMinutes: number | null;
                 recipientName: string | null;
                 recipientPhone: string | null;
-                googleEventId: string | null;
-                createdAt: Date;
-                updatedAt: Date;
             };
         } & {
             id: string;
-            status: string;
             createdAt: Date;
             updatedAt: Date;
             type: string;
             bookingId: string;
+            status: string;
             sentAt: Date | null;
             scheduledFor: Date;
             messageContent: string | null;
@@ -113,7 +113,6 @@ export declare class FollowupsController {
             customer: {
                 id: string;
                 createdAt: Date;
-                updatedAt: Date;
                 name: string;
                 email: string | null;
                 phone: string | null;
@@ -127,27 +126,28 @@ export declare class FollowupsController {
                 dailyTokenUsage: number;
                 tokenResetDate: Date | null;
                 totalTokensUsed: number;
+                updatedAt: Date;
             };
         } & {
             id: string;
             customerId: string;
+            createdAt: Date;
+            updatedAt: Date;
+            status: string;
+            googleEventId: string | null;
             service: string;
             dateTime: Date;
-            status: string;
             durationMinutes: number | null;
             recipientName: string | null;
             recipientPhone: string | null;
-            googleEventId: string | null;
-            createdAt: Date;
-            updatedAt: Date;
         };
     } & {
         id: string;
-        status: string;
         createdAt: Date;
         updatedAt: Date;
         type: string;
         bookingId: string;
+        status: string;
         sentAt: Date | null;
         scheduledFor: Date;
         messageContent: string | null;
@@ -158,7 +158,6 @@ export declare class FollowupsController {
             customer: {
                 id: string;
                 createdAt: Date;
-                updatedAt: Date;
                 name: string;
                 email: string | null;
                 phone: string | null;
@@ -172,27 +171,28 @@ export declare class FollowupsController {
                 dailyTokenUsage: number;
                 tokenResetDate: Date | null;
                 totalTokensUsed: number;
+                updatedAt: Date;
             };
         } & {
             id: string;
             customerId: string;
+            createdAt: Date;
+            updatedAt: Date;
+            status: string;
+            googleEventId: string | null;
             service: string;
             dateTime: Date;
-            status: string;
             durationMinutes: number | null;
             recipientName: string | null;
             recipientPhone: string | null;
-            googleEventId: string | null;
-            createdAt: Date;
-            updatedAt: Date;
         };
     } & {
         id: string;
-        status: string;
         createdAt: Date;
         updatedAt: Date;
         type: string;
         bookingId: string;
+        status: string;
         sentAt: Date | null;
         scheduledFor: Date;
         messageContent: string | null;
@@ -203,7 +203,6 @@ export declare class FollowupsController {
             customer: {
                 id: string;
                 createdAt: Date;
-                updatedAt: Date;
                 name: string;
                 email: string | null;
                 phone: string | null;
@@ -217,27 +216,28 @@ export declare class FollowupsController {
                 dailyTokenUsage: number;
                 tokenResetDate: Date | null;
                 totalTokensUsed: number;
+                updatedAt: Date;
             };
         } & {
             id: string;
             customerId: string;
+            createdAt: Date;
+            updatedAt: Date;
+            status: string;
+            googleEventId: string | null;
             service: string;
             dateTime: Date;
-            status: string;
             durationMinutes: number | null;
             recipientName: string | null;
             recipientPhone: string | null;
-            googleEventId: string | null;
-            createdAt: Date;
-            updatedAt: Date;
         };
     } & {
         id: string;
-        status: string;
         createdAt: Date;
         updatedAt: Date;
         type: string;
         bookingId: string;
+        status: string;
         sentAt: Date | null;
         scheduledFor: Date;
         messageContent: string | null;
@@ -245,11 +245,11 @@ export declare class FollowupsController {
     }>;
     recordResponse(id: string, response: RecordFollowupResponseDto): Promise<{
         id: string;
-        status: string;
         createdAt: Date;
         updatedAt: Date;
         type: string;
         bookingId: string;
+        status: string;
         sentAt: Date | null;
         scheduledFor: Date;
         messageContent: string | null;
@@ -257,11 +257,11 @@ export declare class FollowupsController {
     }>;
     updateFollowup(id: string, data: UpdateFollowupDto): Promise<{
         id: string;
-        status: string;
         createdAt: Date;
         updatedAt: Date;
         type: string;
         bookingId: string;
+        status: string;
         sentAt: Date | null;
         scheduledFor: Date;
         messageContent: string | null;
@@ -269,11 +269,11 @@ export declare class FollowupsController {
     }>;
     cancelFollowup(id: string): Promise<{
         id: string;
-        status: string;
         createdAt: Date;
         updatedAt: Date;
         type: string;
         bookingId: string;
+        status: string;
         sentAt: Date | null;
         scheduledFor: Date;
         messageContent: string | null;

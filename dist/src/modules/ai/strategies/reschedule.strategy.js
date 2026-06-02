@@ -153,10 +153,7 @@ class RescheduleStrategy {
                     customerId,
                     step: 'reschedule_date',
                     bookingId: targetBooking.id,
-                    service: targetBooking.service,
-                    data: {
-                        originalDate: targetBooking.dateTime
-                    }
+                    service: targetBooking.service
                 }
             });
             const msg = `Sure thing! You want to reschedule your *${targetBooking.service}* on ${luxon_1.DateTime.fromJSDate(new Date(targetBooking.dateTime)).setZone(this.STUDIO_TIMEZONE).toFormat('MMM dd')}. What new date and time works for you? 🗓️`;

@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var WebhooksService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WebhooksService = void 0;
 const common_1 = require("@nestjs/common");
@@ -27,7 +28,7 @@ const instagram_service_1 = require("../instagram/instagram.service");
 const messenger_send_service_1 = require("./messenger-send.service");
 const notifications_service_1 = require("../notifications/notifications.service");
 const luxon_1 = require("luxon");
-let WebhooksService = class WebhooksService {
+let WebhooksService = WebhooksService_1 = class WebhooksService {
     constructor(messagesService, customersService, aiService, aiSettingsService, bookingsService, paymentsService, whatsappService, instagramService, messengerSendService, messageQueue, aiQueue, websocketGateway, notificationsService) {
         this.messagesService = messagesService;
         this.customersService = customersService;
@@ -42,21 +43,22 @@ let WebhooksService = class WebhooksService {
         this.aiQueue = aiQueue;
         this.websocketGateway = websocketGateway;
         this.notificationsService = notificationsService;
+        this.logger = new common_1.Logger(WebhooksService_1.name);
     }
     async handleWhatsAppWebhook(body) {
         if (body.object !== 'whatsapp_business_account') {
-            console.log('[WEBHOOK] Ignoring webhook - wrong object type:', body.object);
+            this.logger.debug(`Ignoring webhook - wrong object type: ${body.object}`);
             return { status: 'ignored' };
         }
         for (const entry of body.entry || []) {
             for (const change of entry.changes || []) {
                 const value = change.value;
                 if (value?.messages && value.messages.length > 0) {
-                    console.log('[WEBHOOK] Processing WhatsApp message from webhook');
+                    this.logger.log('Processing WhatsApp message from webhook');
                     await this.processWhatsAppMessage(value);
                 }
                 else {
-                    console.log('[WEBHOOK] No messages found in webhook payload');
+                    this.logger.debug('No messages found in webhook payload');
                 }
             }
         }
@@ -153,27 +155,14 @@ Or reply *"CANCEL"* if you'd like to make changes. 💖`;
             }
         }
         else if (text.toLowerCase() === 'confirm') {
-            const draft = await this.bookingsService.getBookingDraft(customer.id);
-            if (draft) {
-                const customerData = await this.customersService.findOne(customer.id);
-                if (customerData?.phone) {
-                    const amount = await this.bookingsService.getDepositForDraft(customer.id) || 2000;
-                    try {
-                        const checkoutId = await this.paymentsService.initiateSTKPush(draft.id, customerData.phone, amount);
-                        await this.whatsappService.sendMessage(from, `Payment request sent! Please check your phone and enter your M-PESA PIN to complete the deposit payment. 💳✨`);
-                        console.log(`STK Push initiated for ${customerData.phone}, CheckoutRequestID: ${checkoutId.checkoutRequestId}`);
-                    }
-                    catch (error) {
-                        console.error('STK Push failed:', error);
-                        await this.whatsappService.sendMessage(from, `Sorry, there was an issue initiating payment. Please try again or contact us at ${process.env.CUSTOMER_CARE_PHONE || '0720 111928'}. 💖`);
-                    }
-                }
-                else {
-                    await this.whatsappService.sendMessage(from, `I don't have your phone number yet. Please share it so I can send the payment request. 📱`);
-                }
+            try {
+                await this.bookingsService.completeBookingDraft(customer.id);
+                await this.whatsappService.sendMessage(from, `✅ Your booking is now confirmed! (Payment step is currently paused.)`);
+                console.log(`Booking draft completed for customer ${customer.id} (payment skipped)`);
             }
-            else {
-                await this.whatsappService.sendMessage(from, `I don't see a pending booking. Would you like to start a new booking? 💖`);
+            catch (error) {
+                console.error('Booking confirmation failed:', error);
+                await this.whatsappService.sendMessage(from, `Sorry, there was an issue confirming your booking. Please try again or contact us. 💖`);
             }
         }
         else if (text.toLowerCase() === 'cancel') {
@@ -585,7 +574,7 @@ Just let me know! 💖`);
     }
 };
 exports.WebhooksService = WebhooksService;
-exports.WebhooksService = WebhooksService = __decorate([
+exports.WebhooksService = WebhooksService = WebhooksService_1 = __decorate([
     (0, common_1.Injectable)(),
     __param(9, (0, bull_1.InjectQueue)('messageQueue')),
     __param(10, (0, bull_1.InjectQueue)('aiQueue')),

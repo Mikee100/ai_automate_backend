@@ -109,6 +109,100 @@ export class AiService {
     if (j === 3 && k !== 13) return 'rd';
     return 'th';
   }
+
+  private hasMeaningfulBookingDraft(draft: any): boolean {
+    return !!(
+      draft &&
+      (draft.service ||
+        draft.date ||
+        draft.time ||
+        draft.name ||
+        draft.recipientPhone ||
+        draft.dateTimeIso)
+    );
+  }
+
+  private getFriendlyCustomerName(rawName?: string | null): string {
+    if (!rawName) return '';
+
+    const cleaned = rawName
+      .replace(/^WhatsApp User\s+/i, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!cleaned) return '';
+    if (/^\+?\d[\d\s-]{5,}$/.test(cleaned)) return '';
+    if (/^(guest|customer|user)$/i.test(cleaned)) return '';
+
+    return cleaned;
+  }
+
+  private normalizeStandaloneName(message: string): string {
+    return message
+      .trim()
+      .replace(/\s+/g, ' ')
+      .split(' ')
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join(' ');
+  }
+
+  private isLikelyStandaloneName(message: string, existingDraft?: any): boolean {
+    if (!existingDraft) return false;
+
+    const clean = message.trim();
+    const lower = clean.toLowerCase();
+
+    if ((existingDraft.step || this.determineBookingStep(existingDraft)) !== 'name') {
+      return false;
+    }
+
+    if (!clean || clean.length < 2 || clean.length > 40) {
+      return false;
+    }
+
+    if (/^(hi|hello|hey|heyy|heyyy|hii|good morning|good afternoon|good evening|habari|hallo)$/i.test(lower)) {
+      return false;
+    }
+
+    if (/\d/.test(clean)) {
+      return false;
+    }
+
+    if (/(package|date|time|book|booking|confirm|deposit|phone|number|slot|availability|available)/i.test(lower)) {
+      return false;
+    }
+
+    if (clean.split(/\s+/).length > 4) {
+      return false;
+    }
+
+    return /^[A-Za-z][A-Za-z' -]*$/.test(clean);
+  }
+
+  private isDraftFieldUpdateMessage(message: string, draft?: any): boolean {
+    if (!draft || !this.hasMeaningfulBookingDraft(draft)) {
+      return false;
+    }
+
+    const trimmed = message.trim();
+
+    if (this.isLikelyStandaloneName(trimmed, draft)) {
+      return true;
+    }
+
+    if ((draft.step || this.determineBookingStep(draft)) === 'name' &&
+      /^(my name is|i am|it's|it is|use)\s+[A-Za-z][A-Za-z' -]{1,30}$/i.test(trimmed)) {
+      return true;
+    }
+
+    if ((draft.step || this.determineBookingStep(draft)) === 'phone' &&
+      /(\+?\d[\d\s-]{7,})/.test(trimmed)) {
+      return true;
+    }
+
+    return false;
+  }
+
   private readonly logger = new Logger(AiService.name);
   private openai: OpenAI;
   private pinecone: Pinecone | null = null;
@@ -221,7 +315,7 @@ export class AiService {
     );
   }
 
-  private readonly businessHours = 'Monday-Saturday: 9:00 AM - 6:00 PM';
+  private readonly businessHours = 'Tuesday-Sunday: 9:00 AM - 7:00 PM';
   private readonly businessDescription = 'We specialize in professional maternity photography services, offering elegant and memorable photoshoot experiences. Our studio provides beautiful indoor sessions with professional makeup, styling, and a variety of stunning backdrops. We offer multiple packages ranging from intimate sessions to full VIP experiences, all designed to celebrate your pregnancy journey. Our goal is to make your maternity experience as elegant and memorable as possible!';
 
   constructor(
@@ -2078,8 +2172,8 @@ SUB-INTENT DETECTION:
 - unknown: Can't determine intent
 
 EXAMPLES:
-User: "I'd like to book the Studio Classic package for next Friday at 2pm"
-→ {\"service\": \"Studio Classic\",  \"date\": \"<next-friday-date>\", \"time\": \"14:00\", \"name\": null, \"recipientPhone\": null, \"subIntent\": \"start\"}
+User: "I'd like to book the Standard Package for next Friday at 2pm"
+→ {\"service\": \"Standard Package\",  \"date\": \"<next-friday-date>\", \"time\": \"14:00\", \"name\": null, \"recipientPhone\": null, \"subIntent\": \"start\"}
 
 User: "Actually, change that to the 5th"
 → {\"service\": null, \"date\": \"<resolved-5th-date>\", \"time\": null, \"name\": null, \"recipientPhone\": null, \"subIntent\": \"provide\"}
@@ -2154,6 +2248,19 @@ User: "yes please"
         subIntent: ['start', 'provide', 'confirm', 'deposit_confirmed', 'cancel', 'reschedule', 'unknown'].includes(detectedSubIntent) ? detectedSubIntent : 'unknown',
       };
 
+      const explicitNameMatch = message.trim().match(/^(?:my name is|i am|it's|it is|use)\s+([A-Za-z][A-Za-z' -]{1,30})$/i);
+      if (!extraction.name && explicitNameMatch && existingDraft && (existingDraft.step || this.determineBookingStep(existingDraft)) === 'name') {
+        extraction.name = this.normalizeStandaloneName(explicitNameMatch[1]);
+        extraction.subIntent = 'provide';
+        this.logger.debug(`[EXTRACTION] Explicit name capture for active draft: "${extraction.name}"`);
+      }
+
+      if (!extraction.name && this.isLikelyStandaloneName(message, existingDraft)) {
+        extraction.name = this.normalizeStandaloneName(message);
+        extraction.subIntent = 'provide';
+        this.logger.debug(`[EXTRACTION] Heuristic name capture for active draft: "${extraction.name}"`);
+      }
+
       // Log extraction for debugging
       if (extraction.date || extraction.time || extraction.service) {
         this.logger.debug(`[EXTRACTION] From "${message}" → ${JSON.stringify(extraction)}`);
@@ -2201,7 +2308,7 @@ User: "yes please"
 
     // STUCK-STATE DETECTION: Check if we're repeating the same question
     const recentAssistantMsgs = history.filter(h => h.role === 'assistant').slice(-3);
-    const isStuckOnField = recentAssistantMsgs.length >= 2 && missing.length > 0 &&
+    const isStuckOnField = draft && draft.step && recentAssistantMsgs.length >= 3 && missing.length > 0 &&
       recentAssistantMsgs.every(msg => {
         const content = msg.content.toLowerCase();
         return content.includes(missing[0]) ||
@@ -2252,7 +2359,7 @@ ACTIVE LISTENING PATTERNS:
 RECOVERY STRATEGIES:
 - If date is ambiguous → Clarify: "Do you mean this Friday (Dec 6th) or next Friday (Dec 13th)?"
 - If date lacks year → Assume current year (${new Date().getFullYear()}) - DO NOT ask to confirm the year unless it's clearly ambiguous
-- If package unclear → Show options with numbers: "We have: 1️⃣ Studio Classic 2️⃣ Outdoor Premium - just tell me the number!"
+- If package unclear → Use ONLY the AVAILABLE PACKAGES below and present them clearly with numbers.
 - If user seems frustrated → Simplify immediately: "I might be making this too complicated. Let's start fresh..."
 
 CRITICAL - Package Information:
@@ -3009,8 +3116,10 @@ DO NOT repeat your previous question. Instead:
                 { qualityScore: qualityCheck.score, originalResponse: responseText }
               );
             }
-          } else {
+          } else if (!qualityCheck.isBackgroundValidation) {
             this.logger.debug(`[QUALITY] Response quality good: ${qualityCheck.score.overall.toFixed(1)}/10`);
+          } else {
+            this.logger.debug(`[QUALITY] Background validation scheduled for fast response`);
           }
         }
       } catch (err) {
@@ -3192,7 +3301,13 @@ DO NOT repeat your previous question. Instead:
     // CIRCUIT BREAKER - FIRST LINE OF DEFENSE
     // ============================================
     // Detect and break infinite loops automatically
-    const breakerCheck = await this.circuitBreaker.checkAndBreak(customerId, history);
+    const isDraftFieldUpdate = this.isDraftFieldUpdateMessage(message, earlyDraft);
+    if (isDraftFieldUpdate) {
+      this.logger.debug(`[CIRCUIT_BREAKER] Skipping breaker for draft field update from customer ${customerId}`);
+    }
+    const breakerCheck = isDraftFieldUpdate
+      ? { shouldBreak: false, recovery: null, reason: null }
+      : await this.circuitBreaker.checkAndBreak(customerId, history);
 
     if (breakerCheck.shouldBreak) {
       this.logger.warn(
@@ -3316,6 +3431,55 @@ DO NOT repeat your previous question. Instead:
     // ============================================
     // STRATEGY PATTERN: Specialized high-performance logic
     // ============================================
+
+    const lower = (message || '').toLowerCase();
+
+    // --- GREETING DETECTION (Prioritize Advanced Intent) ---
+    const isGreetingIntent = intentAnalysis?.primaryIntent === 'greeting';
+
+    // Fallback lightweight detection for very simple messages
+    const greetingKeywords = ['hi', 'hello', 'hey', 'greetings', 'hallo', 'habari', 'good morning', 'good afternoon', 'good evening'];
+    const cleanMsg = lower.replace(/[^\w\s]/g, '').trim();
+    const isExactGreeting = greetingKeywords.some(kw => cleanMsg === kw || cleanMsg.startsWith(kw + ' '));
+    const isGreetingVariant = /^(hello+|hi+|hey+|hii+|heyy+)$/i.test(cleanMsg) || /^(good\s+(morning|afternoon|evening))$/i.test(cleanMsg);
+    const isSimpleGreeting = isExactGreeting || (cleanMsg.split(/\s+/).length <= 2 && isGreetingVariant);
+
+    if (isGreetingIntent || isSimpleGreeting) {
+      // Clean up stale drafts on fresh greeting (> 24h old)
+      if (draft && draft.updatedAt) {
+        const draftAgeHours = (Date.now() - new Date(draft.updatedAt).getTime()) / (1000 * 60 * 60);
+        // Only clear if the user is not actively confirming payment
+        if (draftAgeHours > 24 && !['confirm', 'payment'].includes(draft.step)) {
+          this.logger.log(`[CLEANUP] Clearing stale draft (${draftAgeHours.toFixed(1)}h old) for customer ${customerId} on new greeting.`);
+          if (bookingsService) {
+             await bookingsService.deleteBookingDraft(customerId);
+          } else {
+             await this.prisma.bookingDraft.delete({ where: { customerId } }).catch(() => {});
+          }
+          draft = null;
+          hasDraft = false;
+        }
+      }
+
+      const hasMeaningfulDraft = this.hasMeaningfulBookingDraft(draft);
+
+      // Only use the generic welcome when this is actually a fresh conversation.
+      if (!hasMeaningfulDraft) {
+        // Get customer info for personalization if available
+        const customer = enrichedContext?.customer || await this.prisma.customer.findUnique({ where: { id: customerId } });
+        const name = this.getFriendlyCustomerName(customer?.name);
+        const personalizedName = name ? ` ${name}` : '';
+
+        const greetingResponse = `Hi${personalizedName}! Welcome to Fiesta House.\n\nAre you looking to book a shoot, ask about packages, or check availability?`;
+
+        return {
+          response: greetingResponse,
+          draft: null,
+          updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: greetingResponse }]
+        };
+      }
+    }
+
     // Execute strategies BEFORE generic greetings or other intents
     // This allows BookingStrategy to handle its own greetings
     const strategyContext = {
@@ -3367,36 +3531,7 @@ DO NOT repeat your previous question. Instead:
       }
     }
 
-    const lower = (message || '').toLowerCase();
 
-    // --- GREETING DETECTION (Prioritize Advanced Intent) ---
-    const isGreetingIntent = intentAnalysis?.primaryIntent === 'greeting';
-
-    // Fallback lightweight detection for very simple messages
-    const greetingKeywords = ['hi', 'hello', 'hey', 'greetings', 'hallo', 'habari', 'good morning', 'good afternoon', 'good evening'];
-    const cleanMsg = lower.replace(/[^\w\s]/g, '').trim();
-    const isExactGreeting = greetingKeywords.some(kw => cleanMsg === kw || cleanMsg.startsWith(kw + ' '));
-    const isGreetingVariant = /^(hello+|hi+|hey+|hii+|heyy+)$/i.test(cleanMsg) || /^(good\s+(morning|afternoon|evening))$/i.test(cleanMsg);
-    const isSimpleGreeting = isExactGreeting || (cleanMsg.split(/\s+/).length <= 2 && isGreetingVariant);
-
-    if (isGreetingIntent || isSimpleGreeting) {
-      // Get customer info for personalization if available
-      const customer = enrichedContext?.customer || await this.prisma.customer.findUnique({ where: { id: customerId } });
-      const name = customer?.name?.replace(/^WhatsApp User\s+/i, '') || '';
-      const personalizedName = name ? `, ${name}` : '';
-
-      const greetingResponse = `Hello there${personalizedName}! 🌸 Welcome to Fiesta House Maternity. We're so delighted you reached out! ✨
-
-We specialize in luxury maternity photography here in Kenya, offering a beautiful, all-inclusive experience. From our world-class studio sets and professional makeup to our curated collection of gorgeous gowns, we're here to make sure your shoot is as radiant and stress-free as possible.
-
-How can I help make your maternity session special today? 💖`;
-
-      return {
-        response: greetingResponse,
-        draft: null,
-        updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: greetingResponse }]
-      };
-    }
 
     // --- SMART: Detect available hours/times/slots queries ---
     const slotKeywords = [
@@ -3471,7 +3606,7 @@ How can I help make your maternity session special today? 💖`;
 
       // If missing info, prompt for what is missing
       if (!service && !dateStr) {
-        const msg = `To show available times, please tell me which package you'd like and for which date (e.g., "Studio Classic tomorrow").`;
+        const msg = `To show available times, please tell me which package you'd like and for which date (e.g., "Standard Package tomorrow").`;
         return { response: msg, draft, updatedHistory: [...history.slice(-this.historyLimit), { role: 'user', content: message }, { role: 'assistant', content: msg }] };
       } else if (!service) {
         const msg = `Which package would you like to see available times for on ${dateStr}?`;

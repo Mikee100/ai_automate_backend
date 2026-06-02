@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { MessagesService } from '../messages/messages.service';
 import { CustomersService } from '../customers/customers.service';
 import { AiService } from '../ai/ai.service';
@@ -31,6 +31,8 @@ export class WebhooksService {
     private websocketGateway: WebsocketGateway,
     private notificationsService?: NotificationsService,
   ) { }
+
+  private readonly logger = new Logger(WebhooksService.name);
   /**
    * Handle WhatsApp webhook - PRODUCTION MODE: Accepts messages from ALL phone numbers
    * No phone number restrictions - all incoming messages are processed
@@ -38,7 +40,7 @@ export class WebhooksService {
   async handleWhatsAppWebhook(body: any) {
 
     if (body.object !== 'whatsapp_business_account') {
-      console.log('[WEBHOOK] Ignoring webhook - wrong object type:', body.object);
+      this.logger.debug(`Ignoring webhook - wrong object type: ${body.object}`);
       return { status: 'ignored' };
     }
 
@@ -50,10 +52,10 @@ export class WebhooksService {
         // PROCESS ONLY IF THERE ARE MESSAGE OBJECTS INSIDE
         // PRODUCTION: All phone numbers are allowed - no filtering
         if (value?.messages && value.messages.length > 0) {
-          console.log('[WEBHOOK] Processing WhatsApp message from webhook');
+          this.logger.log('Processing WhatsApp message from webhook');
           await this.processWhatsAppMessage(value);
         } else {
-          console.log('[WEBHOOK] No messages found in webhook payload');
+          this.logger.debug('No messages found in webhook payload');
         }
       }
     }
@@ -195,39 +197,19 @@ Or reply *"CANCEL"* if you'd like to make changes. 💖`;
         console.log(`Deposit confirmation sent to ${newPhone}. Waiting for user confirmation.`);
       }
     } else if (text.toLowerCase() === 'confirm') {
-      // User confirmed deposit - now initiate payment
-      const draft = await this.bookingsService.getBookingDraft(customer.id);
-      if (draft) {
-        const customerData = await this.customersService.findOne(customer.id);
-        if (customerData?.phone) {
-          const amount = await this.bookingsService.getDepositForDraft(customer.id) || 2000;
-
-          try {
-            const checkoutId = await this.paymentsService.initiateSTKPush(draft.id, customerData.phone, amount);
-
-            await this.whatsappService.sendMessage(
-              from,
-              `Payment request sent! Please check your phone and enter your M-PESA PIN to complete the deposit payment. 💳✨`
-            );
-
-            console.log(`STK Push initiated for ${customerData.phone}, CheckoutRequestID: ${checkoutId.checkoutRequestId}`);
-          } catch (error) {
-            console.error('STK Push failed:', error);
-            await this.whatsappService.sendMessage(
-              from,
-              `Sorry, there was an issue initiating payment. Please try again or contact us at ${process.env.CUSTOMER_CARE_PHONE || '0720 111928'}. 💖`
-            );
-          }
-        } else {
-          await this.whatsappService.sendMessage(
-            from,
-            `I don't have your phone number yet. Please share it so I can send the payment request. 📱`
-          );
-        }
-      } else {
+      // User confirmed deposit - complete booking draft and skip payment for now
+      try {
+        await this.bookingsService.completeBookingDraft(customer.id);
         await this.whatsappService.sendMessage(
           from,
-          `I don't see a pending booking. Would you like to start a new booking? 💖`
+          `✅ Your booking is now confirmed! (Payment step is currently paused.)`
+        );
+        console.log(`Booking draft completed for customer ${customer.id} (payment skipped)`);
+      } catch (error) {
+        console.error('Booking confirmation failed:', error);
+        await this.whatsappService.sendMessage(
+          from,
+          `Sorry, there was an issue confirming your booking. Please try again or contact us. 💖`
         );
       }
     } else if (text.toLowerCase() === 'cancel') {

@@ -25,6 +25,7 @@ export declare class WebhooksService {
     private websocketGateway;
     private notificationsService?;
     constructor(messagesService: MessagesService, customersService: CustomersService, aiService: AiService, aiSettingsService: AiSettingsService, bookingsService: BookingsService, paymentsService: PaymentsService, whatsappService: WhatsappService, instagramService: InstagramService, messengerSendService: MessengerSendService, messageQueue: Queue, aiQueue: Queue, websocketGateway: WebsocketGateway, notificationsService?: NotificationsService);
+    private readonly logger;
     handleWhatsAppWebhook(body: any): Promise<{
         status: string;
     }>;

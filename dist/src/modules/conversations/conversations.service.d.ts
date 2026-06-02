@@ -39,10 +39,10 @@ export declare class ConversationsService {
     }[]>;
     sendReply(customerId: string, message: string, platform: string): Promise<{
         id: string;
-        customerId: string;
         createdAt: Date;
-        externalId: string | null;
         content: string;
+        customerId: string;
+        externalId: string | null;
         platform: string;
         direction: string;
         handledBy: string | null;

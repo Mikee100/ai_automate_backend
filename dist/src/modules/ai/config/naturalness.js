@@ -17,6 +17,9 @@ exports.BLOCKED_PHRASES = [
     'we are so excited to',
     'absolutely thrilled',
     'cannot wait to',
+    'all set on our side',
+    'let me know if anything changes',
+    "i've handled that for you",
 ];
 exports.THEATRICAL_REPLACEMENTS = [
     { pattern: /^Oh,?\s*my dear,?\s*/gim, replacement: '' },
@@ -57,12 +60,12 @@ exports.PROMOTIONAL_PATTERNS = [
     { pattern: /\bWe\s+specialize\s+in\s+professional\s+maternity\s+photography[^.!?]*\.?\s*/gi, replacement: '' },
 ];
 exports.GREETING_MAX_LINES = 3;
-exports.GREETING_SIMPLE_TEMPLATE = "Hi there! 😊 Welcome to Fiesta House Maternity 🤍\nHow can I help you today? ✨";
+exports.GREETING_SIMPLE_TEMPLATE = "Hi! Welcome to Fiesta House.\nHow can I help?";
 exports.GREETING_OVERRIDE_IF_CONTAINS = [
-    "thank you for contacting",
+    'thank you for contacting',
     "kenya's leading",
-    "leading luxury",
-    "luxury photo studio",
+    'leading luxury',
+    'luxury photo studio',
 ];
 exports.MAX_EMOTION_LEVEL = 'soft';
 exports.INTENTS_SOFT_EMOTION_ONLY = [
@@ -78,7 +81,7 @@ exports.TEMPLATE_STRUCTURED_REPLACEMENTS = [
     { pattern: /Thank\s+you\s+for\s+your\s+request!?\s*/gi, replacement: 'Perfect. ' },
     { pattern: /Thank\s+you\s+for\s+your\s+request\.\s*/gi, replacement: 'Got it. ' },
     { pattern: /I\s+have\s+noted\s+your\s+booking\s+for\s+/gi, replacement: "I've locked in " },
-    { pattern: /I\s+have\s+confirmed\s+your\s+booking\s+for\s+/gi, replacement: "Booked for " },
+    { pattern: /I\s+have\s+confirmed\s+your\s+booking\s+for\s+/gi, replacement: 'Booked for ' },
     { pattern: /Your\s+booking\s+(?:has\s+been\s+)?confirmed\s+for\s+/gi, replacement: '' },
     { pattern: /Your\s+booking\s+is\s+confirmed\s+for\s+/gi, replacement: '' },
     { pattern: /I'?m\s+glad\s+to\s+hear\s+you'?re\s+doing\s+well!?\s*/gi, replacement: 'All good then. ' },
@@ -95,11 +98,14 @@ exports.TEMPLATE_STRUCTURED_REPLACEMENTS = [
         pattern: /(?:Please\s+)?feel\s+free\s+to\s+reach\s+out\s+if\s+you\s+need\s+anything\.?/gi,
         replacement: 'Just message me if you need anything.',
     },
-    { pattern: /\bYes,?\s+you\s+can\s+absolutely\s+/gi, replacement: 'Yes — you can ' },
-    { pattern: /\bAbsolutely!?\s+You\s+can\s+/gi, replacement: 'Yes — you can ' },
-    { pattern: /\bOf\s+course!?\s+You\s+can\s+/gi, replacement: 'Yes — you can ' },
-    { pattern: /\s+with\s+the\s+(Standard|Economy|Executive|Gold|Platinum|VIP|VVIP)\s+Package\.?/gi, replacement: ' — $1 Package.' },
-    { pattern: /\s+with\s+the\s+(\w+)\s+package\.?/gi, replacement: ' — $1 package.' },
-    { pattern: /\b(?:We\s+have\s+recorded\s+your\s+booking|Your\s+booking\s+has\s+been\s+recorded)\.?/gi, replacement: "We're all set on our side." },
+    { pattern: /\bYes,?\s+you\s+can\s+absolutely\s+/gi, replacement: 'Yes - you can ' },
+    { pattern: /\bAbsolutely!?\s+You\s+can\s+/gi, replacement: 'Yes - you can ' },
+    { pattern: /\bOf\s+course!?\s+You\s+can\s+/gi, replacement: 'Yes - you can ' },
+    { pattern: /\s+with\s+the\s+(Standard|Economy|Executive|Gold|Platinum|VIP|VVIP)\s+Package\.?/gi, replacement: ' - $1 Package.' },
+    { pattern: /\s+with\s+the\s+(\w+)\s+package\.?/gi, replacement: ' - $1 package.' },
+    { pattern: /\b(?:We\s+have\s+recorded\s+your\s+booking|Your\s+booking\s+has\s+been\s+recorded)\.?/gi, replacement: 'Your booking details are saved.' },
+    { pattern: /\bAll\s+set\s+on\s+our\s+side\.?/gi, replacement: 'Everything is set.' },
+    { pattern: /\bLet\s+me\s+know\s+if\s+anything\s+changes\.?/gi, replacement: "If anything changes, tell me and I'll adjust it." },
+    { pattern: /\bI'?ve\s+handled\s+that\s+for\s+you\.?/gi, replacement: 'Got it.' },
 ];
 //# sourceMappingURL=naturalness.js.map
